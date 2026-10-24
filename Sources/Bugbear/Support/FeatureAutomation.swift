@@ -187,6 +187,21 @@ enum FeatureAutomation {
             let y = Int(primary.frame.maxY - frame.midY)
             return "at=\(x),\(y) open=\(app.isMenuPanelOpen)"
 
+        case "windows-debug":
+            // Every window of the app: class, visible, key, frame, plus the activation policy.
+            var parts: [String] = ["policy=\(NSApp.activationPolicy().rawValue) active=\(NSApp.isActive)"]
+            for window in NSApp.windows {
+                let frame = window.frame
+                parts.append("\(window.className) visible=\(window.isVisible) key=\(window.isKeyWindow) level=\(window.level.rawValue) \(Int(frame.minX)),\(Int(frame.minY)) \(Int(frame.width))x\(Int(frame.height))")
+            }
+            return parts.joined(separator: " | ")
+
+        case "press-status-item":
+            // What a click on the bear does, without going through the event system.
+            app.statusItemButton()?.performClick(nil)
+            try? await Task.sleep(nanoseconds: 500_000_000)
+            return "open=\(app.isMenuPanelOpen)"
+
         case "close-panel":
             app.closeMenuPanel()
             try? await Task.sleep(nanoseconds: 300_000_000)

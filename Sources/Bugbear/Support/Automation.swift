@@ -33,6 +33,7 @@ enum Automation {
         let name = parts.first ?? ""
         switch name {
         case "status":
+            app.refreshStatus(force: true)
             var state = "\(app.bufferState)"
             state += " covered=\(Int(app.coveredSeconds)) recording=\(app.recording != nil) paused=\(app.recording?.isPaused ?? false) captures=\(app.store.captures.count) displays=\(app.buffers.count)"
             report(command, state)

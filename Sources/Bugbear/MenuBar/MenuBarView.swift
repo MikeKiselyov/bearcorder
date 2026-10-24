@@ -47,7 +47,7 @@ struct MenuBarView: View {
         .foregroundStyle(Theme.text)
         .task {
             await app.refreshEnvironmentPreview()
-            app.refreshStatus()
+            app.refreshStatus(force: true)
         }
         .onChange(of: app.recording != nil) { _, isRecording in
             if isRecording { tab = .record }
