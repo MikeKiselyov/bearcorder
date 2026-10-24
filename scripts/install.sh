@@ -65,19 +65,17 @@ logo() {
 }
 
 # A step: "•  Checking your Mac…", then the same line becomes "✓  macOS 15.1".
+# Without a terminal only the finished line is printed, so plain output reads the same.
 step() {
     if [ "$FANCY" = "1" ]; then
         printf '   %s•%s  %s…' "$DIM" "$N" "$1"
-    else
-        printf '   -  %s…\n' "$1"
     fi
 }
 done_step() {
     if [ "$FANCY" = "1" ]; then
-        printf '\r\033[K   %s✓%s  %s\n' "$OK" "$N" "$1"
-    else
-        printf '   ok %s\n' "$1"
+        printf '\r\033[K'
     fi
+    printf '   %s✓%s  %s\n' "$OK" "$N" "$1"
 }
 stop() {
     if [ "$FANCY" = "1" ]; then
@@ -100,7 +98,8 @@ with_spinner() {
     local label="$1" log="$2"
     shift 2
     if [ "$FANCY" != "1" ]; then
-        printf '   -  %s…\n' "$label"
+        printf '   …  %s\n' "$label"
+        printf '      %s\n' "${TIPS[0]}"
         "$@" >"$log" 2>&1
         return
     fi
