@@ -114,13 +114,18 @@ instant, and the video editor has a switch at the top: one display, another, or 
 It opens on the display the pointer was on. Trims, cuts, arrows and text stay when you switch; clicks are
 placed for the picture you pick.
 
+Full-screen screenshots work the same way: every display is taken at once, the editor opens on the one
+under the pointer (or side by side for "All displays"), and a switch at the bottom changes it. Marks are
+drawn on a picture, so each display keeps its own and they come back when you switch back. `⌥⇧4` picks an
+area on any display.
+
 | | All displays kept (default) | Main display only (Settings → Buffer) |
 |---|---|---|
 | Buffer, `⌥⇧1`-`⌥⇧3` | every display; switch in the editor | the main display |
 | Recording, full screen | every display; switch in the editor | the display under the pointer |
 | Recording an area | the display the area is on | the display the area is on |
-| Screenshot, full screen | the display under the pointer | the display under the pointer |
-| Screenshot, all displays | every display stitched into one image | every display stitched into one image |
+| Screenshot, full screen | every display; opens on the one under the pointer | the same |
+| Screenshot, all displays | every display; opens side by side | the same |
 
 While recording, displays that are not in the video are dimmed and say "Not recorded". Connecting or
 disconnecting a display restarts the buffer with the new set. The first-start guide asks whether to keep
