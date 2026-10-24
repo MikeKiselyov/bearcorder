@@ -68,7 +68,7 @@ Change any of it later in Settings, and reopen the guide from there.
   <img src="docs/images/onboarding-2.png" width="520" alt="First-start guide: keep the last minutes of the screen or turn the buffer off">
 </p>
 
-Click the bear to open the panel. It has four tabs: **Capture**, **Record**, **Tools** and **Recent**.
+Click the bear to open the panel. It has five tabs: **Capture**, **Record**, **Tools**, **Recent** and **Space**.
 
 <p align="center">
   <img src="docs/images/menu.gif" width="300" alt="The menu bar panel tabs">
@@ -191,6 +191,22 @@ Search by app or URL, filter screenshots and videos. With **Select** you can:
 - compare two screenshots (side by side, slider, changes boxed) or two clips (synced playback).
 
 **Settings → Storage** deletes old captures automatically or keeps them under a size.
+
+### Disk space
+
+The **Space** tab shows how full the disk is and what can be cleaned safely; **Disk Space** opens the
+full window.
+
+- **Clean up**: app caches, Xcode DerivedData and device support, simulator caches, npm / Yarn / pnpm,
+  Gradle, Homebrew, CocoaPods and pip caches, logs. Each shows its size; Clean asks once more before it
+  deletes. Apps and tools make caches again when they need them. Apple's own caches are left alone.
+- **Folders**: scan the home folder and walk down the biggest folders, with a bar for each.
+- **Largest files**: files over 50 MB, biggest first, with Show in Finder and Move to Trash (they stay in
+  the Trash until you empty it).
+
+The scan skips what macOS guards with a permission prompt or keeps for itself: other apps' private data,
+Apple's folders, the Photos and Music libraries, Contacts, Calendars, Mail, Messages and the Trash. macOS
+may ask once for Desktop, Documents and Downloads.
 
 ### Check the screen
 

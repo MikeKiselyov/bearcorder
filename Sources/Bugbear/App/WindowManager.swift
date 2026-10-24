@@ -75,6 +75,14 @@ final class WindowManager: NSObject, NSWindowDelegate {
         }
     }
 
+    /// Disk space: clean up, folders by size, largest files.
+    func openSpace(section: SpaceView.Section) {
+        AppState.shared.closeMenuPanel()
+        show(id: "space", title: "Disk Space", size: CGSize(width: 980, height: 720), minSize: CGSize(width: 760, height: 520)) {
+            SpaceView(section: section)
+        }
+    }
+
     func openToolbox(tool: ToolKind?) {
         var initial = tool
         var initialInput = ""

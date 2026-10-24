@@ -118,6 +118,80 @@ enum FeatureAutomation {
                 return "error \(details.domain) \(details.code) \(details.userInfo)"
             }
 
+        case "space-measure":
+            // Sizes of the clean-up categories in the real home folder (nothing is deleted).
+            let space = SpaceModel.shared
+            await space.measure(force: true)
+            var parts: [String] = ["free=\(SpaceModel.format(space.volumeFree))", "cleanable=\(SpaceModel.format(space.cleanableBytes))"]
+            for category in CleanupCategory.all {
+                parts.append("\(category.id)=\(SpaceModel.format(space.sizes[category.id] ?? 0))")
+            }
+            return parts.joined(separator: " ")
+
+        case "space-scan":
+            // Scans the home folder like "Scan home folder" and reports the biggest folders and files.
+            // space-scan[:<subfolder of home>]
+            let space = SpaceModel.shared
+            space.startScan(subfolder: argument.isEmpty ? nil : argument)
+            while space.isScanning {
+                try? await Task.sleep(nanoseconds: 250_000_000)
+            }
+            guard let tree = space.tree, case .done(let seconds) = space.scanState else { return "no result" }
+            var folders: [String] = []
+            for child in tree.root.children.prefix(4) {
+                folders.append("\(child.name)=\(SpaceModel.format(child.bytes))")
+            }
+            var files: [String] = []
+            for file in space.topFiles.prefix(3) {
+                files.append("\((file.path as NSString).lastPathComponent)=\(SpaceModel.format(file.bytes))")
+            }
+            return String(format: "files=%d total=%@ seconds=%.1f", tree.root.fileCount, SpaceModel.format(tree.root.bytes), seconds) + " top=" + folders.joined(separator: ",") + " biggest=" + files.joined(separator: ",")
+
+        case "space-top":
+            // Full paths of the biggest files from the last scan.
+            var lines: [String] = []
+            for file in SpaceModel.shared.topFiles.prefix(Int(argument) ?? 5) {
+                lines.append("\(SpaceModel.format(file.bytes)) \(file.path)")
+            }
+            return lines.joined(separator: " | ")
+
+        case "open-space":
+            // open-space:<Clean up|Folders|Largest files>
+            let section = SpaceView.Section(rawValue: argument) ?? .cleanUp
+            WindowManager.shared.close(id: "space")
+            WindowManager.shared.openSpace(section: section)
+            return "opened \(section.rawValue)"
+
+        case "space-clean-test":
+            // Cleans "App caches" and "Logs" in a made-up home folder: caches go, kept folders stay.
+            let space = SpaceModel.shared
+            let fakeHome = AppPaths.temporary.appendingPathComponent("space-home-\(UUID().uuidString)", isDirectory: true)
+            let files = FileManager.default
+            let samples = ["Library/Caches/com.example.app/blob.bin", "Library/Caches/Homebrew/tool.tar.gz", "Library/Logs/Example/run.log", "Library/Logs/Bugbear/bugbear.log"]
+            for sample in samples {
+                let url = fakeHome.appendingPathComponent(sample)
+                try? files.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+                try? Data(count: 2_000_000).write(to: url)
+            }
+            space.homeOverride = fakeHome
+            await space.measure(force: true)
+            let beforeCaches = space.sizes["appCaches"] ?? 0
+            let beforeHomebrew = space.sizes["homebrew"] ?? 0
+            for category in CleanupCategory.all where category.id == "appCaches" || category.id == "logs" {
+                await space.clean(category)
+            }
+            let cacheGone = !files.fileExists(atPath: fakeHome.appendingPathComponent(samples[0]).path)
+            let homebrewKept = files.fileExists(atPath: fakeHome.appendingPathComponent(samples[1]).path)
+            let otherLogGone = !files.fileExists(atPath: fakeHome.appendingPathComponent(samples[2]).path)
+            let ownLogKept = files.fileExists(atPath: fakeHome.appendingPathComponent(samples[3]).path)
+            let folderKept = files.fileExists(atPath: fakeHome.appendingPathComponent("Library/Caches").path)
+            let result = "before appCaches=\(SpaceModel.format(beforeCaches)) homebrew=\(SpaceModel.format(beforeHomebrew)) cacheGone=\(cacheGone) homebrewKept=\(homebrewKept) otherLogGone=\(otherLogGone) ownLogKept=\(ownLogKept) cachesFolderKept=\(folderKept)"
+            space.message = nil
+            space.homeOverride = nil
+            try? files.removeItem(at: fakeHome)
+            await space.measure(force: true)
+            return result
+
         case "front-title":
             // The title of the front app's focused window, so scripts act only on their own window.
             guard let running = app.lastExternalApp else { return "title=" }
