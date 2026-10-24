@@ -56,6 +56,10 @@ final class ScreenBuffer: NSObject, SCStreamOutput, SCStreamDelegate {
     private let queue: DispatchQueue
     private let segmentLength: Double = 10
     private var stream: SCStream?
+    /// The settings the stream runs with, kept to change the frame rate without a restart.
+    private var streamSettings: SCStreamConfiguration?
+    /// Start a new segment with the next frame (after a frame rate change). Queue only.
+    private var startNewSegment = false
     private var configuration = BufferConfiguration(retentionSeconds: 180, framesPerSecond: 30, maxHeight: 1080, showsCursor: true, systemAudio: false, microphone: false)
 
     // Queue-confined state.
@@ -156,6 +160,7 @@ final class ScreenBuffer: NSObject, SCStreamOutput, SCStreamDelegate {
         streamConfiguration.colorMatrix = CGDisplayStream.yCbCrMatrix_ITU_R_709_2
         streamConfiguration.queueDepth = 6
         streamConfiguration.capturesAudio = configuration.systemAudio
+        streamSettings = streamConfiguration
         streamConfiguration.excludesCurrentProcessAudio = true
         streamConfiguration.sampleRate = 48000
         streamConfiguration.channelCount = 2
@@ -208,6 +213,24 @@ final class ScreenBuffer: NSObject, SCStreamOutput, SCStreamDelegate {
             own.append(app)
         }
         return own
+    }
+
+    /// Changes the frame rate on the running stream, keeping what the buffer holds. The next frame
+    /// starts a new segment, so the encoder's bitrate matches the new rate.
+    func setFrameRate(_ framesPerSecond: Int) async {
+        guard let current = stream, let settings = streamSettings else { return }
+        settings.minimumFrameInterval = CMTime(value: 1, timescale: CMTimeScale(framesPerSecond))
+        do {
+            try await current.updateConfiguration(settings)
+        } catch {
+            Log.error("buffer[\(displayID)] frame rate change failed: \(error.localizedDescription)")
+            return
+        }
+        queue.sync {
+            configuration.framesPerSecond = framesPerSecond
+            startNewSegment = true
+        }
+        Log.info("buffer[\(displayID)] now \(framesPerSecond) fps")
     }
 
     /// Leaves our own windows out of the capture again, and lets the listed ones (drawing overlay,
@@ -303,7 +326,8 @@ final class ScreenBuffer: NSObject, SCStreamOutput, SCStreamDelegate {
     private func appendVideo(_ sampleBuffer: CMSampleBuffer, at time: Double) {
         if time <= lastFrameTime { return }
 
-        if let index = currentSegmentIndex, time - segments[index].start >= segmentLength {
+        if let index = currentSegmentIndex, time - segments[index].start >= segmentLength || startNewSegment {
+            startNewSegment = false
             finishSegmentOnQueue(completion: nil)
         }
         if writer == nil {

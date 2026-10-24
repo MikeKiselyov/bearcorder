@@ -69,6 +69,8 @@ final class AppState {
     /// The one display a recording keeps: the area's, or the one under the pointer when "Record all
     /// displays" is off. Nil records every buffered display side by side.
     @ObservationIgnored private var recordingDisplay: CGDirectDisplayID?
+    /// The buffer runs at the recording frame rate while recording.
+    @ObservationIgnored private var boostedFrameRate = false
     /// A display the buffer does not normally capture, added for the length of one recording.
     @ObservationIgnored private var extraDisplayForRecording: CGDirectDisplayID?
 
@@ -448,11 +450,12 @@ final class AppState {
     /// Saves a clip from the buffers and adds it to Recent. With several displays each one is saved on
     /// its own, which needs no re-encoding; the editor switches between them or puts them side by side.
     /// It opens on the display under the pointer, where the person was looking.
-    private func saveClip(from source: [ScreenBuffer], ranges: [(start: Double, end: Double)], app: NSRunningApplication?) async throws -> Capture {
+    private func saveClip(from source: [ScreenBuffer], ranges: [(start: Double, end: Double)], app: NSRunningApplication?, framesPerSecond: Int? = nil) async throws -> Capture {
+        let rate = framesPerSecond ?? settings.framesPerSecond
         guard let main = source.first else { throw BufferError.noDisplay }
         let environment = await EnvironmentCollector.snapshot(for: app, readURL: settings.readBrowserURL)
         if source.count == 1 {
-            let clip = try await ClipComposer.export(buffers: source, ranges: ranges, region: nil, framesPerSecond: settings.framesPerSecond)
+            let clip = try await ClipComposer.export(buffers: source, ranges: ranges, region: nil, framesPerSecond: rate)
             Log.info("clip exported: \(clip.duration)s → \(clip.url.lastPathComponent)")
             let capture = try store.add(kind: .video, mediaFile: clip.url, environment: environment, events: inputRecorder.events(for: clip), duration: clip.duration)
             attachSystemLog(to: capture, clip: clip, app: app)
@@ -463,7 +466,7 @@ final class AppState {
         var clips: [ClipExport] = []
         var variants: [ScreenVariant] = []
         for buffer in ordered {
-            let clip = try await ClipComposer.export(buffers: [buffer], ranges: ranges, region: nil, framesPerSecond: settings.framesPerSecond, audioFrom: main)
+            let clip = try await ClipComposer.export(buffers: [buffer], ranges: ranges, region: nil, framesPerSecond: rate, audioFrom: main)
             clips.append(clip)
             variants.append(ScreenVariant(id: "display-\(buffer.displayID)", name: AppState.screenName(buffer.displayID), file: "screen-\(buffer.displayID).mp4", events: inputRecorder.events(for: clip), isMain: buffer === main))
         }
@@ -646,6 +649,12 @@ final class AppState {
             return
         }
         await refreshBufferFilters()
+        if settings.recordingFramesPerSecond > settings.framesPerSecond {
+            for buffer in buffers {
+                await buffer.setFrameRate(settings.recordingFramesPerSecond)
+            }
+            boostedFrameRate = true
+        }
         let session = RecordingSession()
         for buffer in buffers {
             buffer.pin(from: session.startTime)
@@ -697,10 +706,10 @@ final class AppState {
         recordingDisplay = nil
         do {
             if region == nil {
-                let capture = try await saveClip(from: exportBuffers, ranges: ranges, app: app)
+                let capture = try await saveClip(from: exportBuffers, ranges: ranges, app: app, framesPerSecond: settings.recordingFramesPerSecond)
                 WindowManager.shared.openEditor(for: capture)
             } else {
-                let clip = try await ClipComposer.export(buffers: exportBuffers, ranges: ranges, region: region?.normalized, framesPerSecond: settings.framesPerSecond)
+                let clip = try await ClipComposer.export(buffers: exportBuffers, ranges: ranges, region: region?.normalized, framesPerSecond: settings.recordingFramesPerSecond)
                 await finishClip(clip, app: app)
             }
         } catch {
@@ -725,8 +734,16 @@ final class AppState {
         Task { await restoreBufferResolution() }
     }
 
-    /// Back to the displays and resolution from Settings after a recording that changed them.
+    /// Back to the displays, resolution and frame rate from Settings after a recording changed them.
     private func restoreBufferResolution() async {
+        if boostedFrameRate && !nativeResolutionForArea && extraDisplayForRecording == nil {
+            boostedFrameRate = false
+            for buffer in buffers {
+                await buffer.setFrameRate(settings.framesPerSecond)
+            }
+            return
+        }
+        boostedFrameRate = false
         if !nativeResolutionForArea && extraDisplayForRecording == nil { return }
         nativeResolutionForArea = false
         extraDisplayForRecording = nil

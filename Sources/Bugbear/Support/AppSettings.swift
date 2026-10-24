@@ -13,8 +13,13 @@ final class AppSettings {
     var bufferMinutes: Int {
         didSet { defaults.set(bufferMinutes, forKey: "bufferMinutes") }
     }
+    /// Frames per second of the always-on buffer. 15 is plenty to see a bug and costs half of 30.
     var framesPerSecond: Int {
         didSet { defaults.set(framesPerSecond, forKey: "framesPerSecond") }
+    }
+    /// Frames per second while recording on purpose (⌥⇧6); the buffer switches up for it.
+    var recordingFramesPerSecond: Int {
+        didSet { defaults.set(recordingFramesPerSecond, forKey: "recordingFramesPerSecond") }
     }
     /// Maximum output height in pixels; 0 keeps the display's native size.
     var maxHeight: Int {
@@ -94,7 +99,8 @@ final class AppSettings {
     private init() {
         defaults.register(defaults: [
             "bufferMinutes": 3,
-            "framesPerSecond": 30,
+            "framesPerSecond": 15,
+            "recordingFramesPerSecond": 30,
             "maxHeight": 1080,
             "showsCursor": true,
             "recordClicks": true,
@@ -117,6 +123,7 @@ final class AppSettings {
         ])
         bufferMinutes = defaults.integer(forKey: "bufferMinutes")
         framesPerSecond = defaults.integer(forKey: "framesPerSecond")
+        recordingFramesPerSecond = defaults.integer(forKey: "recordingFramesPerSecond")
         maxHeight = defaults.integer(forKey: "maxHeight")
         showsCursor = defaults.bool(forKey: "showsCursor")
         recordClicks = defaults.bool(forKey: "recordClicks")
