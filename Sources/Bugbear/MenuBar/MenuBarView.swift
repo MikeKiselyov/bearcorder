@@ -7,6 +7,7 @@ enum MenuTab: String, CaseIterable, Identifiable {
     case record = "Record"
     case tools = "Tools"
     case recent = "Recent"
+    case space = "Space"
 
     var id: String { rawValue }
 
@@ -16,6 +17,7 @@ enum MenuTab: String, CaseIterable, Identifiable {
         case .record: return "record.circle"
         case .tools: return "wrench.and.screwdriver"
         case .recent: return "clock"
+        case .space: return "internaldrive"
         }
     }
 }
@@ -76,6 +78,8 @@ struct MenuBarView: View {
                     }
                 case .recent:
                     recentSection
+                case .space:
+                    SpaceTabSection()
                 }
             }
             .frame(maxWidth: .infinity, alignment: .top)
