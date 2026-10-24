@@ -26,15 +26,18 @@ enum FeatureAutomation {
             return "moved=\(WindowResizer.move(app: app.lastExternalApp, to: CGPoint(x: x, y: y)))"
 
         case "web-area":
-            // The page area of the front browser window as x,y,w,h on the main screen (normalized, top-left
-            // origin), so the scroll test does not depend on the browser's toolbars and tab bar.
-            guard let running = app.lastExternalApp, let frame = webAreaFrame(of: running), let screen = NSScreen.screens.first else { return "no web area" }
-            let size = screen.frame.size
-            let x = frame.minX / size.width
-            let y = frame.minY / size.height
-            let width = frame.width / size.width
-            let height = frame.height / size.height
-            return String(format: "%.4f,%.4f,%.4f,%.4f", x, y, width, height)
+            // The visible page area of the front browser window: normalized on the display it is on
+            // (top-left origin), then its global top-left frame in points, then that display's width.
+            // The scroll test does not depend on toolbars, tab bars or which display holds the window.
+            guard let running = app.lastExternalApp, let frame = webAreaFrame(of: running), let primary = NSScreen.screens.first else { return "no web area" }
+            let center = CGPoint(x: frame.midX, y: primary.frame.maxY - frame.midY)
+            guard let screen = NSScreen.screens.first(where: { item in item.frame.contains(center) }) else { return "no screen" }
+            let screenTop = primary.frame.maxY - screen.frame.maxY
+            let x = (frame.minX - screen.frame.minX) / screen.frame.width
+            let y = (frame.minY - screenTop) / screen.frame.height
+            let width = frame.width / screen.frame.width
+            let height = frame.height / screen.frame.height
+            return String(format: "%.4f,%.4f,%.4f,%.4f %d,%d,%d,%d %d", x, y, width, height, Int(frame.minX), Int(frame.minY), Int(frame.width), Int(frame.height), Int(screen.frame.width))
 
         case "scroll-capture":
             // scroll-capture:x,y,w,h (normalized area on the screen under the pointer)
@@ -109,6 +112,16 @@ enum FeatureAutomation {
                 let details = error as NSError
                 return "error \(details.domain) \(details.code) \(details.userInfo)"
             }
+
+        case "front-title":
+            // The title of the front app's focused window, so scripts act only on their own window.
+            guard let running = app.lastExternalApp else { return "title=" }
+            let element = AXUIElementCreateApplication(running.processIdentifier)
+            var focused: AnyObject?
+            guard AXUIElementCopyAttributeValue(element, kAXFocusedWindowAttribute as CFString, &focused) == .success, let window = focused, CFGetTypeID(window) == AXUIElementGetTypeID() else { return "title=" }
+            var title: AnyObject?
+            AXUIElementCopyAttributeValue(window as! AXUIElement, kAXTitleAttribute as CFString, &title)
+            return "title=\(title as? String ?? "")"
 
         case "app-windows":
             // app-windows:<name>: the app's windows from Accessibility: title, top-left, size, minimized.
