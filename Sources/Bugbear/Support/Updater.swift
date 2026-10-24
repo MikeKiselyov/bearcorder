@@ -10,6 +10,11 @@ import BugbearCore
 final class Updater {
     static let shared = Updater()
 
+    var hasUpdate: Bool {
+        if case .available = state { return true }
+        return false
+    }
+
     enum State: Equatable {
         case idle
         case checking
