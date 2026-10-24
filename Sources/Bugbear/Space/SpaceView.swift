@@ -187,8 +187,8 @@ struct SpaceView: View {
         switch model.scanState {
         case .idle:
             scanPrompt
-        case .running(let progress):
-            scanProgress(progress)
+        case .preparing, .running:
+            scanStatus
         case .done:
             folderList
         }
@@ -196,31 +196,111 @@ struct SpaceView: View {
 
     private var scanPrompt: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("See what takes space in your home folder").font(.system(size: 15, weight: .semibold))
+            Text("See what takes space on this Mac").font(.system(size: 15, weight: .semibold))
             Text("Bugbear adds up every folder and finds the biggest files. It takes a minute or two. macOS may ask once for Desktop, Documents and Downloads; other apps' private data, Apple's own folders and the Photos and Music libraries are skipped.")
                 .font(.system(size: 12))
                 .foregroundStyle(Theme.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
-            Button("Scan home folder") { model.startScan() }
+            Toggle("Include other apps' private data (Docker, Slack, Telegram…). macOS asks once.", isOn: $model.includeAppData)
+                .toggleStyle(.checkbox)
+                .font(.system(size: 12))
+            Button("Scan home folder and Applications") { model.startScan() }
                 .buttonStyle(AccentButtonStyle())
         }
     }
 
-    private func scanProgress(_ progress: DiskScanner.Progress) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
+    /// Steps of the scan: permissions first, then the home folder and Applications, with live numbers.
+    private var scanStatus: some View {
+        var progress = DiskScanner.Progress()
+        var isPreparing = true
+        if case .running(let current) = model.scanState {
+            progress = current
+            isPreparing = false
+        }
+        return VStack(alignment: .leading, spacing: 14) {
             HStack(spacing: 10) {
                 ProgressView().controlSize(.small)
-                Text("Scanning… \(progress.files) files, \(SpaceModel.format(progress.bytes))")
-                    .font(.system(size: 13, weight: .semibold))
+                Text(isPreparing ? "Checking access…" : "Scanning…").font(.system(size: 15, weight: .semibold))
+                Spacer()
+                TimelineView(.periodic(from: .now, by: 1)) { context in
+                    let seconds = Int(context.date.timeIntervalSince(model.scanStartedAt))
+                    Text(String(format: "%d:%02d", seconds / 60, seconds % 60))
+                        .font(.system(size: 13, design: .monospaced))
+                        .foregroundStyle(Theme.textSecondary)
+                }
+                Button("Stop") { model.cancelScan() }
+                    .buttonStyle(SecondaryButtonStyle())
             }
-            if !progress.folder.isEmpty {
-                Text("In ~/\(progress.folder)")
+            VStack(alignment: .leading, spacing: 8) {
+                if !model.accessChecks.isEmpty {
+                    stepRow("Access to protected folders", done: !isPreparing, active: isPreparing)
+                    ForEach(model.accessChecks) { check in
+                        accessRow(check)
+                    }
+                }
+                stepRow("Home folder", done: !isPreparing && progress.folder.hasPrefix("Applications"), active: !isPreparing && !progress.folder.hasPrefix("Applications"))
+                stepRow("Applications", done: false, active: progress.folder.hasPrefix("Applications"))
+            }
+            if !isPreparing {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("\(progress.files) files · \(SpaceModel.format(progress.bytes))")
+                        .font(.system(size: 13, design: .monospaced))
+                    if !progress.folder.isEmpty {
+                        Text("In \(progress.folder)")
+                            .font(.system(size: 12))
+                            .foregroundStyle(Theme.textSecondary)
+                    }
+                }
+            }
+            if isPreparing {
+                Text("macOS asks once for each folder. Allow the ones you want counted; the scan then runs on its own.")
                     .font(.system(size: 12))
                     .foregroundStyle(Theme.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else {
+                TimelineView(.periodic(from: .now, by: 1)) { context in
+                    if context.date.timeIntervalSince(model.lastScanProgress) > 10 {
+                        Label("No progress for a while: macOS is probably asking for permission. Look for a dialog on your screens and answer it; the scan goes on right after.", systemImage: "exclamationmark.bubble")
+                            .font(.system(size: 12))
+                            .foregroundStyle(Theme.warning)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
             }
-            Button("Stop") { model.cancelScan() }
-                .buttonStyle(SecondaryButtonStyle())
         }
+    }
+
+    private func stepRow(_ title: String, done: Bool, active: Bool) -> some View {
+        HStack(spacing: 8) {
+            if active {
+                ProgressView().controlSize(.mini).frame(width: 16)
+            } else {
+                Image(systemName: done ? "checkmark.circle.fill" : "circle")
+                    .foregroundStyle(done ? Theme.success : Theme.textTertiary)
+                    .frame(width: 16)
+            }
+            Text(title).font(.system(size: 13, weight: active ? .semibold : .regular))
+        }
+    }
+
+    private func accessRow(_ check: SpaceModel.AccessCheck) -> some View {
+        HStack(spacing: 8) {
+            switch check.state {
+            case .waiting:
+                Image(systemName: "circle.dotted").foregroundStyle(Theme.textTertiary).frame(width: 16)
+                Text(check.id).font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
+            case .asking:
+                ProgressView().controlSize(.mini).frame(width: 16)
+                Text("\(check.id): answer the macOS dialog").font(.system(size: 12, weight: .semibold))
+            case .allowed:
+                Image(systemName: "checkmark").foregroundStyle(Theme.success).frame(width: 16)
+                Text("\(check.id): allowed").font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
+            case .denied:
+                Image(systemName: "xmark").foregroundStyle(Theme.warning).frame(width: 16)
+                Text("\(check.id): not allowed, left out").font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
+            }
+        }
+        .padding(.leading, 24)
     }
 
     @ViewBuilder
@@ -228,7 +308,7 @@ struct SpaceView: View {
         if let folder = model.currentFolder {
             VStack(alignment: .leading, spacing: 10) {
                 HStack(spacing: 4) {
-                    Button("Home") { model.folderPath = [] }
+                    Button("This Mac") { model.folderPath = [] }
                         .buttonStyle(.plain)
                         .foregroundStyle(Theme.link)
                     ForEach(Array(model.folderPath.enumerated()), id: \.offset) { item in
@@ -241,8 +321,10 @@ struct SpaceView: View {
                     }
                     Spacer()
                     Text(SpaceModel.format(folder.bytes)).font(.system(size: 13, design: .monospaced))
-                    Button("Show in Finder") { model.reveal(model.url(forFolder: model.folderPath)) }
-                        .buttonStyle(SecondaryButtonStyle())
+                    if let url = model.url(forFolder: model.folderPath) {
+                        Button("Show in Finder") { model.reveal(url) }
+                            .buttonStyle(SecondaryButtonStyle())
+                    }
                     Button("Scan again") { model.startScan() }
                         .buttonStyle(SecondaryButtonStyle())
                 }
@@ -252,6 +334,20 @@ struct SpaceView: View {
                         ForEach(folder.children, id: \.name) { child in
                             folderRow(child, parentBytes: folder.bytes)
                             Divider().overlay(Theme.border)
+                        }
+                        if model.folderPath.isEmpty && model.notCounted > 0 {
+                            HStack(spacing: 12) {
+                                Image(systemName: "questionmark.folder").foregroundStyle(Theme.textTertiary)
+                                VStack(alignment: .leading, spacing: 1) {
+                                    Text("Not counted").font(.system(size: 13))
+                                    Text("macOS itself, other users, skipped folders, local Time Machine snapshots")
+                                        .font(.system(size: 11))
+                                        .foregroundStyle(Theme.textSecondary)
+                                }
+                                Spacer()
+                                Text(SpaceModel.format(model.notCounted)).font(.system(size: 13, design: .monospaced)).foregroundStyle(Theme.textSecondary)
+                            }
+                            .padding(.vertical, 8)
                         }
                         let inFiles = folder.bytes - childrenBytes(folder)
                         if inFiles > 0 {
@@ -264,7 +360,13 @@ struct SpaceView: View {
                         }
                     }
                 }
-                Text("In Library only app data, caches, developer files and logs are counted. Skipped, because it is macOS's own data or macOS asks for permission: other apps' private data, Apple's folders, the Photos and Music libraries, the Trash.")
+                if !model.deniedFolders.isEmpty {
+                    Text("Not counted, access not allowed: \(model.deniedFolders.joined(separator: ", ")). Allow it in System Settings → Privacy & Security → Files and Folders → Bugbear, then scan again.")
+                        .font(.system(size: 11))
+                        .foregroundStyle(Theme.warning)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Text("In Library only app data, caches, developer files and logs are counted\(model.includeAppData ? ", plus other apps' private data" : ""). Skipped, because it is macOS's own data or macOS asks for permission: Apple's folders, the Photos and Music libraries, Contacts, Calendars, Mail, Messages, the Trash.")
                     .font(.system(size: 11))
                     .foregroundStyle(Theme.textTertiary)
             }
@@ -318,8 +420,8 @@ struct SpaceView: View {
         switch model.scanState {
         case .idle:
             scanPrompt
-        case .running(let progress):
-            scanProgress(progress)
+        case .preparing, .running:
+            scanStatus
         case .done:
             if model.topFiles.isEmpty {
                 Text("No files over 50 MB.").foregroundStyle(Theme.textSecondary)

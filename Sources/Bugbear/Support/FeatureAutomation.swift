@@ -129,23 +129,52 @@ enum FeatureAutomation {
             return parts.joined(separator: " ")
 
         case "space-scan":
-            // Scans the home folder like "Scan home folder" and reports the biggest folders and files.
-            // space-scan[:<subfolder of home>]
+            // space-scan (home + Applications), space-scan:appdata (also other apps' data),
+            // or space-scan:<subfolder of home>.
             let space = SpaceModel.shared
-            space.startScan(subfolder: argument.isEmpty ? nil : argument)
+            if argument == "appdata" {
+                space.includeAppData = true
+                space.startScan()
+            } else if argument.isEmpty {
+                space.startScan()
+            } else {
+                space.startScan(subfolder: argument)
+            }
             while space.isScanning {
                 try? await Task.sleep(nanoseconds: 250_000_000)
             }
             guard let tree = space.tree, case .done(let seconds) = space.scanState else { return "no result" }
-            var folders: [String] = []
-            for child in tree.root.children.prefix(4) {
-                folders.append("\(child.name)=\(SpaceModel.format(child.bytes))")
+            var lines: [String] = [String(format: "files=%d scanned=%@ notCounted=%@ seconds=%.1f", tree.root.fileCount, SpaceModel.format(tree.root.bytes), SpaceModel.format(space.notCounted), seconds)]
+            for root in tree.root.children {
+                var inner: [String] = []
+                for child in root.children.prefix(10) {
+                    inner.append("\(child.name)=\(SpaceModel.format(child.bytes))")
+                }
+                lines.append("\(root.name)=\(SpaceModel.format(root.bytes)): " + inner.joined(separator: ", "))
             }
-            var files: [String] = []
-            for file in space.topFiles.prefix(3) {
-                files.append("\((file.path as NSString).lastPathComponent)=\(SpaceModel.format(file.bytes))")
+            return lines.joined(separator: " || ")
+
+        case "space-folder":
+            // space-folder:Home/Library/Application Support: the biggest folders inside it.
+            guard let node = SpaceModel.shared.tree?.node(at: argument.components(separatedBy: "/")) else { return "not found" }
+            var parts: [String] = []
+            for child in node.children.prefix(12) {
+                parts.append("\(child.name)=\(SpaceModel.format(child.bytes))")
             }
-            return String(format: "files=%d total=%@ seconds=%.1f", tree.root.fileCount, SpaceModel.format(tree.root.bytes), seconds) + " top=" + folders.joined(separator: ",") + " biggest=" + files.joined(separator: ",")
+            return "\(argument)=\(SpaceModel.format(node.bytes)): " + parts.joined(separator: ", ")
+
+        case "status-item":
+            // Where the bear is (top-left screen points) and whether the panel is open.
+            guard let button = app.statusItemButton(), let window = button.window, let primary = NSScreen.screens.first else { return "no status item open=\(app.isMenuPanelOpen)" }
+            let frame = window.frame
+            let x = Int(frame.midX)
+            let y = Int(primary.frame.maxY - frame.midY)
+            return "at=\(x),\(y) open=\(app.isMenuPanelOpen)"
+
+        case "close-panel":
+            app.closeMenuPanel()
+            try? await Task.sleep(nanoseconds: 300_000_000)
+            return "open=\(app.isMenuPanelOpen)"
 
         case "space-top":
             // Full paths of the biggest files from the last scan.
