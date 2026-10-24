@@ -73,6 +73,16 @@ struct VideoSidebar: View {
                         model.updateOverlay(updated)
                     }))
                     .textFieldStyle(.roundedBorder)
+                    Picker("Background", selection: Binding(get: {
+                        model.selectedOverlay?.clearBackground ?? false
+                    }, set: { clear in
+                        model.setSelectedTextClear(clear)
+                    })) {
+                        Text("Label").tag(false)
+                        Text("Transparent").tag(true)
+                    }
+                    .pickerStyle(.segmented)
+                    .font(.system(size: 12))
                 }
                 if overlay.kind != .blur {
                     HStack(spacing: 6) {

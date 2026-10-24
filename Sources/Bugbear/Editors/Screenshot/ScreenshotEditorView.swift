@@ -155,6 +155,18 @@ private struct ScreenshotEditorContent: View {
                 }
                 .buttonStyle(.plain)
                 .help("Bigger text (+ with Text or Step)")
+                Button {
+                    document.clearTextBackground.toggle()
+                    document.applyStyleToSelection()
+                } label: {
+                    Image(systemName: document.clearTextBackground ? "character" : "character.textbox")
+                        .font(.system(size: 13, weight: .semibold))
+                        .frame(width: 28, height: 28)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help(document.clearTextBackground ? "Text without background. Click to put a label behind it" : "Text on a label. Click for transparent background")
+                .accessibilityLabel(document.clearTextBackground ? "Transparent text background" : "Text label background")
             }
             .padding(.horizontal, 3)
             .background(Theme.control)

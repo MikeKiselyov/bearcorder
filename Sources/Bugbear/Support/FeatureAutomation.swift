@@ -171,8 +171,9 @@ enum FeatureAutomation {
             return "afterStop=\(stoppedState) final=\(space.scanState) files=\(tree.root.fileCount)"
 
         case "space-folder":
-            // space-folder:Home/Library/Application Support: the biggest folders inside it.
-            guard let node = SpaceModel.shared.tree?.node(at: argument.components(separatedBy: "/")) else { return "not found" }
+            // space-folder:Home > Library > Application Support: the biggest folders inside it.
+            // " > " separates names, because a scanned subfolder root keeps its slashes.
+            guard let node = SpaceModel.shared.tree?.node(at: argument.components(separatedBy: " > ")) else { return "not found" }
             var parts: [String] = []
             for child in node.children.prefix(12) {
                 parts.append("\(child.name)=\(SpaceModel.format(child.bytes))")

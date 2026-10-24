@@ -283,6 +283,7 @@ final class CanvasView: NSView, NSTextFieldDelegate {
             cropDraft = CGRect(origin: point, size: .zero)
         case .text:
             var annotation = Annotation(tool: .text, start: point, end: point, color: document.color, lineWidth: document.lineWidth)
+            annotation.clearBackground = document.clearTextBackground
             annotation.fontSize = document.fontSize
             document.add(annotation)
             beginTextEditing(annotation)
@@ -482,9 +483,14 @@ final class CanvasView: NSView, NSTextFieldDelegate {
         document.selectedId = annotation.id
         let field = NSTextField(string: annotation.text)
         field.font = NSFont.systemFont(ofSize: annotation.fontSize, weight: .bold)
-        field.textColor = annotation.color.contrastingText
-        field.backgroundColor = annotation.color.nsColor
-        field.drawsBackground = true
+        if annotation.hasClearBackground {
+            field.textColor = annotation.color.nsColor
+            field.drawsBackground = false
+        } else {
+            field.textColor = annotation.color.contrastingText
+            field.backgroundColor = annotation.color.nsColor
+            field.drawsBackground = true
+        }
         field.isBordered = false
         field.focusRingType = .none
         field.placeholderString = "Type…"

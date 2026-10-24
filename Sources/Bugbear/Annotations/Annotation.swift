@@ -94,6 +94,14 @@ enum AnnotationColor: String, CaseIterable, Codable, Identifiable {
 
     var color: Color { Color(nsColor: nsColor) }
 
+    /// Outline around text drawn in this color without a label, so it stays readable.
+    var outline: NSColor {
+        switch self {
+        case .black: return NSColor(hex: 0xF4F4F5)
+        default: return NSColor(hex: 0x1A0B06)
+        }
+    }
+
     /// Text color that reads on top of this color.
     var contrastingText: NSColor {
         switch self {
@@ -185,6 +193,13 @@ struct Annotation: Identifiable, Codable, Equatable {
     var lineWidth: CGFloat
     /// Font size for text; radius base for steps.
     var fontSize: CGFloat = 24
+    /// Text without the colored label behind it. Optional so older project.json files still load.
+    var clearBackground: Bool?
+
+    /// Text drawn in the mark color with an outline, over a transparent background.
+    var hasClearBackground: Bool {
+        return clearBackground ?? false
+    }
 
     var rect: CGRect {
         return CGRect(x: min(start.x, end.x), y: min(start.y, end.y), width: abs(end.x - start.x), height: abs(end.y - start.y))

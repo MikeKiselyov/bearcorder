@@ -24,6 +24,19 @@ enum DevChecks {
         return image.cgImage(forProposedRect: nil, context: nil, hints: nil)
     }
 
+    /// One pixel of an image, top-left origin.
+    private static func pixel(_ image: CGImage, at point: CGPoint) -> (red: Int, green: Int, blue: Int)? {
+        var bytes = [UInt8](repeating: 0, count: 4)
+        let drawn = bytes.withUnsafeMutableBytes { buffer -> Bool in
+            guard let context = CGContext(data: buffer.baseAddress, width: 1, height: 1, bitsPerComponent: 8, bytesPerRow: 4, space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return false }
+            let flippedY = CGFloat(image.height) - point.y - 1
+            context.draw(image, in: CGRect(x: -point.x, y: -flippedY, width: CGFloat(image.width), height: CGFloat(image.height)))
+            return true
+        }
+        if !drawn { return nil }
+        return (red: Int(bytes[0]), green: Int(bytes[1]), blue: Int(bytes[2]))
+    }
+
     /// A tall white page with one text line every 60 px.
     private static func renderTallImage(_ lines: [String]) -> CGImage? {
         let size = CGSize(width: 700, height: CGFloat(lines.count) * 60 + 40)
@@ -91,6 +104,7 @@ enum DevChecks {
         project.timeline.freezes = [FreezeEdit(at: 1, duration: 1)]
         project.overlays = [
             VideoOverlay(kind: .text, span: TimeSpan(start: 0.5, end: 5.5), start: CGPoint(x: 0.05, y: 0.08), end: CGPoint(x: 0.05, y: 0.08), text: "Total is negative", color: .coral),
+            VideoOverlay(kind: .text, span: TimeSpan(start: 0.5, end: 5.5), start: CGPoint(x: 0.5, y: 0.08), end: CGPoint(x: 0.5, y: 0.08), text: "No background", color: .white, clearBackground: true),
             VideoOverlay(kind: .arrow, span: TimeSpan(start: 0.5, end: 5.5), start: CGPoint(x: 0.3, y: 0.3), end: CGPoint(x: 0.5, y: 0.5), color: .yellow),
             VideoOverlay(kind: .rectangle, span: TimeSpan(start: 0.5, end: 5.5), start: CGPoint(x: 0.55, y: 0.55), end: CGPoint(x: 0.8, y: 0.75), color: .coral),
             VideoOverlay(kind: .blur, span: TimeSpan(start: 0.5, end: 5.5), start: CGPoint(x: 0.05, y: 0.7), end: CGPoint(x: 0.35, y: 0.95)),
@@ -182,6 +196,36 @@ enum DevChecks {
             check(cropped?.width == 800 && cropped?.height == 500, "Screenshot crop size")
             let stitched = ScreenshotCapture.stitchHorizontally([base, base], gap: 0)
             check(stitched?.width == 3200 && stitched?.height == 1000, "Stitch two displays")
+        }
+
+        // 3b. Text on a label and text with a transparent background.
+        if let white = renderTextImage([]) {
+            var label = Annotation(tool: .text, start: CGPoint(x: 40, y: 40), end: CGPoint(x: 40, y: 40), color: .coral, lineWidth: 5)
+            label.text = "Checkout 502"
+            label.fontSize = 40
+            var clear = label
+            clear.clearBackground = true
+            let corner = CGPoint(x: 44, y: 44)
+            let labelImage = AnnotationRenderer.renderImage(base: white, annotations: [label], crop: nil, badgeLines: nil, badgeCorner: .topRight, badgeScale: 1)
+            let clearImage = AnnotationRenderer.renderImage(base: white, annotations: [clear], crop: nil, badgeLines: nil, badgeCorner: .topRight, badgeScale: 1)
+            let labelCorner = labelImage.flatMap { image in pixel(image, at: corner) }
+            let clearCorner = clearImage.flatMap { image in pixel(image, at: corner) }
+            check(labelCorner != nil && labelCorner!.green < 150, "Text label fills its box", "\(String(describing: labelCorner))")
+            check(clearCorner != nil && clearCorner!.red > 240 && clearCorner!.green > 240 && clearCorner!.blue > 240, "Transparent text leaves the picture visible", "\(String(describing: clearCorner))")
+            if let image = clearImage {
+                ImageFiles.write(image, to: folder.appendingPathComponent("text-transparent.png"), type: "public.png")
+                let lines = (try? await TextRecognizer.recognize(image)) ?? []
+                let text = TextRecognizer.text(of: lines)
+                check(text.contains("Checkout") && text.contains("502"), "Transparent text stays readable", text)
+            }
+            var data = try? JSONEncoder().encode(label)
+            var decoded = data.flatMap { encoded in try? JSONDecoder().decode(Annotation.self, from: encoded) }
+            check(decoded != nil && decoded!.hasClearBackground == false, "Old marks keep their label")
+            data = try? JSONEncoder().encode(clear)
+            decoded = data.flatMap { encoded in try? JSONDecoder().decode(Annotation.self, from: encoded) }
+            check(decoded?.hasClearBackground == true, "Transparent text is saved")
+        } else {
+            check(false, "Render white image")
         }
 
         // 4. Click placement for side-by-side displays and a cropped region.

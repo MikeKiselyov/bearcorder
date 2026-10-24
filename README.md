@@ -142,6 +142,7 @@ all displays when more than one is connected.
 
 - Trim, cut out parts, slow motion, freeze frame.
 - Text, arrows, boxes and blur with their own time ranges on the timeline. `+` and `-` resize them.
+  Text sits on a colored label or, with Background → Transparent, is drawn as outlined letters.
 - Highlight clicks, show keystrokes, environment badge.
 - Export MP4 or GIF with a size limit (10-100 MB) for trackers that cap attachments.
   The preview is rendered by the same pipeline as the export.
@@ -168,7 +169,8 @@ all displays when more than one is connected.
 - **Scrolling screenshot**: pick an area; the app scrolls it and glues one long image.
   Sticky headers and footers appear once.
 - Editor: arrow, rectangle, ellipse, line, highlighter, pen, text, numbered steps, pixelate blur,
-  magnifier, crop. `+` and `-` change line thickness and text size.
+  magnifier, crop. `+` and `-` change line thickness and text size. The button next to the text size
+  switches text between a colored label and outlined letters on a transparent background.
 - Combine several screenshots side by side, environment badge, style presets, layers, undo and redo.
 - Copy (`⌘C`), save to a folder, or drag the result straight into Jira or Slack.
 
@@ -315,27 +317,24 @@ Permissions can be removed in System Settings → Privacy & Security.
 
 ## Tests and checks
 
-```bash
-swift test                                                    # unit tests for the core logic
-swift build && "$(swift build --show-bin-path)/Bugbear" --self-test /tmp/bugbear-checks
-```
-
-- `swift test` covers `Sources/BugbearCore`: formatters, converters, JWT, time parsing, the video
-  timeline, report building, scrolling-screenshot stitching.
-- `--self-test` needs no permissions. It generates a clip with sound, runs the whole video editor
-  pipeline (trim, cut, slow motion, freeze, overlays, blur, clicks, keys, MP4 and GIF export, audio
-  mixing), renders an annotated screenshot and checks multi-display click mapping.
-
-With Screen Recording and Accessibility allowed, three scripts drive the real app through a local
-automation hook (off by default, switched on only for the run). They move the mouse; don't touch the
-Mac while they run.
+One command runs everything and prints a summary:
 
 ```bash
-scripts/e2e.sh            # buffer, saves, recording with pause, drawing, editor export, audio, screenshots
-scripts/e2e-features.sh   # scrolling screenshot of a Safari page, window resize, ruler, color picker,
-                          # design overlay, area recording, shortcuts, reports, step guide, comparison
-scripts/perf.sh           # CPU and memory idle and while recording, save time, responsiveness
+scripts/test-all.sh           # all suites, about 8 minutes
+scripts/test-all.sh --quick   # unit tests and the self-test, about a minute, no permissions needed
 ```
+
+| Suite | What it covers | Needs |
+|---|---|---|
+| `swift test` | `Sources/BugbearCore`: formatters, converters, JWT, time zones, cron, regex, JSON diff and path, HTTP, test data, the video timeline, size limits, reports, crash reports, scrolling-screenshot stitching, disk tree, updates | nothing |
+| `--self-test` | a generated clip with sound through the whole editor (trim, cut, slow motion, freeze, text with and without a label, arrows, blur, clicks, keys), MP4 and GIF export, size limits, annotated and cropped screenshots, OCR, QR codes, step guides, before/after comparison, display stitching | nothing |
+| `scripts/e2e.sh` | the real app: buffer, saves, recording with pause, drawing, editor export, system audio, markers, crash auto-save, update check | Screen Recording, Accessibility |
+| `scripts/e2e-features.sh` | a Chrome page: scrolling screenshot, window resize, ruler, color picker, design overlay, area recording, shortcuts, Jira and Markdown reports, step guide, comparison, editor sizes, switching between displays, the menu panel, What's New, disk space scan and clean-up | Screen Recording, Accessibility, Chrome |
+| `scripts/perf.sh` | CPU and memory idle and while recording, save time | Screen Recording |
+
+The scripts drive the real app through a local automation hook (off by default, switched on only for
+the run). They move the mouse and open a Chrome window; don't touch the Mac while they run. Logs of
+the last run are in `build/test-logs/`.
 
 The pictures in this README are rendered off screen from a made-up page, so they can be regenerated
 on any Mac without permissions: `scripts/readme-media.sh` (needs `ffmpeg`).

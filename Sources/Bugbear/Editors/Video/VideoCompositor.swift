@@ -121,6 +121,7 @@ struct VideoCompositor {
             case .text:
                 annotation.tool = .text
                 annotation.text = overlay.text.isEmpty ? "Text" : overlay.text
+                annotation.clearBackground = overlay.clearBackground
             case .blur: break
             }
             if let image = renderAnnotation(annotation, canvas: renderSize) {

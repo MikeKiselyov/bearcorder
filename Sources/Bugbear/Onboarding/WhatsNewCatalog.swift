@@ -4,6 +4,12 @@ import BugbearCore
 /// it appears once on every Mac that updates to a build containing it.
 enum WhatsNewCatalog {
     static let releases: [WhatsNewRelease] = [
+        WhatsNewRelease(id: 4, title: "Text without a label, several displays, disk space", items: [
+            WhatsNewRelease.Item(symbol: "character", title: "Text on a transparent background", text: "Write on screenshots and videos with outlined letters instead of a colored label. Pick it next to the text size, or under Background in the video editor.", shortcut: "Editors"),
+            WhatsNewRelease.Item(symbol: "rectangle.on.rectangle", title: "Every display, your pick", text: "The buffer keeps all displays. In the editor show one display or both side by side, for clips and screenshots.", shortcut: "Editor toolbar"),
+            WhatsNewRelease.Item(symbol: "internaldrive", title: "Disk space", text: "See what takes space, clean caches and build leftovers, find the biggest files and move them to the Trash.", shortcut: "Space tab"),
+            WhatsNewRelease.Item(symbol: "doc.on.clipboard", title: "Screenshots go to the clipboard", text: "Every screenshot is copied right away, ready to paste into a ticket or a chat.", shortcut: "⌥⇧4"),
+        ]),
         WhatsNewRelease(id: 3, title: "Reports for Jira, checks on screen, more tools", items: [
             WhatsNewRelease.Item(symbol: "list.number", title: "Bug report in Jira wiki", text: "Copy bug report now also gives Jira markup: h2 headings, # steps, {{code}}. The last format you pick becomes the default.", shortcut: "Copy bug report ▾"),
             WhatsNewRelease.Item(symbol: "tag", title: "Your fields in every capture", text: "Stand, build, test account, feature flag: set them once and they go into the environment, the badge and the report.", shortcut: "Settings → Bug reports"),
