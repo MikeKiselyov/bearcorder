@@ -71,6 +71,9 @@ final class AppState {
     @ObservationIgnored private var recordingDisplay: CGDirectDisplayID?
     /// The buffer runs at the recording frame rate while recording.
     @ObservationIgnored private var boostedFrameRate = false
+    /// Between pressing record and the recording running: a second press must not start another.
+    @ObservationIgnored private var isStartingRecording = false
+    @ObservationIgnored private var screensChangedWhileRecording = false
     /// A display the buffer does not normally capture, added for the length of one recording.
     @ObservationIgnored private var extraDisplayForRecording: CGDirectDisplayID?
 
@@ -220,6 +223,9 @@ final class AppState {
         screenSignature = signature
         if bufferState == .running && recording == nil {
             Task { await restartBufferIfRunning() }
+        } else if recording != nil {
+            // The buffer is restarted when the recording ends.
+            screensChangedWhileRecording = true
         }
     }
 
@@ -614,7 +620,9 @@ final class AppState {
 
     /// `presetRegion` skips the area picker (automation).
     func startRecording(target: RecordingTarget, presetRegion: RegionSelector.Selection? = nil) async {
-        if recording != nil { return }
+        if recording != nil || isStartingRecording { return }
+        isStartingRecording = true
+        defer { isStartingRecording = false }
         closeMenuPanel()
         recordingRegion = presetRegion
         if target == .area && presetRegion == nil {
@@ -644,7 +652,7 @@ final class AppState {
             await startBuffer()
         }
         if bufferState != .running {
-            await restoreBufferResolution()
+            await restoreBufferResolution(force: true)
             showError("Screen recording is not available. Grant Screen Recording access and try again.")
             return
         }
@@ -734,22 +742,33 @@ final class AppState {
         Task { await restoreBufferResolution() }
     }
 
-    /// Back to the displays, resolution and frame rate from Settings after a recording changed them.
-    private func restoreBufferResolution() async {
-        if boostedFrameRate && !nativeResolutionForArea && extraDisplayForRecording == nil {
-            boostedFrameRate = false
-            for buffer in buffers {
-                await buffer.setFrameRate(settings.framesPerSecond)
+    /// Back to the displays, resolution and frame rate from Settings after a recording changed them,
+    /// and back on if the buffer died during the recording (a display was unplugged). `force` is for
+    /// a recording that failed to start.
+    private func restoreBufferResolution(force: Bool = false) async {
+        // A new recording started meanwhile: the buffer's settings are its own now.
+        if !force && (recording != nil || isStartingRecording) { return }
+        var bufferFailed = false
+        if case .failed = bufferState {
+            bufferFailed = true
+        }
+        let needsRestart = nativeResolutionForArea || extraDisplayForRecording != nil || bufferFailed || screensChangedWhileRecording
+        let wasBoosted = boostedFrameRate
+        nativeResolutionForArea = false
+        extraDisplayForRecording = nil
+        boostedFrameRate = false
+        screensChangedWhileRecording = false
+        if needsRestart {
+            if bufferState == .running || bufferFailed {
+                await startBuffer()
+                Log.info("recording done: buffer back to \(settings.qualityLabel)")
             }
             return
         }
-        boostedFrameRate = false
-        if !nativeResolutionForArea && extraDisplayForRecording == nil { return }
-        nativeResolutionForArea = false
-        extraDisplayForRecording = nil
-        if recording == nil && bufferState == .running {
-            await startBuffer()
-            Log.info("recording done: buffer back to \(settings.qualityLabel)")
+        if wasBoosted {
+            for buffer in buffers {
+                await buffer.setFrameRate(settings.framesPerSecond)
+            }
         }
     }
 
@@ -846,11 +865,19 @@ final class AppState {
     /// right after the editor opens, so the editor does not wait for it. The editor opens on the display
     /// under the pointer, or side by side for "All displays".
     private func saveScreenshotOfEachDisplay(_ displays: [(displayID: CGDirectDisplayID, frame: CGRect, url: URL)], showAll: Bool, environment: EnvironmentSnapshot, events: [InputEvent], started: Date) {
-        guard displays.count > 1 else {
-            for display in displays {
-                try? FileManager.default.removeItem(at: display.url)
-            }
+        if displays.isEmpty {
             showError("Could not take a screenshot of the displays.")
+            return
+        }
+        if displays.count == 1 {
+            // A display went to sleep or was unplugged: keep the one picture that came back.
+            do {
+                let capture = try store.add(kind: .screenshot, mediaFile: displays[0].url, environment: environment, events: events)
+                announceScreenshot(capture)
+                WindowManager.shared.openEditor(for: capture)
+            } catch {
+                showError(error.localizedDescription)
+            }
             return
         }
         var variants: [ScreenVariant] = []

@@ -4,6 +4,25 @@ import Foundation
 /// Measures and cleans folders, and scans the home folder for what takes space. Runs off the main
 /// thread; folders macOS does not let us read are skipped quietly.
 enum DiskScanner {
+    /// Set from the main thread when the person presses Stop; the walk checks it between files.
+    /// (A detached task does not see its parent's cancellation, so a flag is needed.)
+    final class StopFlag: @unchecked Sendable {
+        private let lock = NSLock()
+        private var stopped = false
+
+        var isStopped: Bool {
+            lock.lock()
+            defer { lock.unlock() }
+            return stopped
+        }
+
+        func stop() {
+            lock.lock()
+            stopped = true
+            lock.unlock()
+        }
+    }
+
     struct Progress {
         var files = 0
         var bytes: Int64 = 0
@@ -108,7 +127,7 @@ enum DiskScanner {
     /// the biggest files. `includeAppData` also opens other apps' private data in ~/Library
     /// (Containers, Group Containers), which macOS asks about once.
     /// `progress` is called now and then from the scanning thread.
-    static func scan(roots: [Root], includeAppData: Bool, progress: @escaping (Progress) -> Void) -> ScanResult? {
+    static func scan(roots: [Root], includeAppData: Bool, stop: StopFlag, progress: @escaping (Progress) -> Void) -> ScanResult? {
         let started = Date()
         let libraryPath = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library").standardizedFileURL.path
         var allowedInLibrary = scannedInLibrary
@@ -128,7 +147,7 @@ enum DiskScanner {
             }
             guard let walker = FileManager.default.enumerator(at: root.url, includingPropertiesForKeys: Array(sizeKeys), options: [], errorHandler: { _, _ in true }) else { continue }
             for case let url as URL in walker {
-                if Task.isCancelled { return nil }
+                if stop.isStopped { return nil }
                 let path = url.standardizedFileURL.path
                 if skipped.contains(path) || isAppleFolder(url) {
                     walker.skipDescendants()

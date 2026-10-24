@@ -108,6 +108,9 @@ with_spinner() {
     local frames=(⠋ ⠙ ⠹ ⠸ ⠼ ⠴ ⠦ ⠧ ⠇ ⠏)
     local start=$SECONDS tick=0
     printf '\033[?25l'
+    # Give the cursor back even if the install is stopped with Ctrl-C.
+    trap 'printf "\033[?25h"' EXIT
+    trap 'printf "\033[?25h\n"; exit 130' INT TERM
     while kill -0 "$pid" 2>/dev/null; do
         local elapsed=$((SECONDS - start))
         local tip="${TIPS[$(( (elapsed / 8) % ${#TIPS[@]} ))]}"
