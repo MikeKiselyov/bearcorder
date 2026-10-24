@@ -56,17 +56,10 @@ html = (f'<!doctype html><html><head><meta charset="utf-8"><title>Scroll test</t
         f'<header>Bugbear scroll test · sticky header</header>{"".join(rows)}<footer>Sticky footer · end of page</footer></body></html>')
 open(sys.argv[1], "w").write(html)
 EOF
-# A new window, so the browser windows you have open are not moved or resized.
-if [ "$BROWSER" = "Google Chrome" ]; then
-    # Hands the page to the running Chrome, which opens it in a new window.
-    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --new-window "file://$WORK/long.html" >/dev/null 2>&1 &
-else
-    open -a "$BROWSER" "$WORK/long.html"
-fi
-sleep 4
+# A new window, so the browser windows you have open are not moved or resized: bring the browser
+# forward, ⌘N, then type the address like a person would.
 $R "activate-app:$BROWSER" 10 >/dev/null
 sleep 1
-# Resizing and moving act on the front app: never touch someone else's window.
 front=$($R screen 10 | sed -n 's/.*front=//p')
 if [ "$front" != "$BROWSER" ]; then
     echo "STOP  $BROWSER is not in front ($front is), so windows are left alone."
@@ -74,22 +67,46 @@ if [ "$front" != "$BROWSER" ]; then
     defaults write "$BUNDLE_ID" automationEnabled -bool false
     exit 1
 fi
+$R post-key:45:cmd 10 >/dev/null
+sleep 1.5
+printf '%s' "file://$WORK/long.html" | pbcopy
+$R post-key:37:cmd 10 >/dev/null
+sleep 0.3
+$R post-key:9:cmd 10 >/dev/null
+sleep 0.3
+$R post-key:36:none 10 >/dev/null
+sleep 3
+# Resizing, moving and scrolling act on the front window: only ever on the test page.
+title=$($R front-title 10 | sed -n 's/^title=//p')
+case "$title" in
+    "Scroll test"*) ;;
+    *)
+        echo "STOP  the front window is \"$title\", not the test page, so windows are left alone."
+        $R setting:readBrowserURL:true 10 >/dev/null
+        defaults write "$BUNDLE_ID" automationEnabled -bool false
+        exit 1
+        ;;
+esac
 
 echo "==> window size"
 result=$($R resize-front:1280x720 10)
 if echo "$result" | grep -q "app=$BROWSER size=1280x720"; then pass "resize $BROWSER to 1280×720"; else fail "resize $BROWSER" "$result"; fi
 $R resize-front:1100x760 10 >/dev/null
-$R move-front:120,60 10 >/dev/null
 sleep 1
 
 echo "==> scrolling screenshot"
 $R post-key:115:none 10 >/dev/null
 sleep 1
-# The page area from Accessibility, minus 24 pt on the right for the scroll bar.
+# The page area from Accessibility: normalized on its display, global frame, display width.
 web=$($R web-area 10)
-screen_width=$($R screen 10 | sed -n 's/width=\([0-9]*\).*/\1/p')
-screen_height=$($R screen 10 | sed -n 's/.*height=\([0-9]*\).*/\1/p')
-area=$(echo "$web" | awk -F, -v width="$screen_width" '{ printf "%.4f,%.4f,%.4f,%.4f", $1, $2, $3 - 24 / width, $4 }')
+normalized=$(echo "$web" | cut -d' ' -f1)
+global=$(echo "$web" | cut -d' ' -f2)
+screen_width=$(echo "$web" | cut -d' ' -f3)
+# Minus 24 pt on the right for the scroll bar.
+area=$(echo "$normalized" | awk -F, -v width="$screen_width" '{ printf "%.4f,%.4f,%.4f,%.4f", $1, $2, $3 - 24 / width, $4 }')
+# The capture picks the display under the pointer: put it in the middle of the page.
+page_center=$(echo "$global" | awk -F, '{ printf "%d,%d", $1 + $3 / 2, $2 + $4 / 2 }')
+$R "move-pointer:$page_center" 10 >/dev/null
 result=$($R scroll-capture:$area 300)
 file=$(echo "$result" | sed -n 's/.*file=//p')
 height=$(field "$result" height)
@@ -119,7 +136,7 @@ echo "==> color picker"
 ( $R pick-color-test 30 > "$WORK/pick.txt" ) &
 sleep 2
 # The middle of the sticky footer: 20 pt above the bottom of the page area.
-footer_point=$(echo "$web" | awk -F, -v width="$screen_width" -v height="$screen_height" '{ printf "%d,%d", ($1 + $3 / 2) * width, ($2 + $4) * height - 20 }')
+footer_point=$(echo "$global" | awk -F, '{ printf "%d,%d", $1 + $3 / 2, $2 + $4 - 20 }')
 $R post-click:$footer_point 10 >/dev/null
 wait
 if grep -q "hex=#FF6B4A" "$WORK/pick.txt"; then pass "picks #FF6B4A from the footer"; else fail "color picker" "$(cat "$WORK/pick.txt")"; fi
@@ -197,6 +214,12 @@ result=$($R video-size-test 60)
 if echo "$result" | grep -q "100→150→400"; then pass "video mark sizes 100→150→400%"; else fail "video mark sizes" "$result"; fi
 result=$($R cleanup-dryrun:0:0 60)
 if echo "$result" | grep -q "wouldDelete=0"; then pass "clean-up with no limits deletes nothing"; else fail "clean-up dry run" "$result"; fi
+
+# Close the test page window, and only that one.
+$R "activate-app:$BROWSER" 10 >/dev/null
+if $R front-title 10 | grep -q "^title=Scroll test"; then
+    $R post-key:13:cmd 10 >/dev/null
+fi
 
 $R setting:readBrowserURL:true 10 >/dev/null
 defaults write "$BUNDLE_ID" automationEnabled -bool false
