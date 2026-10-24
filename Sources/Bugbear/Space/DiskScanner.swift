@@ -96,48 +96,65 @@ enum DiskScanner {
         return excluded
     }
 
-    /// Walks `root` and returns folder sizes a few levels deep plus the biggest files.
+    /// A folder to scan, shown in the tree under `name` ("Home", "Applications").
+    struct Root {
+        var name: String
+        var url: URL
+        /// Paths below `url` left out.
+        var skip: [String]
+    }
+
+    /// Walks the roots and returns folder sizes a few levels deep, under one "This Mac" node, plus
+    /// the biggest files. `includeAppData` also opens other apps' private data in ~/Library
+    /// (Containers, Group Containers), which macOS asks about once.
     /// `progress` is called now and then from the scanning thread.
-    static func scan(root: URL, skip: [String], progress: @escaping (Progress) -> Void) -> ScanResult? {
+    static func scan(roots: [Root], includeAppData: Bool, progress: @escaping (Progress) -> Void) -> ScanResult? {
         let started = Date()
-        let rootPath = root.standardizedFileURL.path
         let libraryPath = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library").standardizedFileURL.path
-        var skipped: Set<String> = []
-        for path in skip {
-            skipped.insert(root.appendingPathComponent(path).standardizedFileURL.path)
+        var allowedInLibrary = scannedInLibrary
+        if includeAppData {
+            allowedInLibrary.insert("Containers")
+            allowedInLibrary.insert("Group Containers")
         }
-        let tree = DiskTree(rootName: root.lastPathComponent)
+        let tree = DiskTree(rootName: "This Mac", maxDepth: 7)
         var top = TopFiles(limit: 100, minimumBytes: 50_000_000)
         var state = Progress()
         var lastReport = Date()
-        guard let walker = FileManager.default.enumerator(at: root, includingPropertiesForKeys: Array(sizeKeys), options: [], errorHandler: { _, _ in true }) else { return nil }
-        for case let url as URL in walker {
-            if Task.isCancelled { return nil }
-            let path = url.standardizedFileURL.path
-            if skipped.contains(path) || isAppleFolder(url) {
-                walker.skipDescendants()
-                continue
+        for root in roots {
+            let rootPath = root.url.standardizedFileURL.path
+            var skipped: Set<String> = []
+            for path in root.skip {
+                skipped.insert(root.url.appendingPathComponent(path).standardizedFileURL.path)
             }
-            let isInLibrary = url.deletingLastPathComponent().standardizedFileURL.path == libraryPath
-            if isInLibrary && !scannedInLibrary.contains(url.lastPathComponent) {
-                walker.skipDescendants()
-                continue
-            }
-            let bytes = allocatedSize(of: url)
-            if bytes == 0 { continue }
-            let relative = String(path.dropFirst(rootPath.count + 1))
-            var components: [String] = []
-            for part in relative.split(separator: "/") {
-                components.append(String(part))
-            }
-            tree.addFile(components: components, bytes: bytes)
-            top.consider(path: path, bytes: bytes)
-            state.files += 1
-            state.bytes += bytes
-            if Date().timeIntervalSince(lastReport) > 0.25 {
-                lastReport = Date()
-                state.folder = components.first ?? ""
-                progress(state)
+            guard let walker = FileManager.default.enumerator(at: root.url, includingPropertiesForKeys: Array(sizeKeys), options: [], errorHandler: { _, _ in true }) else { continue }
+            for case let url as URL in walker {
+                if Task.isCancelled { return nil }
+                let path = url.standardizedFileURL.path
+                if skipped.contains(path) || isAppleFolder(url) {
+                    walker.skipDescendants()
+                    continue
+                }
+                let isInLibrary = url.deletingLastPathComponent().standardizedFileURL.path == libraryPath
+                if isInLibrary && !allowedInLibrary.contains(url.lastPathComponent) {
+                    walker.skipDescendants()
+                    continue
+                }
+                let bytes = allocatedSize(of: url)
+                if bytes == 0 { continue }
+                let relative = String(path.dropFirst(rootPath.count + 1))
+                var components: [String] = [root.name]
+                for part in relative.split(separator: "/") {
+                    components.append(String(part))
+                }
+                tree.addFile(components: components, bytes: bytes)
+                top.consider(path: path, bytes: bytes)
+                state.files += 1
+                state.bytes += bytes
+                if Date().timeIntervalSince(lastReport) > 0.25 {
+                    lastReport = Date()
+                    state.folder = root.name + "/" + (components.count > 2 ? components[1] : "")
+                    progress(state)
+                }
             }
         }
         return ScanResult(tree: tree, topFiles: top.files, seconds: Date().timeIntervalSince(started))

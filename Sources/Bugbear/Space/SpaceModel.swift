@@ -10,8 +10,26 @@ final class SpaceModel {
 
     enum ScanState {
         case idle
+        /// Asking macOS for the protected folders before the scan, so it runs without interruptions.
+        case preparing
         case running(DiskScanner.Progress)
         case done(seconds: Double)
+    }
+
+    /// One protected folder macOS asks about, checked before the scan.
+    struct AccessCheck: Identifiable {
+        enum State {
+            case waiting
+            case asking
+            case allowed
+            case denied
+        }
+
+        let id: String
+        let url: URL
+        /// Paths below the home folder to leave out of the scan when access is denied.
+        let skipWhenDenied: String
+        var state: State = .waiting
     }
 
     var volumeTotal: Int64 = 0
@@ -25,7 +43,12 @@ final class SpaceModel {
     /// Last result line, e.g. "Freed 3.2 GB from App caches".
     var message: String?
 
-    private(set) var scanState: ScanState = .idle
+    private(set) var scanState: ScanState = .idle {
+        didSet { lastScanProgress = Date() }
+    }
+    /// When the scan last reported progress. A long pause usually means macOS is showing a
+    /// permission prompt and the scan waits for the answer.
+    private(set) var lastScanProgress = Date()
     private(set) var tree: DiskTree?
     private(set) var topFiles: [TopFiles.File] = []
     /// The folder shown in "Folders", as names below the home folder.
@@ -112,31 +135,98 @@ final class SpaceModel {
     // MARK: Scan
 
     var isScanning: Bool {
-        if case .running = scanState { return true }
-        return false
+        switch scanState {
+        case .preparing, .running:
+            return true
+        case .idle, .done:
+            return false
+        }
     }
 
-    /// Scans the home folder, or `subfolder` of it (used by tests).
+    private(set) var accessChecks: [AccessCheck] = []
+    private(set) var scanStartedAt = Date()
+
+    /// Folders macOS refused, which the result does not include.
+    var deniedFolders: [String] {
+        var names: [String] = []
+        for check in accessChecks where check.state == .denied {
+            names.append(check.id)
+        }
+        return names
+    }
+
+    /// Also scan other apps' private data in ~/Library (Docker images often live there). macOS asks once.
+    var includeAppData: Bool = UserDefaults.standard.bool(forKey: "spaceIncludeAppData") {
+        didSet { UserDefaults.standard.set(includeAppData, forKey: "spaceIncludeAppData") }
+    }
+    /// What the last scan covered, to open folders in Finder.
+    @ObservationIgnored private var scanRoots: [DiskScanner.Root] = []
+
+    /// Bytes in use on the disk that the scan did not see: macOS itself, other users, skipped folders,
+    /// local snapshots.
+    var notCounted: Int64 {
+        guard let scanned = tree?.root.bytes else { return 0 }
+        return max(0, volumeTotal - volumeFree - scanned)
+    }
+
+    /// Scans the home folder and /Applications, or just `subfolder` of home (used by tests).
     func startScan(subfolder: String? = nil) {
         if isScanning { return }
-        scanState = .running(DiskScanner.Progress())
+        scanStartedAt = Date()
+        scanState = .preparing
         folderPath = []
-        var root = home
-        var skip = DiskScanner.skippedInScan
+        refreshVolume()
+        var roots: [DiskScanner.Root] = []
         if let inner = subfolder {
-            root = home.appendingPathComponent(inner)
-            // The skip list is relative to the home folder; make it relative to the new root.
+            // The skip list is relative to the home folder; make it relative to the subfolder.
             var relative: [String] = []
             for path in DiskScanner.skippedInScan where path.hasPrefix(inner + "/") {
                 relative.append(String(path.dropFirst(inner.count + 1)))
             }
-            skip = relative
+            roots.append(DiskScanner.Root(name: inner, url: home.appendingPathComponent(inner), skip: relative))
+        } else {
+            roots.append(DiskScanner.Root(name: "Home", url: home, skip: DiskScanner.skippedInScan))
+            roots.append(DiskScanner.Root(name: "Applications", url: URL(fileURLWithPath: "/Applications"), skip: []))
         }
+        var checks: [AccessCheck] = []
+        if subfolder == nil {
+            for name in ["Desktop", "Documents", "Downloads"] {
+                checks.append(AccessCheck(id: name, url: home.appendingPathComponent(name), skipWhenDenied: name))
+            }
+            if includeAppData {
+                checks.append(AccessCheck(id: "Other apps' data", url: home.appendingPathComponent("Library/Containers"), skipWhenDenied: "Library/Containers"))
+            }
+        }
+        accessChecks = checks
+        let withAppData = includeAppData
         scanTask = Task {
+            // 1. Every permission prompt now, one after another, while the person is looking.
+            for index in accessChecks.indices {
+                if Task.isCancelled { return }
+                accessChecks[index].state = .asking
+                let folder = accessChecks[index].url
+                let isAppData = accessChecks[index].skipWhenDenied == "Library/Containers"
+                let allowed = await Task.detached(priority: .userInitiated) { () -> Bool in
+                    return SpaceModel.canRead(folder, insideAnApp: isAppData)
+                }.value
+                accessChecks[index].state = allowed ? .allowed : .denied
+                Log.info("space: access to \(accessChecks[index].id) \(allowed ? "allowed" : "denied")")
+            }
+            // Denied folders are left out instead of failing file by file.
+            if !roots.isEmpty && roots[0].name == "Home" {
+                for check in accessChecks where check.state == .denied {
+                    roots[0].skip.append(check.skipWhenDenied)
+                }
+            }
+            scanRoots = roots
+            let scanRootsNow = roots
+            if Task.isCancelled { return }
+            scanState = .running(DiskScanner.Progress())
+            // 2. The scan itself.
             let result = await Task.detached(priority: .utility) { () -> DiskScanner.ScanResult? in
-                return DiskScanner.scan(root: root, skip: skip) { progress in
+                return DiskScanner.scan(roots: scanRootsNow, includeAppData: withAppData) { progress in
                     Task { @MainActor in
-                        if SpaceModel.shared.isScanning {
+                        if case .running = SpaceModel.shared.scanState {
                             SpaceModel.shared.scanState = .running(progress)
                         }
                     }
@@ -153,6 +243,21 @@ final class SpaceModel {
         }
     }
 
+    /// Opening a protected folder is what makes macOS ask; this returns once it is answered.
+    /// For other apps' data the prompt comes from looking inside one app's container.
+    nonisolated static func canRead(_ folder: URL, insideAnApp: Bool) -> Bool {
+        let files = FileManager.default
+        guard let items = try? files.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil, options: []) else { return false }
+        if !insideAnApp { return true }
+        for item in items where !item.lastPathComponent.hasPrefix("com.apple.") {
+            let data = item.appendingPathComponent("Data")
+            if files.fileExists(atPath: data.path) {
+                return (try? files.contentsOfDirectory(atPath: data.path)) != nil
+            }
+        }
+        return true
+    }
+
     func cancelScan() {
         scanTask?.cancel()
         scanTask = nil
@@ -164,9 +269,11 @@ final class SpaceModel {
         return tree?.node(at: folderPath)
     }
 
-    func url(forFolder path: [String]) -> URL {
-        var url = home
-        for name in path {
+    /// The folder on disk for a path in the tree; the first name is the scanned root.
+    func url(forFolder path: [String]) -> URL? {
+        guard let first = path.first, let root = scanRoots.first(where: { item in item.name == first }) else { return nil }
+        var url = root.url
+        for name in path.dropFirst() {
             url = url.appendingPathComponent(name)
         }
         return url

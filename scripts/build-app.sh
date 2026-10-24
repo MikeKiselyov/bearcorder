@@ -93,6 +93,11 @@ echo "==> signing with: $IDENTITY"
 codesign --force --sign "$IDENTITY" --identifier "$BUNDLE_ID" "$APP_DIR"
 codesign --verify --verbose=1 "$APP_DIR"
 
+# macOS caches app icons: re-register the bundle so the Dock, the screen recording indicator and
+# Finder show the current icon instead of an old one.
+touch "$APP_DIR" "$APP_DIR/Contents/Info.plist"
+/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "$APP_DIR" 2>/dev/null || true
+
 echo "==> done: $APP_DIR"
 
 for argument in "$@"; do
