@@ -774,28 +774,61 @@ final class AppState {
     // MARK: Screenshots
 
     func takeScreenshot(_ mode: ScreenshotMode) async {
+        let started = Date()
+        let panelWasOpen = isMenuPanelOpen
         closeMenuPanel()
         let app = lastExternalApp
-        try? await Task.sleep(nanoseconds: 250_000_000)
+        if panelWasOpen {
+            // Let the panel fade out so it is not in the picture.
+            try? await Task.sleep(nanoseconds: 250_000_000)
+        }
         let recentEvents = inputRecorder.recentEvents(seconds: 60)
+        // Collected while the person picks the area: reading the browser tab can take a moment.
+        async let collected = EnvironmentCollector.snapshot(for: app, readURL: settings.readBrowserURL)
+
         if (mode == .fullScreen || mode == .allDisplays) && NSScreen.screens.count > 1 {
-            await takeScreenshotOfEachDisplay(showAll: mode == .allDisplays, app: app, events: recentEvents)
+            let displays = await ScreenshotCapture.captureEachDisplay()
+            let environment = await collected
+            saveScreenshotOfEachDisplay(displays, showAll: mode == .allDisplays, environment: environment, events: recentEvents, started: started)
             return
         }
         guard let file = await ScreenshotCapture.capture(mode) else { return }
-        let environment = await EnvironmentCollector.snapshot(for: app, readURL: settings.readBrowserURL)
+        let captured = Date()
+        let environment = await collected
         do {
             let capture = try store.add(kind: .screenshot, mediaFile: file, environment: environment, events: recentEvents)
+            announceScreenshot(capture)
             WindowManager.shared.openEditor(for: capture)
+            Log.info(String(format: "screenshot: picked in %.2fs, editor after %.2fs more", captured.timeIntervalSince(started), Date().timeIntervalSince(captured)))
         } catch {
             showError(error.localizedDescription)
         }
     }
 
-    /// Several displays: every display as its own picture plus all of them side by side, like clips.
-    /// The editor opens on the display under the pointer, or on all of them for "All displays".
-    private func takeScreenshotOfEachDisplay(showAll: Bool, app: NSRunningApplication?, events: [InputEvent]) async {
-        let displays = await ScreenshotCapture.captureEachDisplay()
+    /// The capture whose editor should say "Copied" when it opens.
+    @ObservationIgnored private(set) var justCopiedScreenshot: UUID?
+
+    /// Puts a new screenshot on the clipboard (Settings → Screenshots) and says so.
+    private func announceScreenshot(_ capture: Capture) {
+        guard settings.copyScreenshots, let png = try? Data(contentsOf: capture.mediaURL) else {
+            Toast.shared.show("Screenshot saved in Recent", symbol: "photo")
+            return
+        }
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        // Image data for chat apps, plus the file for Finder and Jira attachments.
+        let item = NSPasteboardItem()
+        item.setData(png, forType: .png)
+        item.setString(capture.mediaURL.absoluteString, forType: .fileURL)
+        pasteboard.writeObjects([item])
+        justCopiedScreenshot = capture.id
+        Toast.shared.show("Copied. Paste with ⌘V, it is also in Recent.", symbol: "doc.on.clipboard", seconds: 2.5)
+    }
+
+    /// Several displays: every display as its own picture, like clips. The side-by-side picture is built
+    /// right after the editor opens, so the editor does not wait for it. The editor opens on the display
+    /// under the pointer, or side by side for "All displays".
+    private func saveScreenshotOfEachDisplay(_ displays: [(displayID: CGDirectDisplayID, frame: CGRect, url: URL)], showAll: Bool, environment: EnvironmentSnapshot, events: [InputEvent], started: Date) {
         guard displays.count > 1 else {
             for display in displays {
                 try? FileManager.default.removeItem(at: display.url)
@@ -803,47 +836,61 @@ final class AppState {
             showError("Could not take a screenshot of the displays.")
             return
         }
-        var images: [CGImage] = []
-        for display in displays {
-            if let image = ImageFiles.load(display.url) {
-                images.append(image)
-            }
-        }
-        let sideBySide = AppPaths.temporary.appendingPathComponent("all-\(UUID().uuidString).png")
-        if let stitched = ScreenshotCapture.stitchHorizontally(images) {
-            ImageFiles.write(stitched, to: sideBySide, type: "public.png")
-        }
-        var files: [URL] = []
         var variants: [ScreenVariant] = []
         for display in displays {
-            files.append(display.url)
             variants.append(ScreenVariant(id: "display-\(display.displayID)", name: AppState.screenName(display.displayID), file: "screen-\(display.displayID).png", events: events, isMain: display.displayID == CGMainDisplayID()))
         }
-        files.append(sideBySide)
         variants.append(ScreenVariant(id: ScreenVariant.allID, name: "Side by side", file: "screen-all.png", events: events, isMain: false))
 
-        var chosen = variants.count - 1
-        if !showAll {
-            let mouse = NSEvent.mouseLocation
-            for (index, display) in displays.enumerated() where display.frame.contains(mouse) {
-                chosen = index
-            }
+        var chosen = 0
+        let mouse = NSEvent.mouseLocation
+        for (index, display) in displays.enumerated() where display.frame.contains(mouse) {
+            chosen = index
         }
-        let environment = await EnvironmentCollector.snapshot(for: app, readURL: settings.readBrowserURL)
         do {
-            var capture = try store.add(kind: .screenshot, mediaFile: files[chosen], environment: environment, events: events)
-            for (index, file) in files.enumerated() {
-                let target = capture.folder.appendingPathComponent(variants[index].file)
-                if index == chosen {
-                    try FileManager.default.linkItem(at: capture.mediaURL, to: target)
-                } else {
-                    try FileManager.default.moveItem(at: file, to: target)
+            if showAll {
+                // Stitched now: it is the picture that opens.
+                var images: [CGImage] = []
+                for display in displays {
+                    if let image = ImageFiles.load(display.url) {
+                        images.append(image)
+                    }
+                }
+                let stitchedFile = AppPaths.temporary.appendingPathComponent("all-\(UUID().uuidString).png")
+                if let stitched = ScreenshotCapture.stitchHorizontally(images) {
+                    ImageFiles.write(stitched, to: stitchedFile, type: "public.png")
+                }
+                var capture = try store.add(kind: .screenshot, mediaFile: stitchedFile, environment: environment, events: events)
+                try FileManager.default.linkItem(at: capture.mediaURL, to: capture.folder.appendingPathComponent("screen-all.png"))
+                for (index, display) in displays.enumerated() {
+                    try FileManager.default.moveItem(at: display.url, to: capture.folder.appendingPathComponent(variants[index].file))
+                }
+                capture.screens = variants
+                capture.selectedScreen = ScreenVariant.allID
+                try store.replace(capture)
+                announceScreenshot(capture)
+                WindowManager.shared.openEditor(for: capture)
+            } else {
+                var capture = try store.add(kind: .screenshot, mediaFile: displays[chosen].url, environment: environment, events: events)
+                for (index, display) in displays.enumerated() {
+                    let target = capture.folder.appendingPathComponent(variants[index].file)
+                    if index == chosen {
+                        try FileManager.default.linkItem(at: capture.mediaURL, to: target)
+                    } else {
+                        try FileManager.default.moveItem(at: display.url, to: target)
+                    }
+                }
+                capture.screens = variants
+                capture.selectedScreen = variants[chosen].id
+                try store.replace(capture)
+                announceScreenshot(capture)
+                WindowManager.shared.openEditor(for: capture)
+                let ready = capture
+                Task.detached(priority: .utility) {
+                    CaptureStore.buildSideBySideScreenshot(ready)
                 }
             }
-            capture.screens = variants
-            capture.selectedScreen = variants[chosen].id
-            try store.replace(capture)
-            WindowManager.shared.openEditor(for: capture)
+            Log.info(String(format: "screenshot of %d displays: editor after %.2fs", displays.count, Date().timeIntervalSince(started)))
         } catch {
             showError(error.localizedDescription)
         }
