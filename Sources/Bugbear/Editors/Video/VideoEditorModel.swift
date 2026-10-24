@@ -309,6 +309,7 @@ final class VideoEditorModel {
         if kind == .text {
             overlay.text = "Bug here"
             overlay.end = start
+            overlay.clearBackground = lastClearText
         }
         project.overlays.append(overlay)
         selection = .overlay(overlay.id)
@@ -318,6 +319,18 @@ final class VideoEditorModel {
 
     /// New marks use the size picked last.
     @ObservationIgnored private var lastOverlayScale: Double = 1
+    /// New text keeps the background choice made last.
+    @ObservationIgnored private var lastClearText = UserDefaults.standard.bool(forKey: "clearTextBackground")
+
+    /// Switches the selected text between a colored label and outlined letters on a transparent background.
+    func setSelectedTextClear(_ clear: Bool) {
+        guard var overlay = selectedOverlay, overlay.kind == .text else { return }
+        checkpoint()
+        overlay.clearBackground = clear
+        lastClearText = clear
+        UserDefaults.standard.set(clear, forKey: "clearTextBackground")
+        updateOverlay(overlay)
+    }
 
     /// + and -: grows or shrinks the selected text, arrow or box.
     func changeSelectedOverlaySize(by direction: Int) {

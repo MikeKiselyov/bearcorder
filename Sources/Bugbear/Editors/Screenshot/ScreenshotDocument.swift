@@ -45,6 +45,10 @@ final class ScreenshotDocument {
     var stroke: StrokeSize = .medium
     /// Text and step label size in points, before the image scale.
     var textPoints: CGFloat = TextSizes.standard
+    /// New text has no label behind it, only outlined letters.
+    var clearTextBackground: Bool = UserDefaults.standard.bool(forKey: "clearTextBackground") {
+        didSet { UserDefaults.standard.set(clearTextBackground, forKey: "clearTextBackground") }
+    }
     var showBadge = false
     var badgeCorner: BadgeCorner = .topRight
     var exportFormat: ExportFormat = .png
@@ -180,6 +184,9 @@ final class ScreenshotDocument {
         annotations[index].lineWidth = lineWidth
         if annotations[index].tool == .text || annotations[index].tool == .step {
             annotations[index].fontSize = annotations[index].tool == .step ? fontSize * 1.1 : fontSize
+        }
+        if annotations[index].tool == .text {
+            annotations[index].clearBackground = clearTextBackground
         }
         saveProject()
     }

@@ -163,8 +163,18 @@ enum AnnotationRenderer {
     }
 
     static func textAttributes(_ annotation: Annotation) -> [NSAttributedString.Key: Any] {
+        let font = NSFont.systemFont(ofSize: annotation.fontSize, weight: .bold)
+        if annotation.hasClearBackground {
+            // Negative stroke width fills the letters and outlines them, so the text reads on any picture.
+            return [
+                .font: font,
+                .foregroundColor: annotation.color.nsColor,
+                .strokeColor: annotation.color.outline,
+                .strokeWidth: -4,
+            ]
+        }
         return [
-            .font: NSFont.systemFont(ofSize: annotation.fontSize, weight: .bold),
+            .font: font,
             .foregroundColor: annotation.color.contrastingText,
         ]
     }
@@ -180,14 +190,21 @@ enum AnnotationRenderer {
         let text = annotation.text.isEmpty ? "Text" : annotation.text
         let size = textSize(annotation)
         let box = CGRect(origin: annotation.start, size: size)
+        let padding = annotation.fontSize * 0.45
+        let origin = CGPoint(x: box.minX + padding, y: box.minY + padding * 0.6)
+        let textBox = CGRect(origin: origin, size: CGSize(width: size.width, height: size.height))
+        if annotation.hasClearBackground {
+            withShadow(width: 2) {
+                (text as NSString).draw(with: textBox, options: [.usesLineFragmentOrigin], attributes: textAttributes(annotation))
+            }
+            return
+        }
         withShadow(width: 2) {
             let path = NSBezierPath(roundedRect: box, xRadius: annotation.fontSize * 0.3, yRadius: annotation.fontSize * 0.3)
             annotation.color.nsColor.setFill()
             path.fill()
         }
-        let padding = annotation.fontSize * 0.45
-        let origin = CGPoint(x: box.minX + padding, y: box.minY + padding * 0.6)
-        (text as NSString).draw(with: CGRect(origin: origin, size: CGSize(width: size.width, height: size.height)), options: [.usesLineFragmentOrigin], attributes: textAttributes(annotation))
+        (text as NSString).draw(with: textBox, options: [.usesLineFragmentOrigin], attributes: textAttributes(annotation))
     }
 
     static func drawStep(_ annotation: Annotation) {

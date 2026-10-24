@@ -215,6 +215,73 @@ if echo "$result" | grep -q "100→150→400"; then pass "video mark sizes 100�
 result=$($R cleanup-dryrun:0:0 60)
 if echo "$result" | grep -q "wouldDelete=0"; then pass "clean-up with no limits deletes nothing"; else fail "clean-up dry run" "$result"; fi
 
+echo "==> several displays"
+display_count=$($R screens 10 | tr ';' '\n' | grep -c ':')
+if [ "$display_count" -ge 2 ]; then
+    $R close-windows 10 >/dev/null
+    $R save:4 90 >/dev/null
+    screens=$($R clip-screens 10)
+    first=$(echo "$screens" | tr ' ' '\n' | grep '^display-' | head -1 | cut -d= -f1)
+    if [ "$(echo "$screens" | grep -o 'file:true' | wc -l | tr -d ' ')" -ge "$display_count" ]; then pass "clip keeps one video per display ($display_count)"; else fail "clip per display" "$screens"; fi
+    one=$($R "select-screen:$first" 60)
+    both=$($R select-screen:all 90)
+    one_width=$(echo "$one" | sed -n 's/.*size=\([0-9]*\)x.*/\1/p')
+    both_width=$(echo "$both" | sed -n 's/.*size=\([0-9]*\)x.*/\1/p')
+    if [ -n "$one_width" ] && [ -n "$both_width" ] && [ "$both_width" -gt "$one_width" ]; then pass "clip switches between one display and side by side ($one_width → $both_width px)"; else fail "clip display switch" "$one / $both"; fi
+    $R "select-screen:$first" 60 >/dev/null
+    $R screenshot-full 40 >/dev/null
+    $R close-windows 10 >/dev/null
+    one=$($R "select-screen:$first" 60)
+    both=$($R select-screen:all 60)
+    one_width=$(echo "$one" | sed -n 's/.*size=\([0-9]*\)x.*/\1/p')
+    both_width=$(echo "$both" | sed -n 's/.*size=\([0-9]*\)x.*/\1/p')
+    if [ -n "$one_width" ] && [ -n "$both_width" ] && [ "$both_width" -gt "$one_width" ]; then pass "screenshot switches between one display and both ($one_width → $both_width px)"; else fail "screenshot display switch" "$one / $both"; fi
+    $R "select-screen:$first" 60 >/dev/null
+else
+    echo "SKIP  one display: connect a second one to check display switching"
+fi
+
+echo "==> menu panel"
+$R close-panel 10 >/dev/null
+if [ "$($R press-status-item 10)" = "open=true" ]; then pass "click on the bear opens the panel"; else fail "panel opens"; fi
+if [ "$($R press-status-item 10)" = "open=false" ]; then pass "second click closes it"; else fail "panel closes"; fi
+$R press-status-item 10 >/dev/null
+$R screenshot-full 40 >/dev/null
+$R close-windows 10 >/dev/null
+if [ "$($R press-status-item 10)" = "open=true" ]; then pass "panel still opens after a screenshot"; else fail "panel after screenshot"; fi
+$R close-panel 10 >/dev/null
+
+echo "==> what's new"
+$R whats-new 10 >/dev/null
+if $R windows-debug 10 | tr '|' '\n' | grep "visible=true" | grep -q "720x"; then pass "What's New window opens"; else fail "What's New window"; fi
+$R close-windows 10 >/dev/null
+
+echo "==> disk space"
+fixture="$WORK/space"
+mkdir -p "$fixture/videos" "$fixture/notes"
+# Real data, not sparse files: the scan counts what is allocated on disk. "Largest files" lists 50 MB and up.
+head -c 60000000 /dev/urandom >"$fixture/videos/big.mov"
+head -c 5000000 /dev/urandom >"$fixture/videos/small.mov"
+head -c 1000000 /dev/urandom >"$fixture/notes/a.txt"
+relative="${fixture#"$HOME"/}"
+result=$($R "space-scan:$relative" 90)
+if echo "$result" | grep -q "^files=3 "; then pass "scan counts the files ($(echo "$result" | cut -d' ' -f1-2))"; else fail "scan" "$result"; fi
+folder=$($R "space-folder:$relative > videos" 10)
+if echo "$folder" | grep -q "videos=6[45]"; then pass "folder sizes ($folder)"; else fail "folder sizes" "$folder"; fi
+top=$($R space-top:1 10)
+if echo "$top" | grep -q "big.mov"; then pass "largest file first"; else fail "largest file" "$top"; fi
+rm -rf "$fixture"
+result=$($R space-clean-test 60)
+if echo "$result" | grep -q "cacheGone=true homebrewKept=true otherLogGone=true ownLogKept=true cachesFolderKept=true"; then pass "clean-up deletes caches and keeps what it must"; else fail "clean-up" "$result"; fi
+result=$($R space-stop-test 120)
+if echo "$result" | grep -q "afterStop=idle final=done"; then pass "stopped scan leaves no stale result"; else fail "stop scan" "$result"; fi
+result=$($R space-measure 120)
+if echo "$result" | grep -q "^free="; then pass "categories measured"; else fail "measure" "$result"; fi
+$R open-space:Folders 10 >/dev/null
+sleep 1
+if $R windows-debug 10 | tr '|' '\n' | grep "visible=true" | grep -q "level=0"; then pass "Space window opens"; else fail "Space window"; fi
+$R close-windows 10 >/dev/null
+
 # Close the test page window, and only that one.
 $R "activate-app:$BROWSER" 10 >/dev/null
 if $R front-title 10 | grep -q "^title=Scroll test"; then
