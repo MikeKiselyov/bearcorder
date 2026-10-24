@@ -100,6 +100,9 @@ A bug you could not reproduce is already recorded: press `⌥⇧1` and it opens 
 The buffer is optional: choose it in the first-start guide, pause it from the menu bar, or turn it off in
 Settings → Buffer.
 
+- Light on the Mac: the buffer records at 15 fps (recordings switch to 30 fps without losing what the
+  buffer holds) and captures straight in the video encoder's format. With two displays the app uses
+  about 70 MB of memory and a few percent of one CPU core; saving 30 seconds takes about 0.1 s.
 - System audio and microphone are optional.
 - Clicks and shortcut keys are recorded alongside, so the editor can show them on the video.
   Plain typing is never stored as text; it shows up as "typing…".
@@ -160,6 +163,8 @@ all displays when more than one is connected.
 ### Screenshots and the screenshot editor
 
 - `⌥⇧4` area, `⌥⇧5` window, or all displays stitched into one image.
+- A new screenshot is on the clipboard right away, ready for `⌘V` in a chat or a ticket, and the
+  editor opens in about half a second. Settings → Screenshots turns the copying off.
 - **Scrolling screenshot**: pick an area; the app scrolls it and glues one long image.
   Sticky headers and footers appear once.
 - Editor: arrow, rectangle, ellipse, line, highlighter, pen, text, numbered steps, pixelate blur,

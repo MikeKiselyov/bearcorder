@@ -124,9 +124,13 @@ struct MenuBarView: View {
                 .foregroundStyle(Theme.text)
             VStack(alignment: .leading, spacing: 1) {
                 Text("Bugbear").font(.system(size: 14, weight: .bold))
-                Text("Catch the bug that already happened")
-                    .font(.system(size: 11))
-                    .foregroundStyle(Theme.textSecondary)
+                // The update badge needs the room; the tagline comes back once updated.
+                if !Updater.shared.hasUpdate {
+                    Text("Catch the bug that already happened")
+                        .font(.system(size: 11))
+                        .foregroundStyle(Theme.textSecondary)
+                        .lineLimit(1)
+                }
             }
             Spacer()
             UpdateBadge()
@@ -695,11 +699,16 @@ struct CaptureThumbnail: View {
         VStack(alignment: .leading, spacing: 4) {
             ZStack(alignment: .bottomTrailing) {
                 if let image = app.store.thumbnail(for: capture) {
-                    Image(nsImage: image)
-                        .resizable()
-                        .aspectRatio(contentMode: .fill)
+                    // The cell sets the size and the picture fills it: an image sized by itself
+                    // made wide captures (two displays) push the grid past the panel's edge.
+                    Color.clear
                         .frame(maxWidth: .infinity)
                         .frame(height: height)
+                        .overlay {
+                            Image(nsImage: image)
+                                .resizable()
+                                .aspectRatio(contentMode: .fill)
+                        }
                         .clipped()
                 } else {
                     Rectangle().fill(Color(hex: 0x2E3136)).frame(height: height)

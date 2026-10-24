@@ -47,7 +47,7 @@ struct SettingsView: View {
                         Text("1440p").tag(1440)
                         Text("Native").tag(0)
                     }
-                    Toggle("Record all displays (side by side)", isOn: $settings.captureAllDisplays)
+                    Toggle("Keep all displays (pick one or all side by side in the editor)", isOn: $settings.captureAllDisplays)
                     Toggle("Show the mouse pointer", isOn: $settings.showsCursor)
                     Toggle("Start the buffer when the app opens", isOn: $settings.startBufferOnLaunch)
                     if needsRestart {
