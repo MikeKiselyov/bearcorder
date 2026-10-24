@@ -3,7 +3,7 @@
 #
 #   scripts/e2e.sh            build, launch, run every scenario, print PASS/FAIL
 #
-# Needs Screen Recording permission for QA Helper (granted once in System Settings).
+# Needs Screen Recording permission for Bugbear (granted once in System Settings).
 # Turns on the local automation hook for the run and turns it off afterwards.
 # The microphone and camera are skipped: they would show permission prompts.
 set -uo pipefail
@@ -16,8 +16,8 @@ if [ -f "$ROOT/.env" ]; then
     source "$ROOT/.env"
     set +a
 fi
-BUNDLE_ID="${QAHELPER_BUNDLE_ID:-io.github.qahelper.app}"
-LOG="$HOME/Library/Logs/QA Helper/qahelper.log"
+BUNDLE_ID="${BUGBEAR_BUNDLE_ID:-io.github.bugbear.app}"
+LOG="$HOME/Library/Logs/Bugbear/bugbear.log"
 FAILURES=0
 PASSES=0
 
@@ -30,7 +30,7 @@ run() {
     local timeout="${2:-60}"
     local before
     before=$(grep -c "AUTOMATION $command →" "$LOG" 2>/dev/null || true)
-    scripts/qa-command.sh "$command"
+    scripts/bugbear-command.sh "$command"
     local waited=0
     while [ "$waited" -lt "$timeout" ]; do
         local now
@@ -70,9 +70,9 @@ printf '{"status":"ahead","ahead_by":2,"commits":[{"sha":"1111111aaaa","commit":
 python3 -m http.server 8765 --bind 127.0.0.1 --directory "$FEED_DIR" >/dev/null 2>&1 &
 FEED_PID=$!
 defaults write "$BUNDLE_ID" updateCompareURL "http://127.0.0.1:8765/compare.json"
-pkill -x QAHelper 2>/dev/null; sleep 1
+pkill -x Bugbear 2>/dev/null; sleep 1
 rm -f "$LOG"
-open "$ROOT/build/QA Helper.app"
+open "$ROOT/build/Bugbear.app"
 echo "==> waiting 20 s with a mostly static screen"
 sleep 20
 
@@ -197,7 +197,7 @@ mkdir -p "$crash_folder"
 run "crash-watch:$crash_folder" >/dev/null
 sleep 1
 crash_time=$(date -v-1S "+%Y-%m-%d %H:%M:%S.00 %z")
-printf '{"app_name":"E2E Crasher","timestamp":"%s","bundleID":"io.github.qahelper.e2e","bug_type":"309","name":"E2E Crasher"}\n{}\n' "$crash_time" > "$crash_folder/E2E Crasher-test.ips"
+printf '{"app_name":"E2E Crasher","timestamp":"%s","bundleID":"io.github.bugbear.e2e","bug_type":"309","name":"E2E Crasher"}\n{}\n' "$crash_time" > "$crash_folder/E2E Crasher-test.ips"
 saved=""
 for _ in $(seq 1 60); do
     saved=$(grep "crash clip saved" "$LOG" | tail -1)
@@ -206,7 +206,7 @@ for _ in $(seq 1 60); do
 done
 if [ -n "$saved" ]; then
     capture_id=$(echo "$saved" | sed 's/.*→ //')
-    capture_folder=$(find "$HOME/Library/Application Support/QA Helper" -type d -name "$capture_id" 2>/dev/null | head -1)
+    capture_folder=$(find "$HOME/Library/Application Support/Bugbear" -type d -name "$capture_id" 2>/dev/null | head -1)
     duration=$(media_duration "$capture_folder/original.mp4")
     if at_least "${duration:-0}" 30; then pass "crash saves the time before it (${duration}s clip)"; else fail "crash clip length" "got $duration"; fi
     if [ -f "$capture_folder/crash-report.ips" ]; then pass "crash report kept next to the clip"; else fail "crash report kept next to the clip" "$capture_folder"; fi

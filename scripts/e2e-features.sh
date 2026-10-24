@@ -1,12 +1,13 @@
 #!/bin/bash
 # Real-screen checks of the features that need other apps and the mouse: scrolling screenshot of a
-# Safari page, window resizing, ruler, color picker, design overlay, area recording through the
+# browser page, window resizing, ruler, color picker, design overlay, area recording through the
 # picker, shortcuts, reports, step guide, comparison, editor sizes.
 #
-#   scripts/e2e-features.sh
+#   scripts/e2e-features.sh                     # in Google Chrome
+#   E2E_BROWSER=Safari scripts/e2e-features.sh  # or another browser
 #
-# Opens a local test page in Safari and moves the mouse; don't touch the Mac while it runs (~2 min).
-# Needs Screen Recording and Accessibility for QA Helper. Restores the settings it changes.
+# Opens a local test page in a new browser window and moves the mouse; don't touch the Mac while it runs (~2 min).
+# Needs Screen Recording and Accessibility for Bugbear. Restores the settings it changes.
 set -uo pipefail
 
 cd "$(dirname "$0")/.."
@@ -17,8 +18,9 @@ if [ -f "$ROOT/.env" ]; then
     source "$ROOT/.env"
     set +a
 fi
-BUNDLE_ID="${QAHELPER_BUNDLE_ID:-io.github.qahelper.app}"
-R=scripts/qa-run.sh
+BUNDLE_ID="${BUGBEAR_BUNDLE_ID:-io.github.bugbear.app}"
+R=scripts/bugbear-run.sh
+BROWSER="${E2E_BROWSER:-Google Chrome}"
 WORK="$ROOT/build/e2e-features"
 FAILURES=0
 PASSES=0
@@ -32,8 +34,8 @@ scripts/build-app.sh >/dev/null 2>&1 || { echo "build failed"; exit 1; }
 rm -rf "$WORK"
 mkdir -p "$WORK"
 defaults write "$BUNDLE_ID" automationEnabled -bool true
-pkill -x QAHelper 2>/dev/null; sleep 1
-open "$ROOT/build/QA Helper.app"
+pkill -x Bugbear 2>/dev/null; sleep 1
+open "$ROOT/build/Bugbear.app"
 sleep 6
 $R setting:readBrowserURL:false 10 >/dev/null
 if [ "$($R ax 10)" = "trusted=true" ]; then pass "Accessibility is allowed"; else fail "Accessibility is allowed" "grant it in System Settings"; fi
@@ -51,17 +53,31 @@ style = ("body{margin:0;font:18px -apple-system,sans-serif;background:#fff;color
          ".row{padding:10px 20px;border-bottom:1px solid #ddd;height:22px}"
          ".r0{background:#fafafa}.r1{background:#f2f7ff}.r2{background:#fff8f0}.r3{background:#f4fff4}.r4{background:#fff}")
 html = (f'<!doctype html><html><head><meta charset="utf-8"><title>Scroll test</title><style>{style}</style></head><body>'
-        f'<header>QA Helper scroll test · sticky header</header>{"".join(rows)}<footer>Sticky footer · end of page</footer></body></html>')
+        f'<header>Bugbear scroll test · sticky header</header>{"".join(rows)}<footer>Sticky footer · end of page</footer></body></html>')
 open(sys.argv[1], "w").write(html)
 EOF
-open -a Safari "$WORK/long.html"
+# A new window, so the browser windows you have open are not moved or resized.
+if [ "$BROWSER" = "Google Chrome" ]; then
+    # Hands the page to the running Chrome, which opens it in a new window.
+    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --new-window "file://$WORK/long.html" >/dev/null 2>&1 &
+else
+    open -a "$BROWSER" "$WORK/long.html"
+fi
 sleep 4
-open -a Safari
+$R "activate-app:$BROWSER" 10 >/dev/null
 sleep 1
+# Resizing and moving act on the front app: never touch someone else's window.
+front=$($R screen 10 | sed -n 's/.*front=//p')
+if [ "$front" != "$BROWSER" ]; then
+    echo "STOP  $BROWSER is not in front ($front is), so windows are left alone."
+    $R setting:readBrowserURL:true 10 >/dev/null
+    defaults write "$BUNDLE_ID" automationEnabled -bool false
+    exit 1
+fi
 
 echo "==> window size"
 result=$($R resize-front:1280x720 10)
-if echo "$result" | grep -q "app=Safari size=1280x720"; then pass "resize Safari to 1280×720"; else fail "resize Safari" "$result"; fi
+if echo "$result" | grep -q "app=$BROWSER size=1280x720"; then pass "resize $BROWSER to 1280×720"; else fail "resize $BROWSER" "$result"; fi
 $R resize-front:1100x760 10 >/dev/null
 $R move-front:120,60 10 >/dev/null
 sleep 1
@@ -111,11 +127,11 @@ if grep -q "hex=#FF6B4A" "$WORK/pick.txt"; then pass "picks #FF6B4A from the foo
 echo "==> ruler"
 $R ruler-start 10 >/dev/null
 $R post-drag:400,300:700,500 10 >/dev/null
-open -a Safari
+$R "activate-app:$BROWSER" 10 >/dev/null
 sleep 1
 $R post-key:53:none 10 >/dev/null
 sleep 1
-if [ "$($R ruler-state 10)" = "active=false" ]; then pass "Esc closes the ruler even with Safari in front"; else fail "ruler Esc"; $R ruler-stop 10 >/dev/null; fi
+if [ "$($R ruler-state 10)" = "active=false" ]; then pass "Esc closes the ruler even with $BROWSER in front"; else fail "ruler Esc"; $R ruler-stop 10 >/dev/null; fi
 
 echo "==> design overlay"
 result=$($R overlay-test:2 20)
@@ -125,7 +141,7 @@ if echo "$result" | grep -q "clickThrough=true"; then pass "overlay click-throug
 $R overlay-close 10 >/dev/null
 
 echo "==> area recording through the picker"
-open -a Safari
+$R "activate-app:$BROWSER" 10 >/dev/null
 sleep 1
 $R record-area-picker 10 >/dev/null
 sleep 1.5
@@ -135,7 +151,9 @@ sleep 0.5
 $R post-key:36:none 10 >/dev/null
 sleep 3
 result=$($R recording-region 10)
-if echo "$result" | grep -q "region=640x360 recording=true outline=1"; then pass "720p chip picks 640×360 pt and shows the outline"; else fail "area picker" "$result"; fi
+# One outline window per display: a frame on this one, "Not recorded" on the others.
+screen_count=$($R screens 10 | tr ';' '\n' | wc -l | tr -d ' ')
+if echo "$result" | grep -q "region=640x360 recording=true outline=$screen_count"; then pass "720p chip picks 640×360 pt and shows the outline on $screen_count display(s)"; else fail "area picker" "$result"; fi
 sleep 2
 $R record-stop 60 >/dev/null
 result=$($R "frame-of-latest:1:$WORK/area-frame.png" 30)
@@ -143,7 +161,7 @@ if [ "$result" = "frame=1280x720" ]; then pass "area clip is 1280×720"; else fa
 $R close-windows 10 >/dev/null
 
 echo "==> shortcuts"
-LOG="$HOME/Library/Logs/QA Helper/qahelper.log"
+LOG="$HOME/Library/Logs/Bugbear/bugbear.log"
 before=$(grep -c "marker added" "$LOG")
 $R post-key:46:option,shift 10 >/dev/null
 sleep 1

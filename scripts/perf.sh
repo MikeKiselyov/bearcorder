@@ -15,8 +15,8 @@ if [ -f "$ROOT/.env" ]; then
     source "$ROOT/.env"
     set +a
 fi
-BUNDLE_ID="${QAHELPER_BUNDLE_ID:-io.github.qahelper.app}"
-LOG="$HOME/Library/Logs/QA Helper/qahelper.log"
+BUNDLE_ID="${BUGBEAR_BUNDLE_ID:-io.github.bugbear.app}"
+LOG="$HOME/Library/Logs/Bugbear/bugbear.log"
 FAILURES=0
 
 # Limits for a "fast and smooth" verdict.
@@ -29,7 +29,7 @@ sample() {
     # sample <seconds> → prints "avgCPU maxCPU maxRSSMB"
     local seconds="$1"
     local pid
-    pid=$(pgrep -x QAHelper | head -1)
+    pid=$(pgrep -x Bugbear | head -1)
     local total=0
     local peak=0
     local memory=0
@@ -63,9 +63,9 @@ scripts/build-app.sh >/dev/null 2>&1 || { echo "build failed"; exit 1; }
 defaults write "$BUNDLE_ID" automationEnabled -bool true
 defaults write "$BUNDLE_ID" recordSystemAudio -bool false
 defaults write "$BUNDLE_ID" recordMicrophone -bool false
-pkill -x QAHelper 2>/dev/null; sleep 1
+pkill -x Bugbear 2>/dev/null; sleep 1
 rm -f "$LOG"
-open "$ROOT/build/QA Helper.app"
+open "$ROOT/build/Bugbear.app"
 sleep 8
 
 echo "==> idle with the buffer running (20 s, screen mostly static)"
@@ -75,19 +75,19 @@ echo "      peak ${idle_peak}%"
 verdict "idle memory MB" "$idle_mem" "$MAX_MEMORY_MB"
 
 echo "==> recording with the drawing overlay (15 s)"
-scripts/qa-command.sh record-start; sleep 2
-scripts/qa-command.sh draw-toggle; sleep 1
+scripts/bugbear-command.sh record-start; sleep 2
+scripts/bugbear-command.sh draw-toggle; sleep 1
 read -r rec_avg rec_peak rec_mem <<< "$(sample 15)"
 verdict "recording CPU average %" "$rec_avg" "$MAX_RECORDING_CPU"
 echo "      peak ${rec_peak}%"
 verdict "recording memory MB" "$rec_mem" "$MAX_MEMORY_MB"
-scripts/qa-command.sh draw-toggle; sleep 1
-scripts/qa-command.sh record-stop; sleep 8
-scripts/qa-command.sh close-windows; sleep 2
+scripts/bugbear-command.sh draw-toggle; sleep 1
+scripts/bugbear-command.sh record-stop; sleep 8
+scripts/bugbear-command.sh close-windows; sleep 2
 
 echo "==> save the last 30 s"
 sleep 10
-scripts/qa-command.sh save:30
+scripts/bugbear-command.sh save:30
 sleep 10
 start=$(grep "save from buffer: last 30" "$LOG" | tail -1 | awk '{print $2}')
 end=$(grep "clip exported" "$LOG" | tail -1 | awk '{print $2}')
@@ -97,11 +97,11 @@ fmt = '%H:%M:%S.%f'
 print(round((datetime.strptime('$end', fmt) - datetime.strptime('$start', fmt)).total_seconds(), 2))
 " 2>/dev/null || echo 99)
 verdict "save 30 s clip, seconds" "$save_seconds" "$MAX_SAVE_SECONDS"
-scripts/qa-command.sh close-windows; sleep 2
+scripts/bugbear-command.sh close-windows; sleep 2
 
 echo "==> menu bar stays responsive (automation round trip)"
 before=$(date +%s.%N)
-scripts/qa-command.sh status
+scripts/bugbear-command.sh status
 for _ in $(seq 1 50); do
     if [ "$(grep -c "AUTOMATION status" "$LOG")" -gt 0 ]; then break; fi
     sleep 0.1
@@ -111,7 +111,7 @@ round_trip=$(python3 -c "print(round($after - $before, 2))")
 verdict "command round trip, seconds" "$round_trip" 1
 
 echo "==> core speed"
-"$(swift build -c release --show-bin-path)/QAHelper" --perf-core 2>/dev/null
+"$(swift build -c release --show-bin-path)/Bugbear" --perf-core 2>/dev/null
 
 errors=$(grep -c "ERROR" "$LOG" || true)
 if [ "$errors" = "0" ]; then echo "PASS  no errors in the log"; else echo "FAIL  $errors errors in the log"; FAILURES=$((FAILURES + 1)); fi
