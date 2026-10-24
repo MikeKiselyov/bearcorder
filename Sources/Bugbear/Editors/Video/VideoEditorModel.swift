@@ -73,11 +73,14 @@ final class VideoEditorModel {
                 self?.playerTimeChanged(time.seconds)
             }
         }
+        let opened = Date()
         Task {
             await loadDuration()
             await rebuild(keepPosition: false)
             jumpToLastMarker()
+            Log.info(String(format: "video editor: preview ready in %.2fs", Date().timeIntervalSince(opened)))
             await makeThumbnails()
+            Log.info(String(format: "video editor: filmstrip ready in %.2fs", Date().timeIntervalSince(opened)))
         }
     }
 
@@ -120,11 +123,18 @@ final class VideoEditorModel {
         let generator = AVAssetImageGenerator(asset: asset)
         generator.appliesPreferredTrackTransform = true
         generator.maximumSize = CGSize(width: 240, height: 240)
+        // Close enough for a filmstrip, and much faster than exact frames.
+        generator.requestedTimeToleranceBefore = CMTime(seconds: 0.5, preferredTimescale: 600)
+        generator.requestedTimeToleranceAfter = CMTime(seconds: 0.5, preferredTimescale: 600)
         let count = 12
-        var images: [NSImage] = []
+        var times: [CMTime] = []
         for index in 0..<count {
-            let time = CMTime(seconds: duration * (Double(index) + 0.5) / Double(count), preferredTimescale: 600)
-            if let frame = try? await generator.image(at: time).image {
+            times.append(CMTime(seconds: duration * (Double(index) + 0.5) / Double(count), preferredTimescale: 600))
+        }
+        // One batch: the generator decodes in order instead of seeking twelve times.
+        var images: [NSImage] = []
+        for await result in generator.images(for: times) {
+            if let frame = try? result.image {
                 images.append(NSImage(cgImage: frame, size: CGSize(width: frame.width, height: frame.height)))
             }
         }
