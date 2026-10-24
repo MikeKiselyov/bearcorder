@@ -269,38 +269,90 @@ enum ReadmeMedia {
         writeProject(for: capture, annotations: marks, showBadge: true)
     }
 
-    /// The one-line install in a terminal: the command is typed, then the installer's steps appear.
+    /// The one-line install in a terminal, the way scripts/install.sh draws it: the command is typed,
+    /// the logo appears, then the steps, the build spinner and the welcome.
     private static func writeInstallFrames(to folder: URL) {
         try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         let command = "curl -fsSL https://raw.githubusercontent.com/MikeKiselyov/bugbear-app/main/scripts/install.sh | bash"
-        let output = [
-            "==> Checking macOS",
-            "==> Checking developer tools",
-            "==> Downloading the source to ~/.bugbear",
-            "==> Building (the first build takes a few minutes)",
-            "==> swift build (release)",
-            "==> signing with: Apple Development",
-            "==> installed to /Applications/Bugbear.app",
-            "==> Done. Bugbear is in the menu bar (the bear icon).",
-        ]
         var frameNumber = 0
-        func frame(typed: String, lines: Int) {
-            let view = TerminalDemo(command: typed, output: Array(output.prefix(lines)))
-            let url = folder.appendingPathComponent(String(format: "frame-%03d.png", frameNumber))
-            DevChecks.render(view, size: CGSize(width: 900, height: 360), to: url)
-            frameNumber += 1
+        func frame(_ typed: String, _ lines: [AttributedString], repeats: Int = 1) {
+            for _ in 0..<repeats {
+                let view = TerminalDemo(command: typed, lines: lines, showsCursor: lines.isEmpty)
+                let url = folder.appendingPathComponent(String(format: "frame-%03d.png", frameNumber))
+                DevChecks.render(view, size: CGSize(width: 900, height: 820), to: url)
+                frameNumber += 1
+            }
         }
-        frame(typed: "", lines: 0)
+        frame("", [])
         var typedCount = 0
         while typedCount < command.count {
-            typedCount = min(command.count, typedCount + 7)
-            frame(typed: String(command.prefix(typedCount)), lines: 0)
+            typedCount = min(command.count, typedCount + 9)
+            frame(String(command.prefix(typedCount)), [])
         }
-        for lines in 1...output.count {
-            frame(typed: command, lines: lines)
+
+        var lines: [AttributedString] = [AttributedString("")]
+        lines.append(contentsOf: installerLogo())
+        lines.append(AttributedString(""))
+        lines.append(Terminal.text("   ") + Terminal.text("Bug", Terminal.bear, bold: true) + Terminal.text("bear", Terminal.bug, bold: true))
+        lines.append(Terminal.text("   Screenshots, recordings and a dev toolbox", Terminal.dim))
+        lines.append(Terminal.text("   for people who build and test software.", Terminal.dim))
+        lines.append(AttributedString(""))
+        frame(command, lines, repeats: 6)
+
+        for step in ["macOS 15.1", "Swift 6.1", "Source downloaded to ~/.bugbear"] {
+            lines.append(Terminal.done(step))
+            frame(command, lines, repeats: 2)
         }
+        let spinner = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
+        let tips = [
+            "The first build takes a couple of minutes. Good moment for a cup of tea ☕",
+            "Bugbear keeps the last minutes of your screen, so a bug cannot hide.",
+            "Everything stays on your Mac. Nothing is uploaded anywhere.",
+        ]
+        for index in 0..<15 {
+            var building = lines
+            let seconds = index * 7
+            building.append(Terminal.text("   ") + Terminal.text(spinner[index % spinner.count], Terminal.bug) + Terminal.text("  Building Bugbear ") + Terminal.text(String(format: "%d:%02d", seconds / 60, seconds % 60), Terminal.dim))
+            building.append(Terminal.text("      " + tips[index / 5], Terminal.dim))
+            frame(command, building)
+        }
+        lines.append(Terminal.done("Built and signed (Apple Development certificate)"))
+        frame(command, lines, repeats: 2)
+        lines.append(Terminal.done("Installed to /Applications/Bugbear.app"))
+        frame(command, lines, repeats: 2)
+        lines.append(AttributedString(""))
+        lines.append(Terminal.text("   ✨ All set!", Terminal.bear, bold: true) + Terminal.text(" Look for the bear in the menu bar, top right."))
+        lines.append(Terminal.text("   A short guide opens on first launch.", Terminal.dim))
+        lines.append(AttributedString(""))
+        lines.append(Terminal.text("   ⌥⇧1", Terminal.bug) + Terminal.text("  save the last 30 seconds"))
+        lines.append(Terminal.text("   ⌥⇧4", Terminal.bug) + Terminal.text("  screenshot an area"))
+        lines.append(Terminal.text("   ⌥⇧D", Terminal.bug) + Terminal.text("  dev toolbox"))
+        lines.append(AttributedString(""))
+        lines.append(Terminal.text("   Run this command again any time to update. Happy bug hunting! 🐻", Terminal.dim))
+        frame(command, lines, repeats: 3)
     }
 
+    /// The colored logo lines from scripts/install.sh (between "# logo-start" and "# logo-end"), so
+    /// the picture always matches what the installer prints.
+    private static func installerLogo() -> [AttributedString] {
+        let url = URL(fileURLWithPath: FileManager.default.currentDirectoryPath).appendingPathComponent("scripts/install.sh")
+        guard let script = try? String(contentsOf: url, encoding: .utf8) else { return [] }
+        var inside = false
+        var result: [AttributedString] = []
+        for rawLine in script.components(separatedBy: "\n") {
+            if rawLine.hasPrefix("# logo-start") {
+                inside = true
+                continue
+            }
+            if rawLine.hasPrefix("# logo-end") { break }
+            if !inside { continue }
+            var line = rawLine.trimmingCharacters(in: .whitespaces)
+            if line.hasPrefix("\"") { line.removeFirst() }
+            if line.hasSuffix("\"") { line.removeLast() }
+            result.append(Terminal.parse(line))
+        }
+        return result
+    }
     /// The editor fits the image from a main-queue block, which never runs while this code itself runs on
     /// the main queue, so the fit is done here the same way.
     private static func fitCanvases(in view: NSView) {
@@ -338,10 +390,61 @@ enum ReadmeMedia {
     }
 }
 
+/// Colors and text pieces of the install GIF, matching the installer's escape codes.
+private enum Terminal {
+    static let plain = Color.white.opacity(0.88)
+    static let dim = Color.white.opacity(0.5)
+    static let bear = Color.white
+    static let bun = Color(red: 1, green: 0.69, blue: 0.53)
+    static let bug = Color(red: 1, green: 0.37, blue: 0.37)
+    static let ok = Color(red: 0.53, green: 0.84, blue: 0.53)
+
+    static func text(_ value: String, _ color: Color = plain, bold: Bool = false) -> AttributedString {
+        var piece = AttributedString(value)
+        piece.foregroundColor = color
+        if bold {
+            piece.font = .system(size: 13, weight: .bold, design: .monospaced)
+        }
+        return piece
+    }
+
+    static func done(_ value: String) -> AttributedString {
+        return text("   ") + text("✓", ok) + text("  " + value)
+    }
+
+    /// "${H}██${N}${C}▄${N}" from install.sh to colored text.
+    static func parse(_ line: String) -> AttributedString {
+        var result = AttributedString("")
+        var color = plain
+        var rest = Substring(line)
+        while !rest.isEmpty {
+            if rest.hasPrefix("${"), let close = rest.firstIndex(of: "}") {
+                let name = rest[rest.index(rest.startIndex, offsetBy: 2)..<close]
+                if name == "H" {
+                    color = bear
+                } else if name == "B" {
+                    color = bun
+                } else if name == "C" {
+                    color = bug
+                } else {
+                    color = plain
+                }
+                rest = rest[rest.index(after: close)...]
+                continue
+            }
+            let next = rest.range(of: "${")?.lowerBound ?? rest.endIndex
+            result += text(String(rest[rest.startIndex..<next]), color)
+            rest = rest[next...]
+        }
+        return result
+    }
+}
+
 /// A macOS Terminal window look-alike for the install GIF.
 private struct TerminalDemo: View {
     var command: String
-    var output: [String]
+    var lines: [AttributedString]
+    var showsCursor: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -358,19 +461,21 @@ private struct TerminalDemo: View {
             .frame(height: 34)
             .background(Color(white: 0.17))
 
-            VStack(alignment: .leading, spacing: 5) {
+            VStack(alignment: .leading, spacing: 0) {
                 HStack(alignment: .top, spacing: 0) {
                     Text("~ % ").foregroundStyle(Color(red: 0.45, green: 0.85, blue: 0.55))
-                    Text(command + (output.isEmpty ? "▌" : "")).foregroundStyle(Color.white)
+                    Text(command + (showsCursor ? "▌" : "")).foregroundStyle(Color.white)
                 }
-                ForEach(Array(output.enumerated()), id: \.offset) { item in
-                    Text(item.element)
-                        .fontWeight(item.element.hasPrefix("==> Done") ? .bold : .regular)
-                        .foregroundStyle(item.element.hasPrefix("==> Done") ? Color(red: 0.45, green: 0.85, blue: 0.55) : Color.white.opacity(0.85))
+                ForEach(Array(lines.enumerated()), id: \.offset) { item in
+                    if BlockRow.isBlocks(item.element) {
+                        BlockRow(text: item.element)
+                    } else {
+                        Text(item.element).frame(height: 16)
+                    }
                 }
                 Spacer(minLength: 0)
             }
-            .font(.system(size: 14, design: .monospaced))
+            .font(.system(size: 13, design: .monospaced))
             .padding(16)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             .background(Color(white: 0.09))
@@ -378,5 +483,44 @@ private struct TerminalDemo: View {
         .clipShape(RoundedRectangle(cornerRadius: 10))
         .padding(12)
         .background(Color(white: 0.94))
+    }
+}
+
+/// A logo line of half blocks (▀ ▄ █) drawn as cells, so the rows meet the way they do in a terminal.
+private struct BlockRow: View {
+    var text: AttributedString
+
+    static let cellWidth: CGFloat = ("M" as NSString).size(withAttributes: [.font: NSFont.monospacedSystemFont(ofSize: 13, weight: .regular)]).width
+    static let cellHeight: CGFloat = 17
+
+    static func isBlocks(_ text: AttributedString) -> Bool {
+        let plain = String(text.characters)
+        return plain.contains("█") || plain.contains("▀") || plain.contains("▄")
+    }
+
+    var body: some View {
+        Canvas { context, _ in
+            var column: CGFloat = 0
+            for run in text.runs {
+                let color = run.foregroundColor ?? Color.white
+                for character in text[run.range].characters {
+                    let x = column * BlockRow.cellWidth
+                    var rect: CGRect?
+                    if character == "█" {
+                        rect = CGRect(x: x, y: 0, width: BlockRow.cellWidth, height: BlockRow.cellHeight)
+                    } else if character == "▀" {
+                        rect = CGRect(x: x, y: 0, width: BlockRow.cellWidth, height: BlockRow.cellHeight / 2)
+                    } else if character == "▄" {
+                        rect = CGRect(x: x, y: BlockRow.cellHeight / 2, width: BlockRow.cellWidth, height: BlockRow.cellHeight / 2)
+                    }
+                    if let cell = rect {
+                        // A hair wider so neighbouring cells do not leave seams.
+                        context.fill(Path(cell.insetBy(dx: -0.3, dy: -0.3)), with: .color(color))
+                    }
+                    column += 1
+                }
+            }
+        }
+        .frame(height: BlockRow.cellHeight)
     }
 }
