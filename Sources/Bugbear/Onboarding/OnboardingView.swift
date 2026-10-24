@@ -16,9 +16,18 @@ struct OnboardingView: View {
     private let ticker = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
     static let completedKey = "onboardingCompleted"
+    /// The step the guide was on, so it comes back there after a relaunch (Screen Recording only
+    /// takes effect after one) or when it was closed halfway.
+    static let pageKey = "onboardingPage"
+    private static let permissionsPage = 2
 
-    init(startPage: Int = 0) {
-        _page = State(initialValue: startPage)
+    /// `startPage` nil: the saved step, or the first one.
+    init(startPage: Int? = nil) {
+        var initial = startPage ?? UserDefaults.standard.integer(forKey: OnboardingView.pageKey)
+        if initial < 0 || initial > 4 {
+            initial = 0
+        }
+        _page = State(initialValue: initial)
     }
 
     var body: some View {
@@ -72,6 +81,9 @@ struct OnboardingView: View {
         .foregroundStyle(Theme.text)
         .background(Theme.window)
         .onReceive(ticker) { _ in refreshPermissions() }
+        .onChange(of: page) { _, newPage in
+            UserDefaults.standard.set(newPage, forKey: OnboardingView.pageKey)
+        }
     }
 
     private func refreshPermissions() {
@@ -83,6 +95,7 @@ struct OnboardingView: View {
 
     private func complete() {
         UserDefaults.standard.set(true, forKey: OnboardingView.completedKey)
+        UserDefaults.standard.removeObject(forKey: OnboardingView.pageKey)
         WindowManager.shared.close(id: "onboarding")
         if app.settings.startBufferOnLaunch {
             if app.bufferState != .running && ScreenBuffer.hasScreenRecordingAccess {
@@ -375,6 +388,8 @@ struct OnboardingView: View {
     }
 
     private func relaunch() {
+        // Back on the Permissions step after the restart, with Screen Recording now allowed.
+        UserDefaults.standard.set(OnboardingView.permissionsPage, forKey: OnboardingView.pageKey)
         let path = Bundle.main.bundlePath
         let task = Process()
         task.executableURL = URL(fileURLWithPath: "/bin/sh")
