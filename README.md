@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/images/menubar-glyph.png" width="44" alt="">
+  <img src="docs/images/logo.png" width="128" alt="QA Helper logo: a bear eating a bun">
 </p>
 
 <h1 align="center">QA Helper</h1>
@@ -304,8 +304,8 @@ scripts/                  install, update, build, e2e and perf checks, README pi
 docs/images/              the pictures in this README
 ```
 
-The logo (a black and white bear eating a bun) is drawn in code in `Support/Logo.swift`; the build
-script renders the `.icns` from it.
+The logo (a bear eating a bun) is one flat shape drawn in code in `Support/Logo.swift`: the menu bar
+glyph, the in-app logo and the app icon are the same picture. The build script renders the `.icns` from it.
 
 Storage: captures in `~/Library/Application Support/QA Helper/Captures/`, buffer segments in
 `…/QA Helper/Buffer/` (cleared on launch and quit), exports in the folder chosen in Settings

@@ -52,13 +52,12 @@ for tab in record capture tools recent; do
     cp "$WORK/screens/menu-$tab.png" "$(printf "$WORK/menu-frames/frame-%03d.png" $number)"
     number=$((number + 1))
 done
-make_gif "$WORK/menu-frames" "$OUT/menu.gif" 1.8 1.8 360
+make_gif "$WORK/menu-frames" "$OUT/menu.gif" 1.8 1.8 720
 
 echo "==> pictures"
 picture() {
     ffmpeg -loglevel error -y -i "$WORK/screens/$1.png" -vf "scale=$2:-1:flags=lanczos" "$OUT/$1.png"
 }
-picture menu-record 360
 picture video-editor 1220
 picture history 980
 picture record-area-picker 1200
@@ -68,7 +67,7 @@ picture toolbox-timezones 1220
 picture toolbox-testdata 1220
 picture onboarding-1 680
 picture settings 560
-cp "$WORK/screens/menubar-glyph.png" "$OUT/menubar-glyph.png"
+cp "$WORK/screens/logo.png" "$OUT/logo.png"
 
 du -sh "$OUT"
 ls -1 "$OUT"
