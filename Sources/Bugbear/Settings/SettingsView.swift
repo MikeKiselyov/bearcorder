@@ -96,6 +96,13 @@ struct SettingsView: View {
                         .foregroundStyle(Theme.textSecondary)
                 }
 
+                Section("Screenshots") {
+                    Toggle("Copy a new screenshot to the clipboard", isOn: $settings.copyScreenshots)
+                    Text("Paste it with ⌘V right away; the editor opens too, and ⌘C there copies your marks.")
+                        .font(.system(size: 11))
+                        .foregroundStyle(Theme.textSecondary)
+                }
+
                 Section("Environment") {
                     Toggle("Read the browser tab URL", isOn: $settings.readBrowserURL)
                     Text("Safari, Chrome, Arc, Brave, Edge, Vivaldi and Opera. macOS asks once per browser.")

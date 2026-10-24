@@ -150,7 +150,10 @@ final class ScreenBuffer: NSObject, SCStreamOutput, SCStreamDelegate {
         streamConfiguration.height = evenHeight
         streamConfiguration.minimumFrameInterval = CMTime(value: 1, timescale: CMTimeScale(configuration.framesPerSecond))
         streamConfiguration.showsCursor = configuration.showsCursor
-        streamConfiguration.pixelFormat = kCVPixelFormatType_32BGRA
+        // The H.264 encoder's own format: frames go to it without a colour conversion per frame,
+        // which is most of the CPU a running buffer used to take.
+        streamConfiguration.pixelFormat = kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange
+        streamConfiguration.colorMatrix = CGDisplayStream.yCbCrMatrix_ITU_R_709_2
         streamConfiguration.queueDepth = 6
         streamConfiguration.capturesAudio = configuration.systemAudio
         streamConfiguration.excludesCurrentProcessAudio = true

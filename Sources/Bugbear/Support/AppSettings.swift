@@ -32,6 +32,10 @@ final class AppSettings {
     var readBrowserURL: Bool {
         didSet { defaults.set(readBrowserURL, forKey: "readBrowserURL") }
     }
+    /// A new screenshot goes to the clipboard right away, ready for ⌘V.
+    var copyScreenshots: Bool {
+        didSet { defaults.set(copyScreenshots, forKey: "copyScreenshots") }
+    }
     var startBufferOnLaunch: Bool {
         didSet { defaults.set(startBufferOnLaunch, forKey: "startBufferOnLaunch") }
     }
@@ -96,6 +100,7 @@ final class AppSettings {
             "recordClicks": true,
             "recordKeys": true,
             "readBrowserURL": true,
+            "copyScreenshots": true,
             "startBufferOnLaunch": true,
             "outputFolderPath": FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Desktop").path,
             "timeZones": ["UTC", "Europe/Lisbon", "Europe/Minsk", "America/New_York", "Asia/Tokyo"],
@@ -117,6 +122,7 @@ final class AppSettings {
         recordClicks = defaults.bool(forKey: "recordClicks")
         recordKeys = defaults.bool(forKey: "recordKeys")
         readBrowserURL = defaults.bool(forKey: "readBrowserURL")
+        copyScreenshots = defaults.bool(forKey: "copyScreenshots")
         startBufferOnLaunch = defaults.bool(forKey: "startBufferOnLaunch")
         outputFolderPath = defaults.string(forKey: "outputFolderPath") ?? NSHomeDirectory()
         timeZones = defaults.stringArray(forKey: "timeZones") ?? []

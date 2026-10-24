@@ -125,6 +125,12 @@ final class CaptureStore {
         guard let screens = capture.screens, let variant = screens.first(where: { item in item.id == id }) else { return capture }
         let files = FileManager.default
         let file = capture.folder.appendingPathComponent(variant.file)
+        if capture.kind == .screenshot && variant.id == ScreenVariant.allID && !files.fileExists(atPath: file.path) {
+            // Picked before the background build finished.
+            await Task.detached(priority: .userInitiated) {
+                CaptureStore.buildSideBySideScreenshot(capture)
+            }.value
+        }
         if capture.kind == .screenshot {
             // Marks are drawn on the picture, so every display keeps its own: park the current
             // editor state under the display's name and bring back the other one's.
@@ -169,6 +175,24 @@ final class CaptureStore {
         makeThumbnail(for: updated)
         thumbnailCache[updated.id] = nil
         return updated
+    }
+
+    /// Stitches the displays of a screenshot into screen-all.png, left to right. Does nothing when it
+    /// is already there.
+    nonisolated static func buildSideBySideScreenshot(_ capture: Capture) {
+        guard let screens = capture.screens else { return }
+        let target = capture.folder.appendingPathComponent("screen-all.png")
+        if FileManager.default.fileExists(atPath: target.path) { return }
+        var images: [CGImage] = []
+        for screen in screens where screen.id != ScreenVariant.allID {
+            if let image = ImageFiles.load(capture.folder.appendingPathComponent(screen.file)) {
+                images.append(image)
+            }
+        }
+        guard let stitched = ScreenshotCapture.stitchHorizontally(images) else { return }
+        let temporary = AppPaths.temporary.appendingPathComponent("all-\(UUID().uuidString).png")
+        ImageFiles.write(stitched, to: temporary, type: "public.png")
+        try? FileManager.default.moveItem(at: temporary, to: target)
     }
 
     /// Moves `file` to `target` when it exists, replacing whatever is there.
@@ -258,6 +282,10 @@ final class CaptureStore {
         return nil
     }
 
+    func forgetThumbnail(_ id: UUID) {
+        thumbnailCache[id] = nil
+    }
+
     /// Refreshes the thumbnail from an edited render.
     func updateThumbnail(for capture: Capture, image: CGImage) {
         writeThumbnail(image, to: capture.thumbnailURL)
@@ -266,9 +294,23 @@ final class CaptureStore {
 
     private func makeThumbnail(for capture: Capture) {
         if capture.kind == .screenshot {
-            if let source = CGImageSourceCreateWithURL(capture.mediaURL as CFURL, nil),
-               let image = CGImageSourceCreateImageAtIndex(source, 0, nil) {
-                writeThumbnail(image, to: capture.thumbnailURL)
+            // ImageIO scales while decoding, and off the main thread: a 4K screenshot no longer
+            // holds up the editor.
+            let source = capture.mediaURL
+            let target = capture.thumbnailURL
+            let id = capture.id
+            Task.detached(priority: .utility) {
+                let options: [CFString: Any] = [
+                    kCGImageSourceCreateThumbnailFromImageAlways: true,
+                    kCGImageSourceThumbnailMaxPixelSize: 480,
+                    kCGImageSourceCreateThumbnailWithTransform: true,
+                ]
+                guard let imageSource = CGImageSourceCreateWithURL(source as CFURL, nil),
+                      let thumbnail = CGImageSourceCreateThumbnailAtIndex(imageSource, 0, options as CFDictionary) else { return }
+                ImageFiles.write(thumbnail, to: target, type: "public.jpeg")
+                await MainActor.run {
+                    CaptureStore.shared.forgetThumbnail(id)
+                }
             }
             return
         }

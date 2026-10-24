@@ -43,6 +43,8 @@ echo "==> assembling $APP_DIR"
 rm -rf "$APP_DIR"
 mkdir -p "$APP_DIR/Contents/MacOS" "$APP_DIR/Contents/Resources"
 cp "$BINARY" "$APP_DIR/Contents/MacOS/Bugbear"
+# Debug symbols are not needed to run the app; without them it is a few MB lighter.
+strip -x "$APP_DIR/Contents/MacOS/Bugbear" 2>/dev/null || true
 
 echo "==> rendering icon"
 ICONSET="$BUILD_DIR/AppIcon.iconset"

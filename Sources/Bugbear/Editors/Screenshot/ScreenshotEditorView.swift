@@ -23,7 +23,11 @@ struct ScreenshotEditorView: View {
         .background(Theme.window)
         .onAppear {
             if document == nil {
-                document = ScreenshotDocument(capture: capture)
+                let opened = ScreenshotDocument(capture: capture)
+                if AppState.shared.justCopiedScreenshot == capture.id {
+                    opened?.message = "Copied to the clipboard · ⌘V to paste"
+                }
+                document = opened
             }
         }
     }
