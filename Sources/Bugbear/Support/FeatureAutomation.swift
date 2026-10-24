@@ -89,8 +89,8 @@ enum FeatureAutomation {
             return texts.joined(separator: " || ")
 
         case "clip-screens":
-            // The screens of the newest clip: id=name(clicks) and which one is selected.
-            guard let clip = app.store.captures.first(where: { item in item.kind == .video }) else { return "no video" }
+            // The screens of the newest capture: id=name(clicks) and which one is selected.
+            guard let clip = app.store.captures.first else { return "no capture" }
             guard let screens = clip.screens else { return "single screen" }
             var parts: [String] = []
             for screen in screens {
@@ -100,11 +100,16 @@ enum FeatureAutomation {
             return "selected=\(clip.selectedScreen ?? "?") " + parts.joined(separator: " ")
 
         case "select-screen":
-            // select-screen:<id> on the newest clip; prints the picture size afterwards.
-            guard let clip = app.store.captures.first(where: { item in item.kind == .video }) else { return "no video" }
+            // select-screen:<id> on the newest capture; prints the picture size afterwards.
+            guard let clip = app.store.captures.first else { return "no capture" }
             let started = Date()
             do {
                 let updated = try await app.store.selectScreen(argument, of: clip, framesPerSecond: app.settings.framesPerSecond)
+                if updated.kind == .screenshot {
+                    guard let image = ImageFiles.load(updated.mediaURL) else { return "no image" }
+                    let marks = FileManager.default.fileExists(atPath: updated.projectURL.path)
+                    return "selected=\(updated.selectedScreen ?? "?") size=\(image.width)x\(image.height) project=\(marks)"
+                }
                 guard let track = try await AVURLAsset(url: updated.mediaURL).loadTracks(withMediaType: .video).first else { return "no track" }
                 let size = try await track.load(.naturalSize)
                 return String(format: "selected=%@ size=%dx%d duration=%.2f took=%.2fs", updated.selectedScreen ?? "?", Int(size.width), Int(size.height), updated.duration, Date().timeIntervalSince(started))

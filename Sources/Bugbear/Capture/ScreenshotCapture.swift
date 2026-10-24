@@ -66,24 +66,41 @@ enum ScreenshotCapture {
         return process.terminationStatus
     }
 
-    /// One file per display from `screencapture`, then stitched left to right in screen order.
-    private static func captureAllDisplays(into url: URL) async -> URL? {
-        let screens = await MainActor.run { NSScreen.screens.map { screen in screen.frame } }
+    /// One PNG per display in a single `screencapture` call, left to right by position.
+    static func captureEachDisplay() async -> [(displayID: CGDirectDisplayID, frame: CGRect, url: URL)] {
+        let screens = await MainActor.run { () -> [(displayID: CGDirectDisplayID, frame: CGRect)] in
+            var list: [(displayID: CGDirectDisplayID, frame: CGRect)] = []
+            for screen in NSScreen.screens {
+                list.append((displayID: AppState.displayID(of: screen), frame: screen.frame))
+            }
+            return list
+        }
         var parts: [URL] = []
         for index in 0..<screens.count {
             parts.append(AppPaths.temporary.appendingPathComponent("display-\(index)-\(UUID().uuidString).png"))
         }
         _ = await run(["-x"] + parts.map { part in part.path })
+        // screencapture writes displays in NSScreen order.
+        var result: [(displayID: CGDirectDisplayID, frame: CGRect, url: URL)] = []
+        for (index, part) in parts.enumerated() where FileManager.default.fileExists(atPath: part.path) {
+            result.append((displayID: screens[index].displayID, frame: screens[index].frame, url: part))
+        }
+        result.sort { first, second in first.frame.minX < second.frame.minX }
+        return result
+    }
+
+    /// One file per display from `screencapture`, then stitched left to right in screen order.
+    private static func captureAllDisplays(into url: URL) async -> URL? {
+        let displays = await captureEachDisplay()
         defer {
-            for part in parts {
-                try? FileManager.default.removeItem(at: part)
+            for display in displays {
+                try? FileManager.default.removeItem(at: display.url)
             }
         }
-        // screencapture writes displays in NSScreen order.
         var images: [(image: CGImage, frame: CGRect)] = []
-        for (index, part) in parts.enumerated() {
-            if let image = ImageFiles.load(part) {
-                images.append((image: image, frame: screens[index]))
+        for display in displays {
+            if let image = ImageFiles.load(display.url) {
+                images.append((image: image, frame: display.frame))
             }
         }
         if images.isEmpty { return nil }

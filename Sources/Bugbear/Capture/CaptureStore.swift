@@ -118,13 +118,25 @@ final class CaptureStore {
         }
     }
 
-    /// Shows the clip from another display, or from all of them side by side (built once, ~1 s per
-    /// 10 s of video). The edits in project.json stay: every picture has the same timeline.
+    /// Shows the clip or screenshot from another display, or from all of them side by side (for clips
+    /// built once, ~1 s per 10 s of video). Clip edits stay: every picture has the same timeline.
+    /// Screenshot marks belong to each picture and come back when you switch back.
     func selectScreen(_ id: String, of capture: Capture, framesPerSecond: Int) async throws -> Capture {
         guard let screens = capture.screens, let variant = screens.first(where: { item in item.id == id }) else { return capture }
         let files = FileManager.default
         let file = capture.folder.appendingPathComponent(variant.file)
-        if !files.fileExists(atPath: file.path) && variant.id == ScreenVariant.allID {
+        if capture.kind == .screenshot {
+            // Marks are drawn on the picture, so every display keeps its own: park the current
+            // editor state under the display's name and bring back the other one's.
+            let combined = capture.folder.appendingPathComponent("base.png")
+            if let current = capture.selectedScreen {
+                parkFile(capture.projectURL, as: capture.folder.appendingPathComponent("edit-\(current).json"))
+                parkFile(combined, as: capture.folder.appendingPathComponent("base-\(current).png"))
+            }
+            parkFile(capture.folder.appendingPathComponent("edit-\(id).json"), as: capture.projectURL)
+            parkFile(capture.folder.appendingPathComponent("base-\(id).png"), as: combined)
+        }
+        if !files.fileExists(atPath: file.path) && variant.id == ScreenVariant.allID && capture.kind == .video {
             var parts: [URL] = []
             var mainIndex = 0
             for item in screens where item.id != ScreenVariant.allID {
@@ -147,14 +159,24 @@ final class CaptureStore {
         var updated = capture
         updated.selectedScreen = id
         updated.events = variant.events
-        let duration = try? await AVURLAsset(url: capture.mediaURL).load(.duration)
-        if let seconds = duration?.seconds, seconds > 0 {
-            updated.duration = seconds
+        if capture.kind == .video {
+            let duration = try? await AVURLAsset(url: capture.mediaURL).load(.duration)
+            if let seconds = duration?.seconds, seconds > 0 {
+                updated.duration = seconds
+            }
         }
         try replace(updated)
         makeThumbnail(for: updated)
         thumbnailCache[updated.id] = nil
         return updated
+    }
+
+    /// Moves `file` to `target` when it exists, replacing whatever is there.
+    private func parkFile(_ file: URL, as target: URL) {
+        let files = FileManager.default
+        guard files.fileExists(atPath: file.path) else { return }
+        try? files.removeItem(at: target)
+        try? files.moveItem(at: file, to: target)
     }
 
     func save(_ capture: Capture) throws {

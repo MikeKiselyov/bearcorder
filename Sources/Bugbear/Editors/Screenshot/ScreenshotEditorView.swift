@@ -6,11 +6,12 @@ import UniformTypeIdentifiers
 struct ScreenshotEditorView: View {
     let capture: Capture
     @State private var document: ScreenshotDocument?
+    @State private var switchingScreen = false
 
     var body: some View {
         Group {
             if let document = document {
-                ScreenshotEditorContent(document: document)
+                ScreenshotEditorContent(document: document, switchingScreen: switchingScreen, onSelectScreen: { id in selectScreen(id) })
             } else {
                 VStack(spacing: 12) {
                     Image(systemName: "photo.badge.exclamationmark").font(.system(size: 32))
@@ -26,10 +27,28 @@ struct ScreenshotEditorView: View {
             }
         }
     }
+
+    /// Shows another display, or all of them side by side. Each picture keeps its own marks.
+    private func selectScreen(_ id: String) {
+        guard let current = document, !switchingScreen, id != current.capture.selectedScreen else { return }
+        switchingScreen = true
+        current.saveProject()
+        Task {
+            do {
+                let updated = try await CaptureStore.shared.selectScreen(id, of: current.capture, framesPerSecond: AppState.shared.settings.framesPerSecond)
+                document = ScreenshotDocument(capture: updated)
+            } catch {
+                AppState.shared.showError("Could not switch the screen: \(error.localizedDescription)")
+            }
+            switchingScreen = false
+        }
+    }
 }
 
 private struct ScreenshotEditorContent: View {
     @Bindable var document: ScreenshotDocument
+    var switchingScreen: Bool
+    var onSelectScreen: (String) -> Void
 
     static let editorTools: [AnnotationTool] = [.select, .arrow, .rectangle, .ellipse, .line, .highlighter, .pen, .text, .step, .blur, .magnifier, .crop]
     static let colors: [AnnotationColor] = [.coral, .yellow, .blue, .green, .purple, .white, .black]
@@ -344,6 +363,32 @@ private struct ScreenshotEditorContent: View {
         return Int((document.zoom * backing * 100).rounded())
     }
 
+    /// Screenshots of several displays: pick one display or all of them side by side.
+    @ViewBuilder
+    private var screenPicker: some View {
+        if let screens = document.capture.screens, screens.count > 1 {
+            HStack(spacing: 8) {
+                Image(systemName: "display.2")
+                    .foregroundStyle(Theme.textSecondary)
+                Picker(selection: Binding(get: { document.capture.selectedScreen ?? screens[0].id }, set: { id in onSelectScreen(id) })) {
+                    ForEach(screens) { screen in
+                        Text(screen.name).tag(screen.id)
+                    }
+                } label: {
+                    EmptyView()
+                }
+                .pickerStyle(.segmented)
+                .fixedSize()
+                .disabled(switchingScreen)
+                if switchingScreen {
+                    ProgressView().controlSize(.small)
+                }
+            }
+            .help("Which screen is in the screenshot. Each one keeps its own marks.")
+            .padding(.leading, 8)
+        }
+    }
+
     private var bottomBar: some View {
         HStack(spacing: 10) {
             Button { setZoom(document.zoom / 1.25) } label: { Image(systemName: "minus.magnifyingglass") }
@@ -366,6 +411,8 @@ private struct ScreenshotEditorContent: View {
             .foregroundStyle(Theme.link)
 
             Text(sizeLabel).font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
+
+            screenPicker
 
             if let message = document.message {
                 Text(message)
