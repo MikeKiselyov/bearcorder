@@ -30,6 +30,9 @@ enum ReadmeMedia {
             DevChecks.render(MenuBarView().environment(AppState.shared), size: CGSize(width: 360, height: 719), to: screens.appendingPathComponent("menu-\(tab.rawValue.lowercased()).png"))
         }
 
+        if let icon = Logo.iconImage(pixels: 256) {
+            ImageFiles.write(icon, to: screens.appendingPathComponent("logo.png"), type: "public.png")
+        }
         let videoEditor = screens.appendingPathComponent("video-editor.png")
         render(VideoEditorView(capture: clip).environment(AppState.shared), size: CGSize(width: 1220, height: 800), wait: 3, to: videoEditor)
         if let frame = clipPreviewFrame() {
