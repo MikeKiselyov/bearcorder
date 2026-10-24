@@ -32,8 +32,12 @@ struct SettingsView: View {
                         Text("3 minutes").tag(3)
                         Text("5 minutes").tag(5)
                     }
-                    Picker("Frame rate", selection: $settings.framesPerSecond) {
-                        Text("15 fps").tag(15)
+                    Picker("Buffer frame rate", selection: $settings.framesPerSecond) {
+                        Text("15 fps (lightest)").tag(15)
+                        Text("30 fps").tag(30)
+                        Text("60 fps").tag(60)
+                    }
+                    Picker("Recording frame rate", selection: $settings.recordingFramesPerSecond) {
                         Text("30 fps").tag(30)
                         Text("60 fps").tag(60)
                     }
