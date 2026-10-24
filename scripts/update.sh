@@ -1,8 +1,8 @@
 #!/bin/bash
-# Pulls the latest source, rebuilds QA Helper and replaces the running copy.
+# Pulls the latest source, rebuilds Bugbear and replaces the running copy.
 # The app runs this from its "Update" button; it also works by hand:
 #
-#   scripts/update.sh ["/Applications/QA Helper.app"]
+#   scripts/update.sh ["/Applications/Bugbear.app"]
 #
 # Without an argument the app is installed like scripts/build-app.sh --install.
 set -euo pipefail
@@ -29,8 +29,8 @@ echo "==> build"
 scripts/build-app.sh
 
 # Running straight from this folder's build/: the fresh build is already in place.
-if [ "$TARGET_APP" = "$(pwd)/build/QA Helper.app" ]; then
-    pkill -x QAHelper 2>/dev/null || true
+if [ "$TARGET_APP" = "$(pwd)/build/Bugbear.app" ]; then
+    pkill -x Bugbear 2>/dev/null || true
     sleep 1
     open "$TARGET_APP"
     echo "==> updated"
@@ -38,9 +38,9 @@ if [ "$TARGET_APP" = "$(pwd)/build/QA Helper.app" ]; then
 fi
 
 echo "==> replacing $TARGET_APP"
-pkill -x QAHelper 2>/dev/null || true
+pkill -x Bugbear 2>/dev/null || true
 sleep 1
 rm -rf "$TARGET_APP"
-cp -R "build/QA Helper.app" "$TARGET_APP"
+cp -R "build/Bugbear.app" "$TARGET_APP"
 open "$TARGET_APP"
 echo "==> updated"

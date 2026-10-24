@@ -2,28 +2,28 @@
 import PackageDescription
 
 let package = Package(
-    name: "QAHelper",
+    name: "Bugbear",
     platforms: [.macOS(.v14)],
     products: [
-        .executable(name: "QAHelper", targets: ["QAHelper"]),
+        .executable(name: "Bugbear", targets: ["Bugbear"]),
     ],
     dependencies: [
         .package(url: "https://github.com/jpsim/Yams.git", from: "5.1.0"),
     ],
     targets: [
         .target(
-            name: "QAHelperCore",
+            name: "BugbearCore",
             dependencies: ["Yams"],
             swiftSettings: [.swiftLanguageMode(.v5)]
         ),
         .executableTarget(
-            name: "QAHelper",
-            dependencies: ["QAHelperCore"],
+            name: "Bugbear",
+            dependencies: ["BugbearCore"],
             swiftSettings: [.swiftLanguageMode(.v5)]
         ),
         .testTarget(
-            name: "QAHelperCoreTests",
-            dependencies: ["QAHelperCore"],
+            name: "BugbearCoreTests",
+            dependencies: ["BugbearCore"],
             swiftSettings: [.swiftLanguageMode(.v5)]
         ),
     ]

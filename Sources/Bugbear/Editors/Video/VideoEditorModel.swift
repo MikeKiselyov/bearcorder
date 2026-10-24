@@ -1,0 +1,443 @@
+import AVFoundation
+import AppKit
+import Observation
+import BugbearCore
+
+enum VideoTool: String, CaseIterable, Identifiable {
+    case select
+    case text
+    case arrow
+    case rectangle
+    case blur
+
+    var id: String { rawValue }
+
+    var overlayKind: VideoOverlay.Kind? {
+        switch self {
+        case .text: return .text
+        case .arrow: return .arrow
+        case .rectangle: return .rectangle
+        case .blur: return .blur
+        case .select: return nil
+        }
+    }
+}
+
+/// Selection on the timeline: an overlay or one of the edits.
+enum TimelineItem: Equatable {
+    case overlay(UUID)
+    case cut(Int)
+    case speed(Int)
+    case freeze(Int)
+}
+
+@MainActor
+@Observable
+final class VideoEditorModel {
+    let capture: Capture
+    let asset: AVURLAsset
+    let player = AVPlayer()
+
+    var project: VideoProject
+    var tool: VideoTool = .select
+    var selection: TimelineItem?
+    /// Range picked on the ruler, in source seconds.
+    var range: TimeSpan?
+    /// Playhead in source seconds.
+    var playhead: Double = 0
+    var isPlaying = false
+    var thumbnails: [NSImage] = []
+    var exportProgress: Double?
+    var message: String?
+    var isBuilding = false
+
+    @ObservationIgnored private var output: VideoCompositor.Output?
+    @ObservationIgnored private var timeObserver: Any?
+    @ObservationIgnored private var rebuildTask: Task<Void, Never>?
+    @ObservationIgnored private var undoStack: [VideoProject] = []
+    @ObservationIgnored private var redoStack: [VideoProject] = []
+
+    var duration: Double { project.timeline.sourceDuration }
+
+    init(capture: Capture) {
+        self.capture = capture
+        self.asset = AVURLAsset(url: capture.mediaURL)
+        var loaded = VideoProject(duration: max(capture.duration, 0.1))
+        if let data = try? Data(contentsOf: capture.projectURL), let saved = try? JSONDecoder().decode(VideoProject.self, from: data) {
+            loaded = saved
+        }
+        project = loaded
+        player.actionAtItemEnd = .pause
+        timeObserver = player.addPeriodicTimeObserver(forInterval: CMTime(value: 1, timescale: 30), queue: .main) { [weak self] time in
+            MainActor.assumeIsolated {
+                self?.playerTimeChanged(time.seconds)
+            }
+        }
+        Task {
+            await loadDuration()
+            await rebuild(keepPosition: false)
+            jumpToLastMarker()
+            await makeThumbnails()
+        }
+    }
+
+    /// Opens a clip saved with ⌥⇧M on the marked moment.
+    private func jumpToLastMarker() {
+        var lastMarker: Double? = nil
+        for event in capture.events where event.kind == .marker {
+            lastMarker = event.time
+        }
+        if let marker = lastMarker {
+            seek(toSource: marker)
+        }
+    }
+
+    func tearDown() {
+        player.pause()
+        if let observer = timeObserver {
+            player.removeTimeObserver(observer)
+        }
+        timeObserver = nil
+    }
+
+    private func loadDuration() async {
+        if let real = try? await asset.load(.duration).seconds, real > 0, abs(real - project.timeline.sourceDuration) > 0.05 {
+            // The stored duration was an estimate; keep the user's trim inside the real clip.
+            let old = project.timeline
+            var timeline = EditTimeline(sourceDuration: real)
+            timeline.trim = TimeSpan(start: min(old.trim.start, real), end: min(old.trim.end, real))
+            if !old.hasEdits {
+                timeline.trim = TimeSpan(start: 0, end: real)
+            }
+            timeline.cuts = old.cuts
+            timeline.speeds = old.speeds
+            timeline.freezes = old.freezes
+            project.timeline = timeline
+        }
+    }
+
+    private func makeThumbnails() async {
+        let generator = AVAssetImageGenerator(asset: asset)
+        generator.appliesPreferredTrackTransform = true
+        generator.maximumSize = CGSize(width: 240, height: 240)
+        let count = 12
+        var images: [NSImage] = []
+        for index in 0..<count {
+            let time = CMTime(seconds: duration * (Double(index) + 0.5) / Double(count), preferredTimescale: 600)
+            if let frame = try? await generator.image(at: time).image {
+                images.append(NSImage(cgImage: frame, size: CGSize(width: frame.width, height: frame.height)))
+            }
+        }
+        thumbnails = images
+    }
+
+    // MARK: Undo
+
+    /// Call before every change so it can be undone.
+    func checkpoint() {
+        undoStack.append(project)
+        if undoStack.count > 100 {
+            undoStack.removeFirst()
+        }
+        redoStack.removeAll()
+    }
+
+    var canUndo: Bool { !undoStack.isEmpty }
+
+    func undo() {
+        guard let previous = undoStack.popLast() else { return }
+        redoStack.append(project)
+        project = previous
+        selection = nil
+        projectChanged()
+    }
+
+    func redo() {
+        guard let next = redoStack.popLast() else { return }
+        undoStack.append(project)
+        project = next
+        projectChanged()
+    }
+
+    /// Persists and rebuilds the preview shortly after the last change.
+    func projectChanged() {
+        save()
+        rebuildTask?.cancel()
+        rebuildTask = Task {
+            try? await Task.sleep(nanoseconds: 180_000_000)
+            if Task.isCancelled { return }
+            await rebuild(keepPosition: true)
+        }
+    }
+
+    private func save() {
+        if let data = try? JSONEncoder().encode(project) {
+            try? data.write(to: capture.projectURL)
+        }
+    }
+
+    // MARK: Preview
+
+    private func rebuild(keepPosition: Bool) async {
+        isBuilding = true
+        defer { isBuilding = false }
+        let sourcePosition = playhead
+        do {
+            let built = try await VideoCompositor.build(asset: asset, project: project, events: capture.events, environment: capture.environment)
+            output = built
+            let item = AVPlayerItem(asset: built.composition)
+            item.videoComposition = built.videoComposition
+            let wasPlaying = isPlaying
+            player.replaceCurrentItem(with: item)
+            if keepPosition {
+                let outputTime = built.timeMap.outputTime(forSource: sourcePosition)
+                await player.seek(to: CMTime(seconds: outputTime, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero)
+            } else {
+                playhead = project.timeline.trim.start
+            }
+            if wasPlaying {
+                player.play()
+            }
+        } catch {
+            message = error.localizedDescription
+        }
+    }
+
+    private func playerTimeChanged(_ outputTime: Double) {
+        guard let map = output?.timeMap else { return }
+        playhead = map.sourceTime(forOutput: outputTime)
+        if isPlaying && player.rate == 0 {
+            isPlaying = false
+        }
+    }
+
+    var outputDuration: Double {
+        return project.timeline.outputDuration
+    }
+
+    var outputPlayhead: Double {
+        guard let map = output?.timeMap else { return playhead }
+        return map.outputTime(forSource: playhead)
+    }
+
+    func togglePlay() {
+        if isPlaying {
+            player.pause()
+            isPlaying = false
+            return
+        }
+        // Start over when at the end.
+        if outputPlayhead >= outputDuration - 0.05 {
+            seek(toSource: project.timeline.trim.start)
+        }
+        player.play()
+        isPlaying = true
+    }
+
+    func seek(toSource time: Double) {
+        let clamped = max(0, min(duration, time))
+        playhead = clamped
+        guard let map = output?.timeMap else { return }
+        let target = map.outputTime(forSource: clamped)
+        player.seek(to: CMTime(seconds: target, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero)
+    }
+
+    func step(seconds: Double) {
+        seek(toSource: playhead + seconds)
+    }
+
+    // MARK: Edits
+
+    func setTrimStart(_ value: Double) {
+        let end = project.timeline.trim.end
+        project.timeline.trim = TimeSpan(start: max(0, min(value, end - 0.2)), end: end)
+        projectChanged()
+    }
+
+    func setTrimEnd(_ value: Double) {
+        let start = project.timeline.trim.start
+        project.timeline.trim = TimeSpan(start: start, end: min(duration, max(value, start + 0.2)))
+        projectChanged()
+    }
+
+    /// The span to act on: the ruler selection, or a few seconds from the playhead.
+    func actionSpan(defaultLength: Double = 3) -> TimeSpan {
+        if let selected = range, selected.duration > 0.05 {
+            return selected
+        }
+        return TimeSpan(start: playhead, end: min(duration, playhead + defaultLength))
+    }
+
+    func cutSelection() {
+        guard let selected = range, selected.duration > 0.05 else {
+            message = "Drag on the ruler to choose what to cut"
+            return
+        }
+        checkpoint()
+        project.timeline.cuts.append(selected)
+        range = nil
+        projectChanged()
+    }
+
+    func slowMotion() {
+        checkpoint()
+        project.timeline.speeds.append(SpeedEdit(span: actionSpan(), factor: 0.5))
+        range = nil
+        projectChanged()
+    }
+
+    func freezeFrame() {
+        checkpoint()
+        project.timeline.freezes.append(FreezeEdit(at: playhead, duration: 2))
+        projectChanged()
+    }
+
+    func addOverlay(kind: VideoOverlay.Kind, start: CGPoint, end: CGPoint) {
+        checkpoint()
+        var overlay = VideoOverlay(kind: kind, span: actionSpan(), start: start, end: end)
+        overlay.scale = lastOverlayScale
+        if kind == .text {
+            overlay.text = "Bug here"
+            overlay.end = start
+        }
+        project.overlays.append(overlay)
+        selection = .overlay(overlay.id)
+        tool = .select
+        projectChanged()
+    }
+
+    /// New marks use the size picked last.
+    @ObservationIgnored private var lastOverlayScale: Double = 1
+
+    /// + and -: grows or shrinks the selected text, arrow or box.
+    func changeSelectedOverlaySize(by direction: Int) {
+        guard var overlay = selectedOverlay, overlay.kind != .blur else { return }
+        let next = overlay.steppedScale(direction)
+        if next == overlay.effectiveScale { return }
+        checkpoint()
+        overlay.scale = next
+        lastOverlayScale = next
+        updateOverlay(overlay)
+    }
+
+    func updateOverlay(_ overlay: VideoOverlay) {
+        guard let index = project.overlays.firstIndex(where: { item in item.id == overlay.id }) else { return }
+        project.overlays[index] = overlay
+        projectChanged()
+    }
+
+    var selectedOverlay: VideoOverlay? {
+        guard case .overlay(let id) = selection else { return nil }
+        return project.overlays.first { overlay in overlay.id == id }
+    }
+
+    func deleteSelection() {
+        guard let item = selection else { return }
+        checkpoint()
+        switch item {
+        case .overlay(let id):
+            project.overlays.removeAll { overlay in overlay.id == id }
+        case .cut(let index):
+            if index < project.timeline.cuts.count { project.timeline.cuts.remove(at: index) }
+        case .speed(let index):
+            if index < project.timeline.speeds.count { project.timeline.speeds.remove(at: index) }
+        case .freeze(let index):
+            if index < project.timeline.freezes.count { project.timeline.freezes.remove(at: index) }
+        }
+        selection = nil
+        projectChanged()
+    }
+
+    // MARK: Export
+
+    var estimatedSizeText: String {
+        let seconds = outputDuration
+        var bytes = 0.0
+        if project.format == .gif {
+            bytes = seconds * Double(project.gifFramesPerSecond) * 90_000
+        } else if let limit = project.sizeLimitMB {
+            if SizeBudget.cannotFit(limitMB: limit, duration: seconds, hasAudio: true) {
+                return "too long for \(limit) MB"
+            }
+            return "≤ \(limit) MB"
+        } else {
+            let megabitsPerSecond: Double
+            switch project.quality {
+            case .original: megabitsPerSecond = 12
+            case .p1080: megabitsPerSecond = 9
+            case .p720: megabitsPerSecond = 4.5
+            }
+            bytes = seconds * megabitsPerSecond * 125_000
+        }
+        return "≈ " + DataSizeConverter.describe(bytes).decimal
+    }
+
+    /// Exports to `url`, or to a temp file when nil. Returns the file.
+    func export(to url: URL? = nil) async -> URL? {
+        guard let built = output else { return nil }
+        let ext = project.format == .gif ? "gif" : "mp4"
+        let target = url ?? AppPaths.temporary.appendingPathComponent(UUID().uuidString, isDirectory: true).appendingPathComponent(AppPaths.exportName(date: capture.createdAt)).appendingPathExtension(ext)
+        try? FileManager.default.createDirectory(at: target.deletingLastPathComponent(), withIntermediateDirectories: true)
+        exportProgress = 0
+        defer { exportProgress = nil }
+        let progress: (Double) -> Void = { value in
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    self.exportProgress = value
+                }
+            }
+        }
+        do {
+            if project.format == .gif {
+                try await VideoCompositor.exportGIF(built, framesPerSecond: project.gifFramesPerSecond, to: target, progress: progress)
+            } else {
+                try await VideoCompositor.exportMP4(built, quality: project.quality, sizeLimitMB: project.sizeLimitMB, to: target, progress: progress)
+                warnIfOverLimit(target)
+            }
+            return target
+        } catch {
+            message = error.localizedDescription
+            return nil
+        }
+    }
+
+    private func warnIfOverLimit(_ file: URL) {
+        guard let limit = project.sizeLimitMB else { return }
+        let attributes = try? FileManager.default.attributesOfItem(atPath: file.path)
+        let bytes = (attributes?[.size] as? NSNumber)?.doubleValue ?? 0
+        if bytes > Double(limit) * 1_000_000 {
+            message = "The file is \(DataSizeConverter.describe(bytes).decimal), over the \(limit) MB limit. Trim the clip."
+        }
+    }
+
+    /// The file saved with "Save", listed in the bug report.
+    @ObservationIgnored private var savedFile: URL?
+
+    func copyBugReport(format: BugReport.Format) {
+        var files: [URL] = []
+        if let saved = savedFile {
+            files.append(saved)
+        }
+        BugReportBuilder.copy(for: capture, timeMap: output?.timeMap, files: files, format: format)
+        message = "Bug report copied. Paste it into the ticket."
+    }
+
+    func saveToFolder() async {
+        let ext = project.format == .gif ? "gif" : "mp4"
+        let url = AppPaths.uniqueURL(in: AppSettings.shared.outputFolder, name: AppPaths.exportName(date: capture.createdAt), ext: ext)
+        if let saved = await export(to: url) {
+            savedFile = saved
+            message = "Saved \(saved.lastPathComponent)"
+            NSWorkspace.shared.activateFileViewerSelecting([saved])
+        }
+    }
+
+    /// Puts the exported file on the clipboard, ready to paste into Jira or Slack.
+    func copyFile() async {
+        guard let file = await export() else { return }
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.writeObjects([file as NSURL])
+        message = "Copied \(project.format.rawValue) to clipboard"
+    }
+}

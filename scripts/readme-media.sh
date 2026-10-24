@@ -16,7 +16,7 @@ command -v ffmpeg >/dev/null || { echo "ffmpeg is needed: brew install ffmpeg"; 
 
 echo "==> rendering"
 swift build >/dev/null
-"$(swift build --show-bin-path)/QAHelper" --readme-media "$WORK" | tail -1
+"$(swift build --show-bin-path)/Bugbear" --readme-media "$WORK" | tail -1
 mkdir -p "$OUT"
 
 # A GIF from numbered frames. Every frame shows for $3 seconds, the last one for $4.
@@ -65,7 +65,7 @@ picture record-outline-area 1200
 picture toolbox-json 1220
 picture toolbox-timezones 1220
 picture toolbox-testdata 1220
-picture onboarding-1 680
+picture onboarding-2 680
 picture settings 560
 cp "$WORK/screens/logo.png" "$OUT/logo.png"
 

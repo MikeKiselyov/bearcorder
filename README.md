@@ -1,11 +1,12 @@
 <p align="center">
-  <img src="docs/images/logo.png" width="128" alt="QA Helper logo: a bear eating a bun">
+  <img src="docs/images/logo.png" width="128" alt="Bugbear logo: a bear peeking over a bun with a bug on it">
 </p>
 
-<h1 align="center">QA Helper</h1>
+<h1 align="center">Bugbear</h1>
 
 <p align="center">
-  A macOS menu bar app for QA engineers and developers.<br>
+  <b>Screenshots, recordings and a dev toolbox for people who build and test software.</b><br>
+  A macOS menu bar app for QA engineers, developers, designers and support.<br>
   Catch the bug that already happened, mark it up, paste it into the ticket.<br>
   Everything runs on your Mac. Nothing is uploaded anywhere.
 </p>
@@ -32,7 +33,7 @@
 You need macOS 14 Sonoma or later (Apple silicon or Intel). Open **Terminal** and paste:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/MikeKiselyov/qa-helper/main/scripts/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/MikeKiselyov/bugbear-app/main/scripts/install.sh | bash
 ```
 
 <p align="center">
@@ -43,22 +44,28 @@ What happens:
 
 1. The installer checks macOS and the Apple developer tools. If the tools are missing, macOS shows
    a dialog to install them (about 5 minutes); run the command again afterwards.
-2. The source is downloaded to `~/.qa-helper`.
+2. The source is downloaded to `~/.bugbear`.
 3. The app is built on your Mac (the first build takes a few minutes) and copied to `/Applications`
    (or `~/Applications` without an admin account).
-4. QA Helper starts. Look for the **bear icon** in the menu bar. There is no Dock icon.
+4. Bugbear starts. Look for the **bear icon** in the menu bar. There is no Dock icon.
 
 Nothing is downloaded except the source code: every copy is built and signed on the Mac that runs it.
 Want to read the script first? It is [`scripts/install.sh`](scripts/install.sh), about 50 lines.
 
 ## First start
 
-A short guide opens on first launch. The only permission the app needs to work is
-**Screen & System Audio Recording**: allow it when macOS asks, then press **Relaunch** in the guide.
-Everything else is optional (see [Permissions](#permissions)). Reopen the guide from Settings any time.
+A short guide opens on first launch:
+
+1. **Screen buffer**: keep the last 1, 2, 3 or 5 minutes of the screen, or turn it off. With it off nothing
+   runs in the background; screenshots, recordings and the toolbox work the same.
+2. **Permissions**: the only one the app needs is **Screen & System Audio Recording**. Allow it when macOS
+   asks, then press **Relaunch** in the guide. Everything else is optional (see [Permissions](#permissions)).
+3. **Shortcuts** and a quick try.
+
+Change any of it later in Settings, and reopen the guide from there.
 
 <p align="center">
-  <img src="docs/images/onboarding-1.png" width="520" alt="Welcome guide">
+  <img src="docs/images/onboarding-2.png" width="520" alt="First-start guide: keep the last minutes of the screen or turn the buffer off">
 </p>
 
 Click the bear to open the panel. It has four tabs: **Capture**, **Record**, **Tools** and **Recent**.
@@ -90,13 +97,34 @@ All of them work from any app. Change them, or give one to the actions that have
 
 The app keeps the last 1-5 minutes of the screen on disk (short H.264 segments; old ones are deleted).
 A bug you could not reproduce is already recorded: press `⌥⇧1` and it opens in the editor.
+The buffer is optional: choose it in the first-start guide, pause it from the menu bar, or turn it off in
+Settings → Buffer.
 
-- All connected displays (saved side by side), system audio and microphone are optional.
+- System audio and microphone are optional.
 - Clicks and shortcut keys are recorded alongside, so the editor can show them on the video.
   Plain typing is never stored as text; it shows up as "typing…".
 - When an app you used in the last 10 minutes crashes, the minute before the crash is saved to
   Recent automatically, with the macOS crash report next to it.
 - Each saved clip gets the tested app's system log for the same seconds (`system.log`).
+
+### Several displays
+
+The buffer keeps every connected display. A saved clip holds each display on its own, so saving stays
+instant, and the video editor has a switch at the top: one display, another, or all of them side by side.
+It opens on the display the pointer was on. Trims, cuts, arrows and text stay when you switch; clicks are
+placed for the picture you pick.
+
+| | All displays kept (default) | Main display only (Settings → Buffer) |
+|---|---|---|
+| Buffer, `⌥⇧1`-`⌥⇧3` | every display; switch in the editor | the main display |
+| Recording, full screen | every display; switch in the editor | the display under the pointer |
+| Recording an area | the display the area is on | the display the area is on |
+| Screenshot, full screen | the display under the pointer | the display under the pointer |
+| Screenshot, all displays | every display stitched into one image | every display stitched into one image |
+
+While recording, displays that are not in the video are dimmed and say "Not recorded". Connecting or
+disconnecting a display restarts the buffer with the new set. The first-start guide asks whether to keep
+all displays when more than one is connected.
 
 ### Video editor
 
@@ -203,15 +231,15 @@ screen shows the changes.
 - The check is one request to `api.github.com` that compares your build's commit with the branch;
   nothing about you or your captures is sent.
 - If the source folder has uncommitted changes, the update stops and tells you instead of touching them.
-- From a terminal: `~/.qa-helper/scripts/update.sh` (or run the install command again).
+- From a terminal: `~/.bugbear/scripts/update.sh` (or run the install command again).
 - A fork updates from the fork: the repository comes from the clone's `origin`.
 
 ## Build from a clone
 
 ```bash
-git clone https://github.com/MikeKiselyov/qa-helper.git
-cd qa-helper
-scripts/build-app.sh --run        # builds build/QA Helper.app and launches it
+git clone https://github.com/MikeKiselyov/bugbear-app.git
+cd bugbear-app
+scripts/build-app.sh --run        # builds build/Bugbear.app and launches it
 scripts/build-app.sh --install    # or: copies it to /Applications (or ~/Applications) and launches it
 ```
 
@@ -228,8 +256,8 @@ cp .env.example .env
 
 | Variable | Meaning |
 |---|---|
-| `QAHELPER_BUNDLE_ID` | Bundle identifier of your build. Default `io.github.qahelper.app`. |
-| `QAHELPER_SIGN_IDENTITY` | Code signing identity. Empty: the first "Apple Development" identity in your keychain. `-`: ad-hoc. |
+| `BUGBEAR_BUNDLE_ID` | Bundle identifier of your build. Default `io.github.bugbear.app`. |
+| `BUGBEAR_SIGN_IDENTITY` | Code signing identity. Empty: the first "Apple Development" identity in your keychain. `-`: ad-hoc. |
 
 Why sign with a real identity: macOS ties the Screen Recording, Camera and Microphone permissions to
 the app's signature. With ad-hoc signing every rebuild looks like a new app and macOS asks again.
@@ -248,13 +276,13 @@ List your identities with `security find-identity -v -p codesigning`.
 
 ## Uninstall
 
-Quit QA Helper from the panel (power button), then:
+Quit Bugbear from the panel (power button), then:
 
 ```bash
-rm -rf "/Applications/QA Helper.app" "$HOME/Applications/QA Helper.app"   # the app
-rm -rf ~/.qa-helper                                                     # the source used for updates
-rm -rf "$HOME/Library/Application Support/QA Helper"                    # captures and buffer
-rm -rf "$HOME/Library/Logs/QA Helper"                                   # logs
+rm -rf "/Applications/Bugbear.app" "$HOME/Applications/Bugbear.app"   # the app
+rm -rf ~/.bugbear                                                     # the source used for updates
+rm -rf "$HOME/Library/Application Support/Bugbear"                    # captures and buffer
+rm -rf "$HOME/Library/Logs/Bugbear"                                   # logs
 ```
 
 Permissions can be removed in System Settings → Privacy & Security.
@@ -263,10 +291,10 @@ Permissions can be removed in System Settings → Privacy & Security.
 
 ```bash
 swift test                                                    # unit tests for the core logic
-swift build && "$(swift build --show-bin-path)/QAHelper" --self-test /tmp/qahelper-checks
+swift build && "$(swift build --show-bin-path)/Bugbear" --self-test /tmp/bugbear-checks
 ```
 
-- `swift test` covers `Sources/QAHelperCore`: formatters, converters, JWT, time parsing, the video
+- `swift test` covers `Sources/BugbearCore`: formatters, converters, JWT, time parsing, the video
   timeline, report building, scrolling-screenshot stitching.
 - `--self-test` needs no permissions. It generates a clip with sound, runs the whole video editor
   pipeline (trim, cut, slow motion, freeze, overlays, blur, clicks, keys, MP4 and GIF export, audio
@@ -286,13 +314,13 @@ scripts/perf.sh           # CPU and memory idle and while recording, save time, 
 The pictures in this README are rendered off screen from a made-up page, so they can be regenerated
 on any Mac without permissions: `scripts/readme-media.sh` (needs `ffmpeg`).
 
-Logs: `~/Library/Logs/QA Helper/qahelper.log` (attach it to bug reports about the app).
+Logs: `~/Library/Logs/Bugbear/bugbear.log` (attach it to bug reports about the app).
 
 ## Project layout
 
 ```
-Sources/QAHelperCore/     pure logic, no UI: toolbox, time, timeline math, reports, stitching
-Sources/QAHelper/
+Sources/BugbearCore/     pure logic, no UI: toolbox, time, timeline math, reports, stitching
+Sources/Bugbear/
   App/                    entry point, app state, windows
   Capture/                screen buffer, exporter, screenshots, environment, input events
   Recording/              recording session, HUD, draw-on-screen, camera bubble, area picker, ruler
@@ -307,6 +335,6 @@ docs/images/              the pictures in this README
 The logo (a bear eating a bun) is one flat shape drawn in code in `Support/Logo.swift`: the menu bar
 glyph, the in-app logo and the app icon are the same picture. The build script renders the `.icns` from it.
 
-Storage: captures in `~/Library/Application Support/QA Helper/Captures/`, buffer segments in
-`…/QA Helper/Buffer/` (cleared on launch and quit), exports in the folder chosen in Settings
+Storage: captures in `~/Library/Application Support/Bugbear/Captures/`, buffer segments in
+`…/Bugbear/Buffer/` (cleared on launch and quit), exports in the folder chosen in Settings
 (Desktop by default).

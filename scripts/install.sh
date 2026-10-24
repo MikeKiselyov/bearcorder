@@ -1,16 +1,16 @@
 #!/bin/bash
-# One-command install: gets the source, builds QA Helper on this Mac and puts it in Applications.
+# One-command install: gets the source, builds Bugbear on this Mac and puts it in Applications.
 # Run it again any time to update.
 #
-#   curl -fsSL https://raw.githubusercontent.com/MikeKiselyov/qa-helper/main/scripts/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/MikeKiselyov/bugbear-app/main/scripts/install.sh | bash
 #
 # Options (environment variables):
-#   QAHELPER_REPO        git URL to install from (default: the main GitHub repository)
-#   QAHELPER_SOURCE_DIR  where the source is kept (default: ~/.qa-helper)
+#   BUGBEAR_REPO        git URL to install from (default: the main GitHub repository)
+#   BUGBEAR_SOURCE_DIR  where the source is kept (default: ~/.bugbear)
 set -euo pipefail
 
-REPO_URL="${QAHELPER_REPO:-https://github.com/MikeKiselyov/qa-helper.git}"
-SOURCE_DIR="${QAHELPER_SOURCE_DIR:-$HOME/.qa-helper}"
+REPO_URL="${BUGBEAR_REPO:-https://github.com/MikeKiselyov/bugbear-app.git}"
+SOURCE_DIR="${BUGBEAR_SOURCE_DIR:-$HOME/.bugbear}"
 
 say() { printf '\033[1m==> %s\033[0m\n' "$1"; }
 stop() { printf '\033[31m%s\033[0m\n' "$1" >&2; exit 1; }
@@ -18,7 +18,7 @@ stop() { printf '\033[31m%s\033[0m\n' "$1" >&2; exit 1; }
 say "Checking macOS"
 macos_major="$(sw_vers -productVersion | cut -d. -f1)"
 if [ "$macos_major" -lt 14 ]; then
-    stop "QA Helper needs macOS 14 Sonoma or later (this Mac has $(sw_vers -productVersion))."
+    stop "Bugbear needs macOS 14 Sonoma or later (this Mac has $(sw_vers -productVersion))."
 fi
 
 say "Checking developer tools"
@@ -42,4 +42,4 @@ fi
 say "Building (the first build takes a few minutes)"
 "$SOURCE_DIR/scripts/build-app.sh" --install
 
-say "Done. QA Helper is in the menu bar (the bear icon)."
+say "Done. Bugbear is in the menu bar (the bear icon)."
