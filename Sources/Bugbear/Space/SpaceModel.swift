@@ -57,6 +57,10 @@ final class SpaceModel {
     var confirmingFile: String?
 
     @ObservationIgnored private var measuredAt: Date?
+    @ObservationIgnored private var measureAgain = false
+    /// Each scan gets a number; results and progress of an older, stopped scan are ignored.
+    @ObservationIgnored private var scanGeneration = 0
+    @ObservationIgnored private var scanStop = DiskScanner.StopFlag()
     @ObservationIgnored private var scanTask: Task<Void, Never>?
     /// Tests point this at a made-up home folder.
     @ObservationIgnored var homeOverride: URL?
@@ -102,7 +106,14 @@ final class SpaceModel {
     /// Measures every category. Skipped when done less than a minute ago, unless `force`.
     func measure(force: Bool = false) async {
         refreshVolume()
-        if isMeasuring { return }
+        if isMeasuring {
+            // A clean while sizes are being measured: measure again once this one ends, or the
+            // cleaned category would keep showing its old size.
+            if force {
+                measureAgain = true
+            }
+            return
+        }
         if !force, let last = measuredAt, Date().timeIntervalSince(last) < 60 { return }
         isMeasuring = true
         let root = home
@@ -116,6 +127,10 @@ final class SpaceModel {
         sizes = measured
         measuredAt = Date()
         isMeasuring = false
+        if measureAgain {
+            measureAgain = false
+            await measure(force: true)
+        }
     }
 
     func clean(_ category: CleanupCategory) async {
@@ -199,18 +214,24 @@ final class SpaceModel {
         }
         accessChecks = checks
         let withAppData = includeAppData
+        scanGeneration += 1
+        let generation = scanGeneration
+        let stop = DiskScanner.StopFlag()
+        scanStop = stop
         scanTask = Task {
             // 1. Every permission prompt now, one after another, while the person is looking.
-            for index in accessChecks.indices {
-                if Task.isCancelled { return }
+            for index in checks.indices {
+                if generation != scanGeneration { return }
                 accessChecks[index].state = .asking
-                let folder = accessChecks[index].url
-                let isAppData = accessChecks[index].skipWhenDenied == "Library/Containers"
+                let folder = checks[index].url
+                let isAppData = checks[index].skipWhenDenied == "Library/Containers"
                 let allowed = await Task.detached(priority: .userInitiated) { () -> Bool in
                     return SpaceModel.canRead(folder, insideAnApp: isAppData)
                 }.value
+                // Stopped (and maybe restarted with other checks) while macOS was asking.
+                if generation != scanGeneration { return }
                 accessChecks[index].state = allowed ? .allowed : .denied
-                Log.info("space: access to \(accessChecks[index].id) \(allowed ? "allowed" : "denied")")
+                Log.info("space: access to \(checks[index].id) \(allowed ? "allowed" : "denied")")
             }
             // Denied folders are left out instead of failing file by file.
             if !roots.isEmpty && roots[0].name == "Home" {
@@ -218,20 +239,21 @@ final class SpaceModel {
                     roots[0].skip.append(check.skipWhenDenied)
                 }
             }
+            if generation != scanGeneration { return }
             scanRoots = roots
             let scanRootsNow = roots
-            if Task.isCancelled { return }
             scanState = .running(DiskScanner.Progress())
             // 2. The scan itself.
             let result = await Task.detached(priority: .utility) { () -> DiskScanner.ScanResult? in
-                return DiskScanner.scan(roots: scanRootsNow, includeAppData: withAppData) { progress in
+                return DiskScanner.scan(roots: scanRootsNow, includeAppData: withAppData, stop: stop) { progress in
                     Task { @MainActor in
-                        if case .running = SpaceModel.shared.scanState {
-                            SpaceModel.shared.scanState = .running(progress)
-                        }
+                        let model = SpaceModel.shared
+                        guard generation == model.scanGeneration, case .running = model.scanState else { return }
+                        model.scanState = .running(progress)
                     }
                 }
             }.value
+            if generation != scanGeneration { return }
             guard let finished = result else {
                 scanState = .idle
                 return
@@ -259,6 +281,8 @@ final class SpaceModel {
     }
 
     func cancelScan() {
+        scanStop.stop()
+        scanGeneration += 1
         scanTask?.cancel()
         scanTask = nil
         scanState = .idle

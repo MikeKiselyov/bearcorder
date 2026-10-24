@@ -154,6 +154,22 @@ enum FeatureAutomation {
             }
             return lines.joined(separator: " || ")
 
+        case "space-stop-test":
+            // Start a scan, stop it, start again right away: one clean result, no stale updates.
+            let space = SpaceModel.shared
+            space.startScan(subfolder: "Library")
+            try? await Task.sleep(nanoseconds: 1_500_000_000)
+            space.cancelScan()
+            let stoppedState = "\(space.scanState)"
+            space.startScan(subfolder: "Library")
+            while space.isScanning {
+                try? await Task.sleep(nanoseconds: 250_000_000)
+            }
+            // Give a stale walk time to come back and overwrite things, if it still could.
+            try? await Task.sleep(nanoseconds: 3_000_000_000)
+            guard let tree = space.tree else { return "no result" }
+            return "afterStop=\(stoppedState) final=\(space.scanState) files=\(tree.root.fileCount)"
+
         case "space-folder":
             // space-folder:Home/Library/Application Support: the biggest folders inside it.
             guard let node = SpaceModel.shared.tree?.node(at: argument.components(separatedBy: "/")) else { return "not found" }

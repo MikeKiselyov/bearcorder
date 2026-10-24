@@ -125,15 +125,53 @@ final class CaptureStore {
         guard let screens = capture.screens, let variant = screens.first(where: { item in item.id == id }) else { return capture }
         let files = FileManager.default
         let file = capture.folder.appendingPathComponent(variant.file)
-        if capture.kind == .screenshot && variant.id == ScreenVariant.allID && !files.fileExists(atPath: file.path) {
-            // Picked before the background build finished.
-            await Task.detached(priority: .userInitiated) {
-                CaptureStore.buildSideBySideScreenshot(capture)
-            }.value
+        // 1. Make sure the picture exists before anything is touched.
+        if !files.fileExists(atPath: file.path) && variant.id == ScreenVariant.allID {
+            if capture.kind == .screenshot {
+                // Picked before the background build finished.
+                await Task.detached(priority: .userInitiated) {
+                    CaptureStore.buildSideBySideScreenshot(capture)
+                }.value
+            } else {
+                var parts: [URL] = []
+                var mainIndex = 0
+                for item in screens where item.id != ScreenVariant.allID {
+                    if item.isMain {
+                        mainIndex = parts.count
+                    }
+                    parts.append(capture.folder.appendingPathComponent(item.file))
+                }
+                let temporary = AppPaths.temporary.appendingPathComponent("all-\(UUID().uuidString).mp4")
+                try await ClipComposer.sideBySide(files: parts, mainIndex: mainIndex, framesPerSecond: framesPerSecond, to: temporary)
+                try files.moveItem(at: temporary, to: file)
+            }
         }
+        guard files.fileExists(atPath: file.path) else {
+            throw CocoaError(.fileNoSuchFile, userInfo: [NSFilePathErrorKey: file.path])
+        }
+
+        // 2. original.* becomes a second name for the chosen file. It is swapped in one step, so a
+        // failure leaves the old picture in place.
+        let staged = capture.folder.appendingPathComponent("staged-\(UUID().uuidString).\(capture.mediaURL.pathExtension)")
+        do {
+            try files.linkItem(at: file, to: staged)
+        } catch {
+            try files.copyItem(at: file, to: staged)
+        }
+        do {
+            if files.fileExists(atPath: capture.mediaURL.path) {
+                _ = try files.replaceItemAt(capture.mediaURL, withItemAt: staged)
+            } else {
+                try files.moveItem(at: staged, to: capture.mediaURL)
+            }
+        } catch {
+            try? files.removeItem(at: staged)
+            throw error
+        }
+
+        // 3. Only now the marks follow: they are drawn on a picture, so every display keeps its
+        // own. The current ones are parked under the display's name, the chosen one's come back.
         if capture.kind == .screenshot {
-            // Marks are drawn on the picture, so every display keeps its own: park the current
-            // editor state under the display's name and bring back the other one's.
             let combined = capture.folder.appendingPathComponent("base.png")
             if let current = capture.selectedScreen {
                 parkFile(capture.projectURL, as: capture.folder.appendingPathComponent("edit-\(current).json"))
@@ -141,26 +179,6 @@ final class CaptureStore {
             }
             parkFile(capture.folder.appendingPathComponent("edit-\(id).json"), as: capture.projectURL)
             parkFile(capture.folder.appendingPathComponent("base-\(id).png"), as: combined)
-        }
-        if !files.fileExists(atPath: file.path) && variant.id == ScreenVariant.allID && capture.kind == .video {
-            var parts: [URL] = []
-            var mainIndex = 0
-            for item in screens where item.id != ScreenVariant.allID {
-                if item.isMain {
-                    mainIndex = parts.count
-                }
-                parts.append(capture.folder.appendingPathComponent(item.file))
-            }
-            let temporary = AppPaths.temporary.appendingPathComponent("all-\(UUID().uuidString).mp4")
-            try await ClipComposer.sideBySide(files: parts, mainIndex: mainIndex, framesPerSecond: framesPerSecond, to: temporary)
-            try files.moveItem(at: temporary, to: file)
-        }
-        // original.mp4 is a second name for the chosen file, not a copy.
-        try? files.removeItem(at: capture.mediaURL)
-        do {
-            try files.linkItem(at: file, to: capture.mediaURL)
-        } catch {
-            try files.copyItem(at: file, to: capture.mediaURL)
         }
         var updated = capture
         updated.selectedScreen = id
