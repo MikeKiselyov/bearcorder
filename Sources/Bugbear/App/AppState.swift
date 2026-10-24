@@ -175,7 +175,10 @@ final class AppState {
         HotKeyCenter.shared.register(bindings)
     }
 
-    func refreshStatus() {
+    /// Called every second. The activity bars and the covered time are only shown in the menu bar
+    /// panel, so with the panel closed they are left alone (no work for hidden views); `force`
+    /// updates them anyway.
+    func refreshStatus(force: Bool = false) {
         var text = ""
         if let session = recording {
             let clock = TimeFormat.clock(session.elapsed())
@@ -191,9 +194,12 @@ final class AppState {
             hasAccessibilityAccess = accessibility
         }
         guard let primary = primaryBuffer, primary.isRunning else {
-            coveredSeconds = 0
+            if coveredSeconds != 0 {
+                coveredSeconds = 0
+            }
             return
         }
+        if !force && !isMenuPanelOpen { return }
         let status = primary.status(buckets: 16)
         if Int(status.covered) != Int(coveredSeconds) {
             coveredSeconds = status.covered
