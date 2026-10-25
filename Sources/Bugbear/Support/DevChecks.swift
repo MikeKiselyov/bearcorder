@@ -64,9 +64,50 @@ enum DevChecks {
 
     // MARK: Self test
 
+    /// Each screenshot format comes out smaller as the quality goes down, and half size halves the width.
+    private static func checkScreenshotFormats() {
+        guard let image = renderTallImage(["Total €-49.00", "Payment failed: undefined", "Discount −€98.00", "Card 4242 4242 4242 4242"]) else {
+            check(false, "screenshot formats: test image")
+            return
+        }
+        var sizes: [ScreenshotDocument.ExportFormat: Int] = [:]
+        for format in ScreenshotDocument.ExportFormat.allCases {
+            sizes[format] = ScreenshotDocument.encode(image, as: format)?.count ?? 0
+        }
+        let png = sizes[.png] ?? 0
+        let high = sizes[.jpegHigh] ?? 0
+        let medium = sizes[.jpegMedium] ?? 0
+        let small = sizes[.jpegSmall] ?? 0
+        check(png > 0 && small > 0, "screenshot formats all encode")
+        check(medium < high && small < medium, "JPEG gets smaller with lower quality", "\(high) / \(medium) / \(small)")
+        check((sizes[.pngHalf] ?? 0) < png, "half-size PNG is smaller", "\(sizes[.pngHalf] ?? 0) vs \(png)")
+        if let data = ScreenshotDocument.encode(image, as: .pngHalf), let half = NSBitmapImageRep(data: data) {
+            check(half.pixelsWide == image.width / 2, "half-size PNG is half as wide", "\(half.pixelsWide) vs \(image.width)")
+        }
+    }
+
+    /// Projects saved before picked colors keep loading, and a picked color survives a save.
+    private static func checkAnnotationColors() {
+        let decoder = JSONDecoder()
+        let encoder = JSONEncoder()
+        let old = try? decoder.decode([AnnotationColor].self, from: Data(#"["coral","black"]"#.utf8))
+        check(old == [.coral, .black], "old projects: palette colors load by name")
+        let picked = AnnotationColor(hex: 0x12AB34)
+        var roundTrip: AnnotationColor?
+        if let data = try? encoder.encode([picked]) {
+            check(String(decoding: data, as: UTF8.self) == ##"["#12AB34"]"##, "picked color saved as hex")
+            roundTrip = (try? decoder.decode([AnnotationColor].self, from: data))?.first
+        }
+        check(roundTrip == picked, "picked color loads back")
+        check(AnnotationColor(NSColor(hex: 0x12AB34)) == picked, "color panel color becomes the same hex")
+    }
+
+
     static func selfTest(folder: URL) async -> Int32 {
         try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         failures = []
+        checkAnnotationColors()
+        checkScreenshotFormats()
 
         // 1. Synthetic 6 s clip with a moving box and a 440 Hz tone.
         let video = folder.appendingPathComponent("synthetic-video.mov")
@@ -130,6 +171,20 @@ enum DevChecks {
             check(size.height == 720, "Edited MP4 is 720p", "\(size)")
             let audioTracks = try await exported.loadTracks(withMediaType: .audio)
             check(audioTracks.count == 1, "Edited MP4 keeps audio")
+            // The size shown in the quality menu is an upper estimate: the file must not be bigger.
+            // The size in the quality menu follows how densely the source is encoded.
+            let preset = SizeBudget.preset(sourceWidth: output.renderSize.width, sourceHeight: output.renderSize.height, maxHeight: 720)
+            var sourcePerPixel: Double?
+            if let sourceTrack = try await AVURLAsset(url: clip).loadTracks(withMediaType: .video).first {
+                let rate = try await sourceTrack.load(.estimatedDataRate)
+                let natural = try await sourceTrack.load(.naturalSize)
+                sourcePerPixel = Double(rate) / Double(natural.width * natural.height)
+            }
+            let bitrate = SizeBudget.expectedVideoBitrate(presetBitrate: preset.videoBitrate, sourceBitsPerPixelSecond: sourcePerPixel, width: preset.width, height: preset.height)
+            let estimate = SizeBudget.estimatedBytes(videoBitrate: bitrate, duration: expected, hasAudio: true)
+            let actual = Double((try? FileManager.default.attributesOfItem(atPath: mp4.path)[.size] as? Int) ?? 0)
+            check(actual > estimate / 2.5 && actual < estimate * 2.5, "720p file size is close to the shown estimate", "\(Int(actual)) vs \(Int(estimate))")
+            print("      720p estimate \(Int(estimate)) bytes, file \(Int(actual)) bytes")
 
             let limited = folder.appendingPathComponent("edited-1mb.mp4")
             try await VideoCompositor.exportMP4(output, quality: .original, sizeLimitMB: 1, to: limited, progress: nil)
@@ -623,7 +678,7 @@ enum DevChecks {
         let other = RecordingOutlineView(frame: CGRect(origin: .zero, size: CGSize(width: 1200, height: 700)))
         renderAppKit(other, to: folder.appendingPathComponent("record-outline-other-display.png"))
 
-        for page in 0..<5 {
+        for page in 0..<6 {
             render(OnboardingView(startPage: page).environment(app).preferredColorScheme(.dark), size: CGSize(width: 680, height: 600), to: folder.appendingPathComponent("onboarding-\(page + 1).png"))
         }
 

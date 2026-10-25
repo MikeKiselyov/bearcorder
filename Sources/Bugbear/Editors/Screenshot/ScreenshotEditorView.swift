@@ -55,7 +55,6 @@ private struct ScreenshotEditorContent: View {
     var onSelectScreen: (String) -> Void
 
     static let editorTools: [AnnotationTool] = [.select, .arrow, .rectangle, .ellipse, .line, .highlighter, .pen, .text, .step, .blur, .magnifier, .crop]
-    static let colors: [AnnotationColor] = [.coral, .yellow, .blue, .green, .purple, .white, .black]
 
     var body: some View {
         VStack(spacing: 0) {
@@ -65,6 +64,13 @@ private struct ScreenshotEditorContent: View {
                 AnnotationCanvas(document: document)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .overlay(alignment: .top) { cropHint }
+                    .background(DeleteKeyMonitor {
+                        if document.selectedId == nil {
+                            return false
+                        }
+                        document.deleteSelected()
+                        return true
+                    })
                 Divider().overlay(Theme.border)
                 sidebar
             }
@@ -79,105 +85,46 @@ private struct ScreenshotEditorContent: View {
 
     private var toolbar: some View {
         HStack(spacing: 2) {
+            ToolButton(systemImage: "arrow.uturn.backward", help: "Undo the last change (⌘Z)") { document.undo() }
+                .disabled(!document.canUndo)
+            ToolButton(systemImage: "arrow.uturn.forward", help: "Redo what was undone (⇧⌘Z)") { document.redo() }
+                .disabled(!document.canRedo)
+
+            Rectangle().fill(Theme.borderStrong).frame(width: 1, height: 24).padding(.horizontal, 8)
+
             ForEach(Self.editorTools) { tool in
-                ToolButton(systemImage: tool.symbol, help: "\(tool.title) (\(String(tool.keyboardShortcut ?? " ").uppercased()))", isSelected: document.tool == tool) {
+                ToolButton(systemImage: tool.symbol, help: "\(tool.title) (\(String(tool.keyboardShortcut ?? " ").uppercased())): \(tool.purpose)", isSelected: document.tool == tool) {
                     document.tool = tool
                 }
             }
-            ToolButton(systemImage: "rectangle.split.2x1", help: "Combine with another screenshot") {
+            ToolButton(systemImage: "rectangle.split.2x1", help: "Combine with another screenshot: places other images to the right") {
                 combine()
             }
 
             Rectangle().fill(Theme.borderStrong).frame(width: 1, height: 24).padding(.horizontal, 8)
 
-            HStack(spacing: 6) {
-                ForEach(Self.colors) { color in
-                    Button {
-                        document.color = color
-                        document.applyStyleToSelection()
-                    } label: {
-                        Circle()
-                            .fill(color.color)
-                            .frame(width: 20, height: 20)
-                            .overlay(Circle().stroke(Theme.text, lineWidth: document.color == color ? 2 : 0))
-                            .overlay(Circle().stroke(Theme.borderStrong, lineWidth: color == .black ? 1 : 0))
-                            .frame(width: 26, height: 30)
-                            .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(color.rawValue)
-                }
+            ColorPalette(selection: document.color, swatchSize: 18) { color in
+                document.color = color
+                document.applyStyleToSelection()
             }
 
             Rectangle().fill(Theme.borderStrong).frame(width: 1, height: 24).padding(.horizontal, 8)
 
-            HStack(spacing: 3) {
-                ForEach(StrokeSize.allCases) { size in
-                    Button {
-                        document.stroke = size
-                        document.applyStyleToSelection()
-                    } label: {
-                        RoundedRectangle(cornerRadius: min(2, size.width / 2))
-                            .fill(Theme.text)
-                            .frame(width: 14, height: min(size.width, 16))
-                            .frame(width: 24, height: 28)
-                            .background(document.stroke == size ? Color(hex: 0x45484F) : Color.clear)
-                            .clipShape(RoundedRectangle(cornerRadius: 5))
-                            .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .help("Line: \(size.rawValue). + and - step through sizes")
-                    .accessibilityLabel("\(size.rawValue) stroke")
+            HStack(spacing: 6) {
+                FillToggle(isFilled: document.isFilled, isEnabled: document.fillTarget != nil) { filled in
+                    document.setFilled(filled)
+                }
+                SizeStepper(value: "\(Int(document.stroke.width))", name: "line") { direction in
+                    document.stroke = document.stroke.stepped(direction)
+                    document.applySizeToSelection()
+                }
+                SizeStepper(value: "\(Int(document.textPoints))", name: "text") { direction in
+                    document.textPoints = TextSizes.stepped(from: document.textPoints, direction)
+                    document.applySizeToSelection()
                 }
             }
-            .padding(3)
-            .background(Theme.control)
-            .clipShape(RoundedRectangle(cornerRadius: 7))
 
-            HStack(spacing: 2) {
-                Button {
-                    document.textPoints = TextSizes.stepped(from: document.textPoints, -1)
-                    document.applySizeToSelection()
-                } label: {
-                    Text("A").font(.system(size: 11, weight: .semibold)).frame(width: 24, height: 28).contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .help("Smaller text (- with Text or Step)")
-                Text("\(Int(document.textPoints))")
-                    .font(.system(size: 12, design: .monospaced))
-                    .frame(width: 28)
-                    .accessibilityLabel("Text size \(Int(document.textPoints))")
-                Button {
-                    document.textPoints = TextSizes.stepped(from: document.textPoints, 1)
-                    document.applySizeToSelection()
-                } label: {
-                    Text("A").font(.system(size: 17, weight: .semibold)).frame(width: 24, height: 28).contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .help("Bigger text (+ with Text or Step)")
-                Button {
-                    document.clearTextBackground.toggle()
-                    document.applyStyleToSelection()
-                } label: {
-                    Image(systemName: document.clearTextBackground ? "character" : "character.textbox")
-                        .font(.system(size: 13, weight: .semibold))
-                        .frame(width: 28, height: 28)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .help(document.clearTextBackground ? "Text without background. Click to put a label behind it" : "Text on a label. Click for transparent background")
-                .accessibilityLabel(document.clearTextBackground ? "Transparent text background" : "Text label background")
-            }
-            .padding(.horizontal, 3)
-            .background(Theme.control)
-            .clipShape(RoundedRectangle(cornerRadius: 7))
-
-            Spacer()
-
-            ToolButton(systemImage: "arrow.uturn.backward", help: "Undo (⌘Z)") { document.undo() }
-                .disabled(!document.canUndo)
-            ToolButton(systemImage: "arrow.uturn.forward", help: "Redo (⇧⌘Z)") { document.redo() }
-                .disabled(!document.canRedo)
+            Spacer(minLength: 0)
         }
         .padding(.horizontal, 12)
         .frame(height: 52)
@@ -187,7 +134,7 @@ private struct ScreenshotEditorContent: View {
     private var cropHint: some View {
         if document.tool == .crop {
             HStack(spacing: 10) {
-                Text("Drag to crop · Enter to apply · Esc to cancel").font(.system(size: 12))
+                Text("Drag the edges or corners · drag inside to move · Enter to apply · Esc to leave").font(.system(size: 12))
                 if document.crop != nil {
                     Button("Reset crop") { document.setCrop(nil) }
                         .buttonStyle(.plain)
@@ -447,12 +394,13 @@ private struct ScreenshotEditorContent: View {
 
             Picker("", selection: $document.exportFormat) {
                 ForEach(ScreenshotDocument.ExportFormat.allCases) { format in
-                    Text(format.rawValue).tag(format)
+                    Text(exportLabel(format)).tag(format)
                 }
             }
             .pickerStyle(.menu)
-            .frame(width: 84)
+            .frame(width: 210)
             .labelsHidden()
+            .help("File type and quality for Save, Drag and the file in Copy, with the size it comes out at. \(document.exportFormat.detail)")
 
             Button("Save to folder") {
                 if let url = document.saveToFolder() {
@@ -467,6 +415,12 @@ private struct ScreenshotEditorContent: View {
         }
         .padding(.horizontal, 16)
         .frame(height: 56)
+    }
+
+    /// "JPEG, medium · 240 KB"; the size appears once it is measured.
+    private func exportLabel(_ format: ScreenshotDocument.ExportFormat) -> String {
+        guard let size = document.exportSizeText(format) else { return format.rawValue }
+        return "\(format.rawValue) · \(size)"
     }
 
     private var sizeLabel: String {

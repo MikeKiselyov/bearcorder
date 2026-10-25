@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/images/logo.png" width="128" alt="Bugbear logo: a bear peeking over a bun with a bug on it">
+  <img src="docs/images/logo.png" width="128" alt="Bugbear logo: a bear looking at a bug through a magnifying glass">
 </p>
 
 <h1 align="center">Bugbear</h1>
@@ -39,8 +39,8 @@ curl -fsSL https://raw.githubusercontent.com/MikeKiselyov/bugbear-app/main/scrip
 
 What happens:
 
-1. The installer checks macOS and the Apple developer tools. If the tools are missing, macOS shows
-   a dialog to install them (about 5 minutes); run the command again afterwards.
+1. The installer checks macOS and Apple's free Command Line Tools (Xcode is not needed). If the tools
+   are missing, macOS shows a dialog to install them (about 5 minutes); run the command again afterwards.
 2. The source is downloaded to `~/.bugbear`.
 3. The app is built on your Mac (the first build takes a few minutes) and copied to `/Applications`
    (or `~/Applications` without an admin account).

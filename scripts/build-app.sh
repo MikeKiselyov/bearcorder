@@ -8,8 +8,10 @@
 # Personal settings live in .env (git-ignored, see .env.example):
 #   BUGBEAR_BUNDLE_ID       bundle identifier (default io.github.bugbear.app)
 #   BUGBEAR_SIGN_IDENTITY   codesign identity, e.g. "Apple Development: you@example.com (TEAMID)".
-#                            Unset: the first "Apple Development" identity in the keychain is used.
-#                            "-": ad-hoc signing (macOS asks for permissions again after each rebuild).
+#                            Unset: the first "Apple Development" identity in the keychain, or without
+#                            one a certificate made for this Mac (scripts/local-signing.sh).
+#                            "local": always that certificate. "-": ad-hoc signing (macOS asks for
+#                            permissions again after each rebuild).
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
@@ -85,13 +87,24 @@ cat > "$APP_DIR/Contents/Info.plist" <<PLIST
 </plist>
 PLIST
 
+# Signing order: BUGBEAR_SIGN_IDENTITY, then an Apple Development certificate, then a certificate
+# made for this Mac (scripts/local-signing.sh). All three stay the same between builds, so macOS
+# keeps the permissions after an update. Ad-hoc ("-") is the last resort.
 IDENTITY="${BUGBEAR_SIGN_IDENTITY:-}"
 if [ -z "$IDENTITY" ]; then
     IDENTITY="$(security find-identity -v -p codesigning | grep "Apple Development" | head -1 | sed -E 's/.*"(.*)"/\1/' || true)"
 fi
+if [ -z "$IDENTITY" ] || [ "$IDENTITY" = "local" ]; then
+    IDENTITY="$("$ROOT/scripts/local-signing.sh" identity || true)"
+    # The key is usable only while this build signs.
+    trap '"$ROOT/scripts/local-signing.sh" finish' EXIT
+    if [ -n "$IDENTITY" ]; then
+        echo "==> signing with the certificate made for this Mac (no Apple Development one)"
+    fi
+fi
 if [ -z "$IDENTITY" ]; then
     IDENTITY="-"
-    echo "!! No Apple Development identity found; ad-hoc signing (permissions reset on every rebuild)"
+    echo "!! No signing certificate; ad-hoc signing (macOS asks for permissions again after each update)"
 fi
 echo "==> signing with: $IDENTITY"
 codesign --force --sign "$IDENTITY" --identifier "$BUNDLE_ID" "$APP_DIR"

@@ -47,7 +47,7 @@ struct ColorContrastTool: View {
                     }
                     .buttonStyle(.plain)
                     .padding(.top, 34)
-                    .help("Swap")
+                    .help("Swap the text and background colors")
                     colorInput("Background", value: $background, parsed: back)
                 }
                 if let textColor = text, let backColor = back {
@@ -73,6 +73,7 @@ struct ColorContrastTool: View {
                 TextField("#RRGGBB", text: value)
                     .textFieldStyle(.roundedBorder)
                     .font(.system(size: 13, design: .monospaced))
+                    .help("\(title) color as #RRGGBB, rgb(…) or hsl(…)")
                 Button {
                     Task {
                         if let picked = await ColorPick.pick() {
@@ -82,7 +83,7 @@ struct ColorContrastTool: View {
                 } label: {
                     Image(systemName: "eyedropper")
                 }
-                .help("Pick from the screen")
+                .help("Pick the \(title.lowercased()) color from anywhere on the screen")
             }
         }
         .frame(maxWidth: .infinity)

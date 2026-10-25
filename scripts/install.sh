@@ -18,10 +18,9 @@ FANCY=0
 if [ -t 1 ] && [ -z "${NO_COLOR:-}" ] && [ "${TERM:-}" != "dumb" ]; then
     FANCY=1
 fi
-H=""; B=""; C=""; N=""; BOLD=""; DIM=""; OK=""; BAD=""
+H=""; C=""; N=""; BOLD=""; DIM=""; OK=""; BAD=""
 if [ "$FANCY" = "1" ]; then
-    H=$'\033[97m'          # the bear
-    B=$'\033[38;5;216m'    # the bun
+    H=$'\033[97m'          # the bear and the magnifying glass
     C=$'\033[38;5;203m'    # the bug, and the accent
     N=$'\033[0m'
     BOLD=$'\033[1m'
@@ -33,24 +32,26 @@ fi
 logo() {
     local lines=(
 # logo-start
-    "     ${H}▄██████▄▄${N}     ${H}▄▄▄▄▄${N}     ${H}▄██████▄▄${N}"
-    "    ${H}██████████████████████████████████▄${N}"
-    "   ${H}████████████████████████████████████${N}"
-    "   ${H}████████████████████████████████████${N}"
-    "    ${H}▀█████████████████████████████████▀${N}"
-    "      ${H}████████▀${N}  ${H}▀███████▀${N}  ${H}▀████████${N}"
-    "      ${H}████████${N}   ${H}▄███████▄${N}  ${H}▄█████▀▀█${N}"
-    "      ${H}████████████████████████████▄${N}${C}█${N}"
-    "      ${H}█████████████▀${N}   ${H}▀██████▀▀██▀${N}${C}▄█▄▄▄▄${N}"
-    "      ${H}▀████████▀▀▀▀${N}    ${H}▀▀▀▀▀██${N}${C}▀█${N}${H}▀${N} ${C}████${N}"
-    "       ${H}▀▀▀${N}   ${B}▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄${N} ${C}▄▄██████${N}"
-    "       ${B}▄▄██████████████████▀▀${N} ${C}█████▄███▀${N}"
-    "    ${B}▄█████████████▄███████▄${N}${C}▀▀▀▀▄▀████▄▄${N}"
-    "   ${B}███████████████████████████▄${N} ${C}▀▀▀█${N} ${B}▄${N}${C}█${N}${B}▄${N}"
-    "   ${B}██████████████████▀█████████████${N}${C}▀▀${N}${B}███${N}"
-    "   ${B}▀███████████▄██████████████████████▀${N}"
-    "     ${B}▀▀█████████████████████████████▀${N}"
-    "         ${B}▀▀▀▀█████████████████▀▀▀${N}"
+    "      ${H}▄▄██▄▄${N}     ${H}▄${N}     ${H}▄▄██▄▄${N}"
+    "     ${H}▄████████████████████████▄${N}"
+    "     ${H}██████████████████████████${N}"
+    "     ${H}▀████████████████████████${N}"
+    "       ${H}██████▀${N} ${H}▀█████▀${N} ${H}▀█████${N}"
+    "       ${H}██████▄▄▄█████▄▄▄█████${N}"
+    "       ${H}█████████▀${N}  ${H}██████▀▀▀${N}"
+    "       ${H}▀██████████████▀${N} ${H}▄▄████████▄▄${N}"
+    "        ${H}▀████████████${N} ${H}▄██▀${N}        ${H}▀██▄${N}"
+    "          ${H}▀▀████████${N} ${H}▄█▀${N}   ${C}▀▄${N}   ${C}▄▀${N}  ${H}▀██${N}"
+    "              ${H}▀▀▀▀▀${N}  ${H}██${N}      ${C}███${N}      ${H}██${N}"
+    "                    ${H}██${N}   ${C}▀▄███▀███▄▀${N}  ${H}██${N}"
+    "                    ${H}▀█${N}   ${C}▄${N} ${C}███${N} ${C}███${N} ${C}▄${N}  ${H}██${N}"
+    "                     ${H}██${N}   ${C}▀███${N} ${C}███▀${N}  ${H}▄█▀${N}"
+    "                      ${H}██▄${N}   ${C}▀▀${N} ${C}▀▀${N}   ${H}▄█▀${N}"
+    "                       ${H}▀██▄▄▄${N}   ${H}▄▄██▀${N} ${H}▄█▄${N}"
+    "                          ${H}▀▀▀██▀▀▀▀${N}  ${H}█████▄${N}"
+    "                                      ${H}▀█████▄${N}"
+    "                                        ${H}▀████${N}"
+    "                                          ${H}▀▀${N}"
 # logo-end
     )
     echo
@@ -141,6 +142,11 @@ fi
 swift_version="$(swift --version 2>/dev/null | sed -nE 's/.*Swift version ([0-9.]+).*/\1/p' | head -1)"
 swift_major="$(echo "$swift_version" | cut -d. -f1)"
 if [ -z "$swift_major" ] || [ "$swift_major" -lt 6 ]; then
+    # Command Line Tools with Swift 6 need macOS 14.5 or later, so an older Sonoma updates macOS first.
+    macos_minor="$(echo "$macos_version" | cut -d. -f2)"
+    if [ "$macos_major" -eq 14 ] && [ "${macos_minor:-0}" -lt 5 ]; then
+        stop "Swift 6 needs macOS 14.5 or later (this Mac has $macos_version). Update macOS in System Settings → General → Software Update, then run this command again."
+    fi
     stop "Swift 6 or later is needed (found: ${swift_version:-none}). Update Xcode or the Command Line Tools in Software Update."
 fi
 done_step "Swift $swift_version"
@@ -162,7 +168,14 @@ if ! with_spinner "Building Bugbear" "$LOG" "$SOURCE_DIR/scripts/build-app.sh" -
     tail -20 "$LOG" | sed 's/^/      /' >&2
     exit 1
 fi
-done_step "Built and signed ($(grep -q "ad-hoc" "$LOG" && echo "ad-hoc: macOS asks for permissions again after updates" || echo "Apple Development certificate"))"
+if grep -q "ad-hoc" "$LOG"; then
+    signed_with="ad-hoc: macOS asks for permissions again after updates"
+elif grep -q "certificate made for this Mac" "$LOG"; then
+    signed_with="a certificate made for this Mac"
+else
+    signed_with="your Apple Development certificate"
+fi
+done_step "Built and signed ($signed_with)"
 installed="$(sed -n 's/^==> installed to //p' "$LOG" | tail -1)"
 done_step "Installed to ${installed:-Applications}"
 

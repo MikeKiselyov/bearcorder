@@ -66,6 +66,7 @@ struct ToolboxView: View {
                             selected = first
                         }
                     }
+                    .help("Find a tool by name or keyword, Return opens the first match")
             }
             .padding(.horizontal, 10)
             .frame(height: 32)
@@ -107,6 +108,7 @@ struct ToolboxView: View {
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(SecondaryButtonStyle())
+            .help("Paste the clipboard and open the tool that fits its content, like JSON, JWT or a timestamp")
             .padding(12)
         }
         .frame(width: 230)
@@ -200,6 +202,31 @@ struct ToolboxView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .help(purpose(tool))
+    }
+
+    private func purpose(_ tool: ToolKind) -> String {
+        switch tool {
+        case .json, .xml, .yaml, .html, .sql, .graphql: return "Format, validate and minify \(tool.rawValue)"
+        case .jwt: return "Decode a JWT to read its header, claims and expiry"
+        case .base64: return "Encode or decode Base64 text"
+        case .url: return "Percent-encode or decode URLs and query strings"
+        case .htmlEntities: return "Escape or unescape HTML entities like &amp;"
+        case .time: return "Convert Unix timestamps and dates between formats and time zones"
+        case .timeZones: return "Compare your time with other cities, for example to plan a call"
+        case .dataConvert: return "Convert data between JSON, YAML, XML and CSV"
+        case .quick: return "Convert numbers, colors, text case, sizes and durations"
+        case .generate: return "Generate UUIDs and hashes like MD5 and SHA"
+        case .testData: return "Generate fake names, emails, cards and tricky edge-case strings for testing"
+        case .qr: return "Make a QR code from text or a link, or read one from an image"
+        case .regex: return "Test a regular expression against text and see the matches"
+        case .jsonDiff: return "Compare two JSON documents and see what changed"
+        case .jsonPath: return "Query JSON with a JSONPath expression"
+        case .http: return "Parse a raw HTTP request or response, headers, cookies and query"
+        case .cron: return "Explain a cron expression and show the next run times"
+        case .length: return "Count characters and bytes, and make strings of an exact length to test field limits"
+        case .contrast: return "Check text and background color contrast against WCAG"
+        }
     }
 
     // MARK: Detail
@@ -370,6 +397,7 @@ struct CopyButton: View {
         .buttonStyle(AccentButtonStyle(isEnabled: !text.isEmpty))
         .disabled(text.isEmpty)
         .keyboardShortcut(primary ? KeyboardShortcut("c", modifiers: [.command, .shift]) : nil)
+        .help(primary ? "Copy the result to the clipboard (⇧⌘C)" : "Copy to the clipboard")
     }
 }
 
@@ -396,7 +424,7 @@ struct ValueRow: View {
             }
             .buttonStyle(.plain)
             .foregroundStyle(Theme.textSecondary)
-            .help("Copy")
+            .help("Copy \(label) to the clipboard")
             .accessibilityLabel("Copy \(label)")
         }
         .padding(.horizontal, 12)

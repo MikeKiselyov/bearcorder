@@ -38,6 +38,7 @@ struct ShortcutSettingsSection: View {
                     problem = nil
                 }
                 .disabled(!hotKeys.isCustomized)
+                .help("Restore every shortcut to its default keys")
             }
         }
         .onDisappear { stopRecording() }

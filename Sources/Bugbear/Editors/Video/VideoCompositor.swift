@@ -293,13 +293,11 @@ struct VideoCompositor {
                 maxHeight = min(presetHeight, budgetHeight)
             }
         }
-        var size = output.renderSize
-        if let height = maxHeight, size.height > height {
-            let ratio = height / size.height
-            size = CGSize(width: Int(size.width * ratio / 2) * 2, height: Int(height / 2) * 2)
-        }
+        // The same size and bitrate the editor shows the file size for.
+        let preset = SizeBudget.preset(sourceWidth: output.renderSize.width, sourceHeight: output.renderSize.height, maxHeight: maxHeight)
+        let size = CGSize(width: preset.width, height: preset.height)
         var options = AssetExporter.Options(renderSize: size, framesPerSecond: 30, timeRange: CMTimeRange(start: .zero, duration: output.composition.duration))
-        options.videoBitrate = videoBitrate
+        options.videoBitrate = videoBitrate ?? preset.videoBitrate
         try await AssetExporter.export(asset: output.composition, videoComposition: output.videoComposition, options: options, to: url, progress: progress)
     }
 

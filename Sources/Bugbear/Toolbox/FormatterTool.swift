@@ -68,6 +68,7 @@ struct FormatterTool: View {
                     }
                     .menuStyle(.borderlessButton)
                     .fixedSize()
+                    .help("Convert this JSON to YAML, XML or CSV and copy it")
                 }
                 CopyButton(text: current.isValid ? current.output : "")
             }
@@ -108,6 +109,7 @@ struct FormatterTool: View {
         HStack(spacing: 14) {
             PillPicker(options: FormatMode.allCases, selection: $mode) { value in value.rawValue }
                 .frame(width: 170)
+                .help("Format pretty-prints with indentation, Minify removes all extra whitespace")
             Picker("Indent", selection: Binding(get: { useTabs ? 0 : indentWidth }, set: { value in
                 if value == 0 {
                     useTabs = true
@@ -123,16 +125,20 @@ struct FormatterTool: View {
             .pickerStyle(.menu)
             .fixedSize()
             .disabled(mode == .minify)
+            .help("Indentation used in the formatted output")
             if kind == .json || kind == .yaml {
                 Toggle("Sort keys", isOn: $sortKeys).toggleStyle(.checkbox)
+                    .help("Sort object keys alphabetically so two documents are easier to compare")
             }
             if kind == .json {
                 Toggle("Unescape nested JSON strings", isOn: $unescape).toggleStyle(.checkbox)
+                    .help("Expand string values that contain escaped JSON into real nested objects")
             }
             Spacer()
             Button("Clear") { input = "" }
                 .buttonStyle(.plain)
                 .foregroundStyle(Theme.link)
+                .help("Clear the input")
         }
         .font(.system(size: 12))
         .padding(.horizontal, 16)
@@ -165,6 +171,7 @@ struct DataConvertTool: View {
             HStack(spacing: 12) {
                 PillPicker(options: DataFormat.allCases, selection: $source) { value in value.rawValue }
                     .frame(width: 240)
+                    .help("Format of the input")
                 Button {
                     let previous = source
                     source = target
@@ -176,9 +183,10 @@ struct DataConvertTool: View {
                     Image(systemName: "arrow.left.arrow.right")
                 }
                 .buttonStyle(.plain)
-                .help("Swap and use the output as input")
+                .help("Swap the formats and use the output as the new input")
                 PillPicker(options: DataFormat.allCases, selection: $target) { value in value.rawValue }
                     .frame(width: 240)
+                    .help("Format to convert to")
                 Spacer()
             }
             .padding(.horizontal, 16)

@@ -69,6 +69,7 @@ struct CleanupRow: View {
                 WindowManager.shared.openHistory()
             }
             .buttonStyle(SecondaryButtonStyle())
+            .help("Open the captures history to delete screenshots and clips you no longer need")
         case .deleteContents:
             if model.cleaningID == category.id {
                 ProgressView().controlSize(.small).frame(width: 60)
@@ -76,15 +77,18 @@ struct CleanupRow: View {
                 HStack(spacing: 6) {
                     Button("Cancel") { model.confirmingID = nil }
                         .buttonStyle(SecondaryButtonStyle())
+                        .help("Keep these files")
                     Button("Delete") {
                         Task { await model.clean(category) }
                     }
                     .buttonStyle(AccentButtonStyle())
+                    .help("Delete for good; this cannot be undone")
                 }
             } else {
                 Button("Clean") { model.confirmingID = category.id }
                     .buttonStyle(SecondaryButtonStyle())
                     .disabled((model.sizes[category.id] ?? 0) == 0 || model.cleaningID != nil)
+                    .help("Delete the contents of \(category.title) to free space; asks to confirm first")
             }
         }
     }
@@ -120,6 +124,7 @@ struct SpaceView: View {
                 }
                 .pickerStyle(.segmented)
                 .fixedSize()
+                .help("Switch between safe clean-up, folders by size and the largest files")
                 Spacer()
                 if let message = model.message {
                     Text(message)
@@ -165,6 +170,7 @@ struct SpaceView: View {
                 }
                 .buttonStyle(SecondaryButtonStyle())
                 .disabled(model.isMeasuring)
+                .help("Measure the clean-up categories again to get fresh sizes")
             }
             Text("Caches are made again by apps when they need them. Deleting them cannot be undone, so each one asks first.")
                 .font(.system(size: 12))
@@ -204,8 +210,10 @@ struct SpaceView: View {
             Toggle("Include other apps' private data (Docker, Slack, Telegram…). macOS asks once.", isOn: $model.includeAppData)
                 .toggleStyle(.checkbox)
                 .font(.system(size: 12))
+                .help("Also count other apps' data folders in the scan; macOS asks for permission once")
             Button("Scan home folder and Applications") { model.startScan() }
                 .buttonStyle(AccentButtonStyle())
+                .help("Add up every folder and find the biggest files; takes a minute or two")
         }
     }
 
@@ -230,6 +238,7 @@ struct SpaceView: View {
                 }
                 Button("Stop") { model.cancelScan() }
                     .buttonStyle(SecondaryButtonStyle())
+                    .help("Stop the scan")
             }
             VStack(alignment: .leading, spacing: 8) {
                 if !model.accessChecks.isEmpty {
@@ -311,6 +320,7 @@ struct SpaceView: View {
                     Button("This Mac") { model.folderPath = [] }
                         .buttonStyle(.plain)
                         .foregroundStyle(Theme.link)
+                        .help("Go back to the top level")
                     ForEach(Array(model.folderPath.enumerated()), id: \.offset) { item in
                         Image(systemName: "chevron.right").font(.system(size: 10)).foregroundStyle(Theme.textTertiary)
                         Button(item.element) {
@@ -318,15 +328,18 @@ struct SpaceView: View {
                         }
                         .buttonStyle(.plain)
                         .foregroundStyle(item.offset == model.folderPath.count - 1 ? Theme.text : Theme.link)
+                        .help("Go back to \(item.element)")
                     }
                     Spacer()
                     Text(SpaceModel.format(folder.bytes)).font(.system(size: 13, design: .monospaced))
                     if let url = model.url(forFolder: model.folderPath) {
                         Button("Show in Finder") { model.reveal(url) }
                             .buttonStyle(SecondaryButtonStyle())
+                            .help("Open this folder in Finder")
                     }
                     Button("Scan again") { model.startScan() }
                         .buttonStyle(SecondaryButtonStyle())
+                        .help("Scan the disk again to get fresh numbers")
                 }
                 .font(.system(size: 13))
                 ScrollView {
@@ -411,6 +424,7 @@ struct SpaceView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .help(canOpen ? "Open this folder to see what is inside" : "\(child.name) has no subfolders")
     }
 
     // MARK: Largest files
@@ -464,14 +478,18 @@ struct SpaceView: View {
                 .frame(width: 90, alignment: .trailing)
             Button("Show") { model.reveal(url) }
                 .buttonStyle(SecondaryButtonStyle())
+                .help("Show this file in Finder")
             if model.confirmingFile == file.path {
                 Button("Cancel") { model.confirmingFile = nil }
                     .buttonStyle(SecondaryButtonStyle())
+                    .help("Keep this file")
                 Button("Move") { model.moveToTrash(file.path) }
                     .buttonStyle(AccentButtonStyle())
+                    .help("Confirm: move the file to the Trash")
             } else {
                 Button("Move to Trash") { model.confirmingFile = file.path }
                     .buttonStyle(SecondaryButtonStyle())
+                    .help("Move this file to the Trash; asks to confirm first and you can still restore it from the Trash")
             }
         }
         .padding(.vertical, 8)
@@ -507,8 +525,10 @@ struct SpaceTabSection: View {
             HStack(spacing: 8) {
                 Button("All categories") { WindowManager.shared.openSpace(section: .cleanUp) }
                     .buttonStyle(SecondaryButtonStyle())
+                    .help("Open the Disk Space window with every clean-up category")
                 Button("What takes space…") { WindowManager.shared.openSpace(section: .folders) }
                     .buttonStyle(SecondaryButtonStyle())
+                    .help("Scan folders to see what takes the most space on this Mac")
             }
         }
         .padding(16)

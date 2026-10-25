@@ -21,6 +21,10 @@ final class WindowManager: NSObject, NSWindowDelegate {
             .preferredColorScheme(.dark)
             .tint(Theme.accent)
         let hosting = NSHostingController(rootView: root)
+        // The window keeps the size given here. Otherwise it follows SwiftUI's ideal size, and a view
+        // that fills the window grows as tall as the screen: on a tall display the buttons at the
+        // bottom end up under the Dock or off screen.
+        hosting.sizingOptions = []
         let window = NSWindow(contentViewController: hosting)
         window.title = title
         window.styleMask = [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView]
@@ -34,9 +38,37 @@ final class WindowManager: NSObject, NSWindowDelegate {
         window.identifier = NSUserInterfaceItemIdentifier(id)
         window.center()
         window.setFrameAutosaveName("Bugbear.\(id.components(separatedBy: ":").first ?? id)")
+        fitOnScreen(window)
         windows[id] = window
         activate()
         window.makeKeyAndOrderFront(nil)
+    }
+
+    /// Keeps a window inside the visible part of its screen, also when the saved frame is from a
+    /// bigger display or was saved too tall.
+    private func fitOnScreen(_ window: NSWindow) {
+        guard let screen = window.screen ?? NSScreen.main else { return }
+        let visible = screen.visibleFrame
+        var frame = window.frame
+        if frame.width > visible.width {
+            frame.size.width = visible.width
+        }
+        if frame.height > visible.height {
+            frame.size.height = visible.height
+        }
+        if frame.minX < visible.minX {
+            frame.origin.x = visible.minX
+        }
+        if frame.maxX > visible.maxX {
+            frame.origin.x = visible.maxX - frame.width
+        }
+        if frame.minY < visible.minY {
+            frame.origin.y = visible.minY
+        }
+        if frame.maxY > visible.maxY {
+            frame.origin.y = visible.maxY - frame.height
+        }
+        window.setFrame(frame, display: false)
     }
 
     private func activate() {
@@ -65,7 +97,7 @@ final class WindowManager: NSObject, NSWindowDelegate {
     func openEditor(for capture: Capture) {
         switch capture.kind {
         case .screenshot:
-            show(id: "screenshot:\(capture.id)", title: "Screenshot · \(capture.title)", size: CGSize(width: 1220, height: 780), minSize: CGSize(width: 900, height: 560)) {
+            show(id: "screenshot:\(capture.id)", title: "Screenshot · \(capture.title)", size: CGSize(width: 1280, height: 780), minSize: CGSize(width: 1080, height: 560)) {
                 ScreenshotEditorView(capture: capture)
             }
         case .video:

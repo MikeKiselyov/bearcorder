@@ -12,19 +12,19 @@ struct OnboardingView: View {
     @State private var microphoneStatus = AVCaptureDevice.authorizationStatus(for: .audio)
     @State private var cameraStatus = AVCaptureDevice.authorizationStatus(for: .video)
 
-    private let pageCount = 5
+    private let pageCount = 6
     private let ticker = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
     static let completedKey = "onboardingCompleted"
     /// The step the guide was on, so it comes back there after a relaunch (Screen Recording only
     /// takes effect after one) or when it was closed halfway.
     static let pageKey = "onboardingPage"
-    private static let permissionsPage = 2
+    private static let permissionsPage = 3
 
     /// `startPage` nil: the saved step, or the first one.
     init(startPage: Int? = nil) {
         var initial = startPage ?? UserDefaults.standard.integer(forKey: OnboardingView.pageKey)
-        if initial < 0 || initial > 4 {
+        if initial < 0 || initial > 5 {
             initial = 0
         }
         _page = State(initialValue: initial)
@@ -36,8 +36,9 @@ struct OnboardingView: View {
                 switch page {
                 case 0: welcome
                 case 1: buffer
-                case 2: permissions
-                case 3: shortcuts
+                case 2: howItWorks
+                case 3: permissions
+                case 4: shortcuts
                 default: finish
                 }
             }
@@ -195,6 +196,78 @@ struct OnboardingView: View {
                     .foregroundStyle(Theme.textSecondary)
             }
             .frame(height: 24)
+        }
+    }
+
+    /// How saving from the buffer works, step by step, and where files go.
+    private var howItWorks: some View {
+        let keys = HotKeySettings.shared
+        return VStack(alignment: .leading, spacing: 14) {
+            Text("How it works").font(.system(size: 24, weight: .bold))
+            VStack(alignment: .leading, spacing: 12) {
+                howStep(1, "A ring next to the bear means the buffer is on", "It keeps the last minutes of the screen. Turn it on or off in the menu that opens from the bear.")
+                howStep(2, "Saw a bug? Press \(keys.text(for: .saveShort))", "The last 30 seconds open in the editor. \(keys.text(for: .saveMinute)) saves a minute, \(keys.text(for: .saveBuffer)) the whole buffer. The same buttons are in the menu.")
+                howStep(3, "Something about to happen? Press \(keys.text(for: .mark))", "It marks the moment; the next save reaches back to it.")
+                howStep(4, "Trim, point, share", "In the editor cut the clip, add arrows and text, then copy it or drag it into the ticket.")
+                howStep(5, "Stopped it from the macOS menu?", "Stop in the purple screen recording icon saves what the buffer holds and offers to open it.")
+            }
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Save files to").font(.system(size: 14, weight: .semibold))
+                HStack(spacing: 10) {
+                    Image(systemName: "folder")
+                        .foregroundStyle(Theme.textSecondary)
+                    Text(displayPath(app.settings.outputFolderPath))
+                        .font(.system(size: 13))
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                    Spacer()
+                    Button("Choose…") { chooseOutputFolder() }
+                        .buttonStyle(SecondaryButtonStyle())
+                        .help("Pick the folder where saved screenshots and clips go")
+                }
+                .padding(.horizontal, 12)
+                .frame(height: 40)
+                .background(Theme.control)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+                Text("Change it any time in Settings.")
+                    .font(.system(size: 12))
+                    .foregroundStyle(Theme.textSecondary)
+            }
+        }
+    }
+
+    private func howStep(_ number: Int, _ title: String, _ text: String) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            Text("\(number)")
+                .font(.system(size: 12, weight: .bold))
+                .frame(width: 22, height: 22)
+                .background(Theme.accent.opacity(0.2))
+                .clipShape(Circle())
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title).font(.system(size: 13, weight: .semibold))
+                Text(text).font(.system(size: 12)).foregroundStyle(Theme.textSecondary).fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    /// "~/Desktop/Bugbear" instead of the full home path.
+    private func displayPath(_ path: String) -> String {
+        let home = NSHomeDirectory()
+        if path.hasPrefix(home) {
+            return "~" + path.dropFirst(home.count)
+        }
+        return path
+    }
+
+    private func chooseOutputFolder() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.canCreateDirectories = true
+        panel.directoryURL = app.settings.outputFolder
+        panel.prompt = "Save here"
+        if panel.runModal() == .OK, let url = panel.url {
+            app.settings.outputFolderPath = url.path
         }
     }
 

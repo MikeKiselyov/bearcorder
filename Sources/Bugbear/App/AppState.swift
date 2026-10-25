@@ -1,4 +1,5 @@
 import AppKit
+import ScreenCaptureKit
 import Observation
 import BugbearCore
 import QuartzCore
@@ -354,6 +355,10 @@ final class AppState {
 
     private func bufferStopped(_ error: Error?) {
         if bufferState != .running { return }
+        if AppState.isStoppedByUser(error) {
+            Task { await bufferStoppedByUser() }
+            return
+        }
         bufferState = .failed(error?.localizedDescription ?? "Capture stopped")
         // Display changes stop the stream; try again shortly.
         Task {
@@ -361,6 +366,51 @@ final class AppState {
             if recording == nil {
                 await startBuffer()
             }
+        }
+    }
+
+    /// "Stop" in the macOS screen recording menu (the purple icon in the menu bar) ends the stream.
+    static func isStoppedByUser(_ error: Error?) -> Bool {
+        guard let nsError = error as NSError? else { return false }
+        return nsError.domain == SCStreamErrorDomain && nsError.code == SCStreamError.Code.userStopped.rawValue
+    }
+
+    /// The person stopped the capture from the macOS menu. A recording in progress is saved as usual;
+    /// otherwise what the buffer holds becomes a clip, the buffer stays off, and a message offers the
+    /// editor.
+    private func bufferStoppedByUser() async {
+        Log.info("buffer stopped from the macOS screen recording menu")
+        if recording != nil {
+            await stopRecording()
+            await pauseBuffer()
+            return
+        }
+        bufferState = .paused
+        var saved: Capture?
+        if !isSaving, let available = primaryBuffer?.availability(), available.end - available.start >= 1 {
+            isSaving = true
+            do {
+                saved = try await saveClip(from: buffers, ranges: [(start: available.start, end: available.end)], app: lastExternalApp)
+            } catch {
+                Log.error("saving the buffer after a stop failed: \(error.localizedDescription)")
+            }
+            isSaving = false
+        }
+        await pauseBuffer()
+        refreshStatus()
+        guard let capture = saved else {
+            Toast.shared.show("Screen buffer stopped. Turn it on again in the menu bar.", symbol: "pause.circle", seconds: 3)
+            return
+        }
+        if Automation.isEnabled { return }
+        NSApp.activate(ignoringOtherApps: true)
+        let alert = NSAlert()
+        alert.messageText = "The screen buffer stopped"
+        alert.informativeText = "Bugbear saved the last \(TimeFormat.clock(capture.duration)) as a clip in All captures. The buffer is off now; turn it on again from the bear in the menu bar."
+        alert.addButton(withTitle: "Open in editor")
+        alert.addButton(withTitle: "Later")
+        if alert.runModal() == .alertFirstButtonReturn {
+            WindowManager.shared.openEditor(for: capture)
         }
     }
 

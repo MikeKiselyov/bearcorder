@@ -3,6 +3,33 @@
 /// top entry, the update badge compares it with GitHub, and CI refuses a pull request without one.
 public enum WhatsNewCatalog {
     public static let releases: [WhatsNewRelease] = [
+        WhatsNewRelease(id: 12, version: "0.8.0", title: "Pick the quality, see the size", items: [
+            WhatsNewRelease.Item(symbol: "photo", title: "Screenshot quality", text: "Save as PNG, PNG at half size, or JPEG in high, medium or small quality. Each choice shows how big the file comes out.", shortcut: "Screenshot editor"),
+            WhatsNewRelease.Item(symbol: "film", title: "Video quality with sizes", text: "Original, 1080p, 720p or the new 480p, each with the expected file size for this clip.", shortcut: "Video editor"),
+        ]),
+        WhatsNewRelease(id: 11, version: "0.7.0", title: "Friendlier editors", items: [
+            WhatsNewRelease.Item(symbol: "paintpalette", title: "Any color, the last four kept", text: "Pick any color next to the palette. The last four picked colors stay there, one click away.", shortcut: "Editors"),
+            WhatsNewRelease.Item(symbol: "square.dashed", title: "Transparent or filled", text: "Text with or without a label, rectangles and ellipses as outlines or with a see-through fill. Line and text sizes have − and + buttons.", shortcut: "Screenshot editor"),
+            WhatsNewRelease.Item(symbol: "crop", title: "Crop by the edges", text: "Drag the edges and corners to shrink the screenshot, drag inside to move the area. The size shows while you drag.", shortcut: "C"),
+            WhatsNewRelease.Item(symbol: "delete.left", title: "Delete works everywhere", text: "Delete removes the selected mark wherever you clicked last in the editor. Undo and redo moved to the left of the toolbar.", shortcut: "Delete"),
+            WhatsNewRelease.Item(symbol: "stop.circle", title: "Stopped from the macOS menu", text: "Stop in the purple screen recording icon saves what the buffer holds and offers to open it in the editor.", shortcut: "Menu bar"),
+            WhatsNewRelease.Item(symbol: "folder", title: "Your folder, and tooltips", text: "Files go to Desktop/Bugbear unless you pick another folder in the guide or Settings. Every button explains itself when you hover over it.", shortcut: "Welcome guide"),
+        ]),
+        WhatsNewRelease(id: 10, version: "0.6.0", title: "A new look", items: [
+            WhatsNewRelease.Item(symbol: "magnifyingglass", title: "The bear goes bug hunting", text: "A new logo: the bear looks at a bug through a magnifying glass. In the menu bar, the app icon and the installer.", shortcut: "Menu bar"),
+        ]),
+        WhatsNewRelease(id: 9, version: "0.5.4", title: "Windows fit the screen", items: [
+            WhatsNewRelease.Item(symbol: "macwindow", title: "Continue stays in reach", text: "The welcome guide and other windows keep their size and open inside the screen. On tall displays the guide used to stretch past the bottom, out of reach of its Continue button.", shortcut: "Welcome guide"),
+        ]),
+        WhatsNewRelease(id: 8, version: "0.5.3", title: "Tests leave your Bugbear alone", items: [
+            WhatsNewRelease.Item(symbol: "arrow.uturn.backward.circle", title: "Your Bugbear comes back", text: "The test scripts quit the test copy when they finish and start your installed Bugbear again, so a test copy no longer keeps recording in the menu bar.", shortcut: "scripts/e2e.sh"),
+        ]),
+        WhatsNewRelease(id: 7, version: "0.5.2", title: "Clearer installer", items: [
+            WhatsNewRelease.Item(symbol: "wrench.and.screwdriver", title: "Says what to update", text: "On macOS 14.0-14.4 the installer now asks to update macOS first, since Swift 6 needs 14.5.", shortcut: "install.sh"),
+        ]),
+        WhatsNewRelease(id: 6, version: "0.5.1", title: "Permissions stay after updates without Xcode", items: [
+            WhatsNewRelease.Item(symbol: "checkmark.seal", title: "A signature of this Mac's own", text: "Macs without Xcode now sign Bugbear with a certificate made just for them, so macOS no longer asks for Screen Recording again after every update.", shortcut: "Automatic"),
+        ]),
         WhatsNewRelease(id: 5, version: "0.5.0", title: "Every update is a version", items: [
             WhatsNewRelease.Item(symbol: "number", title: "Versions you can see", text: "Each update has its own version number. This window shows it next to every release, and Settings shows the one you have.", shortcut: "What's new"),
             WhatsNewRelease.Item(symbol: "arrow.down.circle.fill", title: "Update to a version", text: "The menu badge says which version is waiting, and only a real release counts as an update.", shortcut: "Menu bar panel"),

@@ -52,6 +52,10 @@ final class VideoEditorModel {
     var isBuilding = false
 
     @ObservationIgnored private var output: VideoCompositor.Output?
+    /// Changes with every rebuilt preview, so size estimates in the sidebar refresh.
+    private(set) var outputVersion = 0
+    /// How many bits per pixel per second the source clip needed; makes size estimates realistic.
+    @ObservationIgnored private var sourceBitsPerPixelSecond: Double?
     @ObservationIgnored private var timeObserver: Any?
     @ObservationIgnored private var rebuildTask: Task<Void, Never>?
     @ObservationIgnored private var undoStack: [VideoProject] = []
@@ -76,6 +80,7 @@ final class VideoEditorModel {
         let opened = Date()
         Task {
             await loadDuration()
+        await measureSource()
             await rebuild(keepPosition: false)
             jumpToLastMarker()
             Log.info(String(format: "video editor: preview ready in %.2fs", Date().timeIntervalSince(opened)))
@@ -101,6 +106,17 @@ final class VideoEditorModel {
             player.removeTimeObserver(observer)
         }
         timeObserver = nil
+    }
+
+    /// Reads how densely the source clip is encoded, for the file size estimates.
+    private func measureSource() async {
+        guard let track = try? await asset.loadTracks(withMediaType: .video).first else { return }
+        guard let rate = try? await track.load(.estimatedDataRate), let size = try? await track.load(.naturalSize) else { return }
+        let pixels = Double(size.width * size.height)
+        if rate > 0 && pixels > 0 {
+            sourceBitsPerPixelSecond = Double(rate) / pixels
+            outputVersion += 1
+        }
     }
 
     private func loadDuration() async {
@@ -195,6 +211,7 @@ final class VideoEditorModel {
         do {
             let built = try await VideoCompositor.build(asset: asset, project: project, events: capture.events, environment: capture.environment)
             output = built
+            outputVersion += 1
             let item = AVPlayerItem(asset: built.composition)
             item.videoComposition = built.videoComposition
             let wasPlaying = isPlaying
@@ -383,16 +400,31 @@ final class VideoEditorModel {
                 return "too long for \(limit) MB"
             }
             return "≤ \(limit) MB"
-        } else {
-            let megabitsPerSecond: Double
-            switch project.quality {
-            case .original: megabitsPerSecond = 12
-            case .p1080: megabitsPerSecond = 9
-            case .p720: megabitsPerSecond = 4.5
-            }
-            bytes = seconds * megabitsPerSecond * 125_000
+        } else if let estimate = estimatedBytes(for: project.quality) {
+            bytes = estimate
         }
         return "≈ " + DataSizeConverter.describe(bytes).decimal
+    }
+
+    /// Expected MP4 size at a quality preset, from the bitrate the export uses. Nil before the
+    /// preview is built.
+    func estimatedBytes(for quality: VideoQuality) -> Double? {
+        _ = outputVersion
+        guard let built = output else { return nil }
+        let preset = SizeBudget.preset(sourceWidth: built.renderSize.width, sourceHeight: built.renderSize.height, maxHeight: quality.maxHeight)
+        let hasAudio = !built.composition.tracks(withMediaType: .audio).isEmpty
+        let bitrate = SizeBudget.expectedVideoBitrate(presetBitrate: preset.videoBitrate, sourceBitsPerPixelSecond: sourceBitsPerPixelSecond, width: preset.width, height: preset.height)
+        return SizeBudget.estimatedBytes(videoBitrate: bitrate, duration: outputDuration, hasAudio: hasAudio)
+    }
+
+    /// "1080p · ≈ 12 MB" for the quality menu.
+    func qualityLabel(_ quality: VideoQuality) -> String {
+        guard let bytes = estimatedBytes(for: quality) else { return quality.rawValue }
+        var label = quality.rawValue
+        if let built = output, let height = quality.maxHeight, built.renderSize.height <= height {
+            label += " (same as original)"
+        }
+        return label + " · ≈ " + DataSizeConverter.describe(bytes).decimal
     }
 
     /// Exports to `url`, or to a temp file when nil. Returns the file.

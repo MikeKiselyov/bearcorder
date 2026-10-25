@@ -22,13 +22,65 @@ final class ScreenshotDocument {
         var hasCombinedBase: Bool
     }
 
+    /// File type and quality for Save, Drag and the file in Copy. The editor shows how big each one
+    /// comes out for the current picture.
     enum ExportFormat: String, CaseIterable, Identifiable {
         case png = "PNG"
-        case jpeg = "JPEG"
+        case pngHalf = "PNG, half size"
+        case jpegHigh = "JPEG, high"
+        case jpegMedium = "JPEG, medium"
+        case jpegSmall = "JPEG, small"
 
         var id: String { rawValue }
-        var fileExtension: String { self == .png ? "png" : "jpg" }
-        var typeIdentifier: String { self == .png ? "public.png" : "public.jpeg" }
+
+        var isPNG: Bool {
+            return self == .png || self == .pngHalf
+        }
+
+        var fileExtension: String {
+            if isPNG {
+                return "png"
+            }
+            return "jpg"
+        }
+
+        var typeIdentifier: String {
+            if isPNG {
+                return "public.png"
+            }
+            return "public.jpeg"
+        }
+
+        /// 0.5 halves the width and height: a Retina screenshot at its size in points.
+        var scale: CGFloat {
+            if self == .pngHalf || self == .jpegSmall {
+                return 0.5
+            }
+            return 1
+        }
+
+        var jpegQuality: Double {
+            switch self {
+            case .jpegHigh: return 0.9
+            case .jpegMedium: return 0.7
+            default: return 0.6
+            }
+        }
+
+        var detail: String {
+            switch self {
+            case .png: return "Sharp, every pixel kept"
+            case .pngHalf: return "Sharp, half the width and height"
+            case .jpegHigh: return "Looks the same, smaller file"
+            case .jpegMedium: return "Small file, fine for chats"
+            case .jpegSmall: return "Smallest: half size, more compression"
+            }
+        }
+    }
+
+    /// An image handed to a background task; CGImage is immutable.
+    private struct FrozenImage: @unchecked Sendable {
+        let image: CGImage
     }
 
     let capture: Capture
@@ -49,9 +101,18 @@ final class ScreenshotDocument {
     var clearTextBackground: Bool = UserDefaults.standard.bool(forKey: "clearTextBackground") {
         didSet { UserDefaults.standard.set(clearTextBackground, forKey: "clearTextBackground") }
     }
+    /// New rectangles and ellipses get a see-through fill of their color.
+    var shapeFill: Bool = UserDefaults.standard.bool(forKey: "shapeFill") {
+        didSet { UserDefaults.standard.set(shapeFill, forKey: "shapeFill") }
+    }
     var showBadge = false
     var badgeCorner: BadgeCorner = .topRight
-    var exportFormat: ExportFormat = .png
+    var exportFormat: ExportFormat = ExportFormat(rawValue: UserDefaults.standard.string(forKey: "screenshotExportFormat") ?? "") ?? .png {
+        didSet { UserDefaults.standard.set(exportFormat.rawValue, forKey: "screenshotExportFormat") }
+    }
+    /// File size in bytes of each export format for the picture as it is now.
+    var exportSizes: [ExportFormat: Int] = [:]
+    @ObservationIgnored private var sizeTask: Task<Void, Never>?
     var zoom: CGFloat = 1
     var fitRequest = 0
     var message: String?
@@ -74,6 +135,7 @@ final class ScreenshotDocument {
         guard let loaded = image else { return nil }
         base = loaded
         loadProject()
+        refreshExportSizes()
     }
 
     // MARK: Sizing
@@ -188,6 +250,57 @@ final class ScreenshotDocument {
         if annotations[index].tool == .text {
             annotations[index].clearBackground = clearTextBackground
         }
+        if annotations[index].tool == .rectangle || annotations[index].tool == .ellipse {
+            annotations[index].fill = shapeFill
+        }
+        saveProject()
+    }
+
+    /// What the fill buttons change: the label behind text, or the inside of a rectangle or
+    /// ellipse. Nil for marks without either.
+    enum FillTarget {
+        case text
+        case shape
+    }
+
+    var fillTarget: FillTarget? {
+        var targetTool = tool
+        if let selectedMark = selected {
+            targetTool = selectedMark.tool
+        }
+        if targetTool == .text {
+            return .text
+        }
+        if targetTool == .rectangle || targetTool == .ellipse {
+            return .shape
+        }
+        return nil
+    }
+
+    /// True when the current target has a background or fill.
+    var isFilled: Bool {
+        if fillTarget == .text {
+            return !clearTextBackground
+        }
+        return shapeFill
+    }
+
+    /// The fill buttons: a label or fill on (true) or a transparent background (false),
+    /// for new marks of that kind and the selected one.
+    func setFilled(_ filled: Bool) {
+        if fillTarget == .text {
+            clearTextBackground = !filled
+        } else {
+            shapeFill = filled
+        }
+        guard let id = selectedId, let index = annotations.firstIndex(where: { item in item.id == id }) else { return }
+        checkpoint()
+        if annotations[index].tool == .text {
+            annotations[index].clearBackground = !filled
+        }
+        if annotations[index].tool == .rectangle || annotations[index].tool == .ellipse {
+            annotations[index].fill = filled
+        }
         saveProject()
     }
 
@@ -298,11 +411,56 @@ final class ScreenshotDocument {
 
     func encoded() -> Data? {
         guard let image = render() else { return nil }
-        let rep = NSBitmapImageRep(cgImage: image)
-        if exportFormat == .png {
+        return ScreenshotDocument.encode(image, as: exportFormat)
+    }
+
+    nonisolated static func encode(_ image: CGImage, as format: ExportFormat) -> Data? {
+        var output = image
+        if format.scale != 1 {
+            let width = max(1, Int(CGFloat(image.width) * format.scale))
+            let height = max(1, Int(CGFloat(image.height) * format.scale))
+            guard let context = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0, space: CGColorSpace(name: CGColorSpace.sRGB)!, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return nil }
+            context.interpolationQuality = .high
+            context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
+            guard let scaled = context.makeImage() else { return nil }
+            output = scaled
+        }
+        let rep = NSBitmapImageRep(cgImage: output)
+        if format.isPNG {
             return rep.representation(using: .png, properties: [:])
         }
-        return rep.representation(using: .jpeg, properties: [.compressionFactor: 0.9])
+        return rep.representation(using: .jpeg, properties: [.compressionFactor: format.jpegQuality])
+    }
+
+    /// Encodes the picture in every format in the background, shortly after the last change.
+    func refreshExportSizes() {
+        sizeTask?.cancel()
+        sizeTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 400_000_000)
+            if Task.isCancelled {
+                return
+            }
+            guard let image = render() else { return }
+            let frozen = FrozenImage(image: image)
+            let sizes = await Task.detached(priority: .utility) { () -> [ExportFormat: Int] in
+                var result: [ExportFormat: Int] = [:]
+                for format in ExportFormat.allCases {
+                    if let data = ScreenshotDocument.encode(frozen.image, as: format) {
+                        result[format] = data.count
+                    }
+                }
+                return result
+            }.value
+            if !Task.isCancelled {
+                exportSizes = sizes
+            }
+        }
+    }
+
+    /// "1.2 MB" for a format, or nil while it is being measured.
+    func exportSizeText(_ format: ExportFormat) -> String? {
+        guard let bytes = exportSizes[format] else { return nil }
+        return DataSizeConverter.describe(Double(bytes)).decimal
     }
 
     /// Writes the rendered image to a temp file named for sharing (drag and drop, Copy).
@@ -387,6 +545,7 @@ final class ScreenshotDocument {
         if let data = try? JSONEncoder().encode(project) {
             try? data.write(to: capture.projectURL)
         }
+        refreshExportSizes()
     }
 
     private func loadProject() {
