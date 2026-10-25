@@ -3,6 +3,10 @@
 /// top entry, the update badge compares it with GitHub, and CI refuses a pull request without one.
 public enum WhatsNewCatalog {
     public static let releases: [WhatsNewRelease] = [
+        WhatsNewRelease(id: 12, version: "0.8.0", title: "Pick the quality, see the size", items: [
+            WhatsNewRelease.Item(symbol: "photo", title: "Screenshot quality", text: "Save as PNG, PNG at half size, or JPEG in high, medium or small quality. Each choice shows how big the file comes out.", shortcut: "Screenshot editor"),
+            WhatsNewRelease.Item(symbol: "film", title: "Video quality with sizes", text: "Original, 1080p, 720p or the new 480p, each with the expected file size for this clip.", shortcut: "Video editor"),
+        ]),
         WhatsNewRelease(id: 11, version: "0.7.0", title: "Friendlier editors", items: [
             WhatsNewRelease.Item(symbol: "paintpalette", title: "Any color, the last four kept", text: "Pick any color next to the palette. The last four picked colors stay there, one click away.", shortcut: "Editors"),
             WhatsNewRelease.Item(symbol: "square.dashed", title: "Transparent or filled", text: "Text with or without a label, rectangles and ellipses as outlines or with a see-through fill. Line and text sizes have − and + buttons.", shortcut: "Screenshot editor"),
