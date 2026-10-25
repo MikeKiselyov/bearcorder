@@ -5,7 +5,6 @@ public enum WhatsNewCatalog {
     public static let releases: [WhatsNewRelease] = [
         WhatsNewRelease(id: 8, version: "0.5.3", title: "Tests leave your Bugbear alone", items: [
             WhatsNewRelease.Item(symbol: "arrow.uturn.backward.circle", title: "Your Bugbear comes back", text: "The test scripts quit the test copy when they finish and start your installed Bugbear again, so a test copy no longer keeps recording in the menu bar.", shortcut: "scripts/e2e.sh"),
-            WhatsNewRelease.Item(symbol: "hammer", title: "Bugbear Dev", text: "A build with your own bundle identifier is called Bugbear Dev, so System Settings shows it apart from the installed Bugbear.", shortcut: ".env"),
         ]),
         WhatsNewRelease(id: 7, version: "0.5.2", title: "Clearer installer", items: [
             WhatsNewRelease.Item(symbol: "wrench.and.screwdriver", title: "Says what to update", text: "On macOS 14.0-14.4 the installer now asks to update macOS first, since Swift 6 needs 14.5.", shortcut: "install.sh"),

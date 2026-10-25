@@ -22,7 +22,7 @@ cp .env.example .env
 
 | Variable | Meaning |
 |---|---|
-| `BUGBEAR_BUNDLE_ID` | Bundle identifier of your build. Default `io.github.bugbear.app`. Any other one names the build "Bugbear Dev", so it is not mixed up with an installed Bugbear. |
+| `BUGBEAR_BUNDLE_ID` | Bundle identifier of your build. Default `io.github.bugbear.app`. |
 | `BUGBEAR_SIGN_IDENTITY` | Code signing identity. Empty: the first "Apple Development" identity in your keychain, otherwise a certificate made for this Mac. `local`: always that certificate. `-`: ad-hoc. |
 
 Why the identity matters: macOS ties the Screen Recording, Camera and Microphone permissions to the

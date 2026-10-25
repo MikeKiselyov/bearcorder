@@ -24,12 +24,6 @@ if [ -f "$ROOT/.env" ]; then
 fi
 APP_NAME="Bugbear"
 BUNDLE_ID="${BUGBEAR_BUNDLE_ID:-io.github.bugbear.app}"
-# A build with your own bundle identifier is a development copy: it gets its own name, so System
-# Settings, the Dock and Spotlight tell it apart from the installed Bugbear.
-DISPLAY_NAME="Bugbear"
-if [ "$BUNDLE_ID" != "io.github.bugbear.app" ]; then
-    DISPLAY_NAME="Bugbear Dev"
-fi
 BUILD_DIR="$ROOT/build"
 APP_DIR="$BUILD_DIR/$APP_NAME.app"
 
@@ -73,8 +67,8 @@ cat > "$APP_DIR/Contents/Info.plist" <<PLIST
     <key>CFBundleIconFile</key><string>AppIcon</string>
     <key>CFBundleIdentifier</key><string>$BUNDLE_ID</string>
     <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
-    <key>CFBundleName</key><string>$DISPLAY_NAME</string>
-    <key>CFBundleDisplayName</key><string>$DISPLAY_NAME</string>
+    <key>CFBundleName</key><string>$APP_NAME</string>
+    <key>CFBundleDisplayName</key><string>$APP_NAME</string>
     <key>CFBundlePackageType</key><string>APPL</string>
     <key>CFBundleShortVersionString</key><string>$VERSION</string>
     <key>CFBundleVersion</key><string>$BUILD_NUMBER</string>
