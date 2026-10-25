@@ -223,12 +223,13 @@ struct VideoSidebar: View {
                         model.projectChanged()
                     })) {
                         ForEach(VideoQuality.allCases) { quality in
-                            Text(quality.rawValue).tag(quality)
+                            Text(model.qualityLabel(quality)).tag(quality)
                         }
                     }
                     .labelsHidden()
                     .pickerStyle(.menu)
-                    .frame(width: 110)
+                    .frame(width: 170)
+                    .help("Picture size of the MP4 and about how big the file comes out. Lower quality makes a smaller file")
                 }
                 row("Size limit") {
                     Picker("", selection: Binding(get: { model.project.sizeLimitMB ?? 0 }, set: { value in

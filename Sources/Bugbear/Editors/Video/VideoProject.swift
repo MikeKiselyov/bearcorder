@@ -77,6 +77,7 @@ enum VideoQuality: String, CaseIterable, Identifiable, Codable {
     case original = "Original"
     case p1080 = "1080p"
     case p720 = "720p"
+    case p480 = "480p"
 
     var id: String { rawValue }
 
@@ -85,6 +86,7 @@ enum VideoQuality: String, CaseIterable, Identifiable, Codable {
         case .original: return nil
         case .p1080: return 1080
         case .p720: return 720
+        case .p480: return 480
         }
     }
 }

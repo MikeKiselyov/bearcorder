@@ -394,12 +394,13 @@ private struct ScreenshotEditorContent: View {
 
             Picker("", selection: $document.exportFormat) {
                 ForEach(ScreenshotDocument.ExportFormat.allCases) { format in
-                    Text(format.rawValue).tag(format)
+                    Text(exportLabel(format)).tag(format)
                 }
             }
             .pickerStyle(.menu)
-            .frame(width: 84)
+            .frame(width: 210)
             .labelsHidden()
+            .help("File type and quality for Save, Drag and the file in Copy, with the size it comes out at. \(document.exportFormat.detail)")
 
             Button("Save to folder") {
                 if let url = document.saveToFolder() {
@@ -414,6 +415,12 @@ private struct ScreenshotEditorContent: View {
         }
         .padding(.horizontal, 16)
         .frame(height: 56)
+    }
+
+    /// "JPEG, medium · 240 KB"; the size appears once it is measured.
+    private func exportLabel(_ format: ScreenshotDocument.ExportFormat) -> String {
+        guard let size = document.exportSizeText(format) else { return format.rawValue }
+        return "\(format.rawValue) · \(size)"
     }
 
     private var sizeLabel: String {
