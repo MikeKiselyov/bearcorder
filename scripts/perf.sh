@@ -23,7 +23,7 @@ FAILURES=0
 
 # Limits for a "fast and smooth" verdict.
 MAX_IDLE_CPU=15        # % of one core, average
-MAX_RECORDING_CPU=30   # % of one core, average
+MAX_RECORDING_CPU=15   # % of one core, average (about 5 on a still screen since 0.10.0)
 MAX_MEMORY_MB=350
 MAX_SAVE_SECONDS=3     # for a 30 s clip
 

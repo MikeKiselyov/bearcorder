@@ -127,6 +127,32 @@ enum DevChecks {
         check(!CaptureStore.isSameFile(first, other), "an equal copy is another file")
     }
 
+    /// The recording bar's clock shows the state and time, and redraws only when they change: a
+    /// redraw of anything on screen is a frame the capture has to deal with.
+    private static func checkRecordingClock() {
+        let session = RecordingSession()
+        let clock = RecordingClockView(session: session)
+        // A clock that moves only when the check says so.
+        var moment = session.startTime + 0.1
+        clock.now = { moment }
+        check(clock.currentText == "REC 0:00 on", "the recording clock shows REC and the time", clock.currentText)
+        check(clock.needsRedraw, "a new clock wants to be drawn")
+        if let bitmap = clock.bitmapImageRepForCachingDisplay(in: clock.bounds) {
+            clock.cacheDisplay(in: clock.bounds, to: bitmap)
+        }
+        check(clock.drawCount == 1 && !clock.needsRedraw, "the clock drew once and has nothing new", "draws \(clock.drawCount)")
+        // Ticks within the same second and blink phase change nothing.
+        moment = session.startTime + 0.5
+        check(!clock.needsRedraw, "the recording clock does not redraw when nothing changed", clock.currentText)
+        moment = session.startTime + 0.9
+        check(clock.needsRedraw && clock.currentText == "REC 0:00 off", "the recording dot blinks", clock.currentText)
+        moment = session.startTime + 1.3
+        check(clock.needsRedraw && clock.currentText == "REC 0:01 on", "the recording clock redraws for a new second", clock.currentText)
+        session.pause()
+        check(clock.needsRedraw && clock.currentText.hasPrefix("Paused"), "the recording clock redraws when paused", clock.currentText)
+        check(clock.accessibilityLabel()?.hasPrefix("Paused, ") == true, "VoiceOver reads the recording clock", clock.accessibilityLabel() ?? "")
+    }
+
     /// A fake Bugbear crash report: the header line and the body macOS writes.
     static func fakeCrashReport(bundleId: String, date: Date = Date()) -> String {
         let formatter = DateFormatter()
@@ -335,6 +361,7 @@ enum DevChecks {
         checkPlacedImage(folder: folder)
         checkSameFile(folder: folder)
         checkFeedback(folder: folder)
+        checkRecordingClock()
 
         // 1. Synthetic 6 s clip with a moving box and a 440 Hz tone.
         let video = folder.appendingPathComponent("synthetic-video.mov")
@@ -963,6 +990,9 @@ enum DevChecks {
         app.overlay.isDrawing = true
         render(RecordingHUDView().environment(app).preferredColorScheme(.dark), size: CGSize(width: 900, height: 44), to: folder.appendingPathComponent("hud-drawing.png"))
         app.overlay.isDrawing = false
+        app.recording = RecordingSession()
+        render(RecordingHUDView().environment(app).preferredColorScheme(.dark), size: CGSize(width: 700, height: 44), to: folder.appendingPathComponent("hud-recording.png"))
+        app.recording = nil
 
         if let menuBar = Logo.menuBarImage(recording: true).cgImage(forProposedRect: nil, context: nil, hints: nil) {
             ImageFiles.write(menuBar, to: folder.appendingPathComponent("menubar-glyph.png"), type: "public.png")

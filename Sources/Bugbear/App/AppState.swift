@@ -39,8 +39,6 @@ final class AppState {
     var environmentPreview: EnvironmentSnapshot?
     var hasAccessibilityAccess = InputEventRecorder.hasAccessibilityAccess
     var cameraOn = false
-    /// Text next to the menu bar icon; updated once a second by the status timer.
-    var menuBarText = ""
     var displayCount = NSScreen.screens.count
 
     @ObservationIgnored private(set) var buffers: [ScreenBuffer] = []
@@ -186,16 +184,6 @@ final class AppState {
     /// panel, so with the panel closed they are left alone (no work for hidden views); `force`
     /// updates them anyway.
     func refreshStatus(force: Bool = false) {
-        var text = ""
-        if let session = recording {
-            let clock = TimeFormat.clock(session.elapsed())
-            text = session.isPaused ? "❚❚ \(clock)" : "REC \(clock)"
-        } else if bufferState == .running {
-            text = TimeFormat.clock(settings.bufferSeconds)
-        }
-        if text != menuBarText {
-            menuBarText = text
-        }
         let accessibility = InputEventRecorder.hasAccessibilityAccess
         if accessibility != hasAccessibilityAccess {
             hasAccessibilityAccess = accessibility
@@ -344,6 +332,8 @@ final class AppState {
             inputRecorder.start(clicks: settings.recordClicks, keys: settings.recordKeys && InputEventRecorder.hasAccessibilityAccess, retentionSeconds: settings.bufferSeconds)
             bufferState = .running
             updateCrashWatcher()
+            // New buffers start without quiet zones; a restart during a recording needs them again.
+            updateQuietZones()
             // Right after launch the app is not listed for exclusion yet; check again until it is.
             Task {
                 for _ in 0..<30 {
@@ -745,7 +735,28 @@ final class AppState {
         }
         overlay.show(on: overlayFrame)
         hud.show(app: self)
+        hud.onMove = { [weak self] in
+            self?.updateQuietZones()
+        }
         recordingOutline.show(region: recordingRegion, recordedDisplays: recordedDisplays)
+        updateQuietZones()
+    }
+
+    /// While recording, our recording bar and outline are on screen and macOS keeps redrawing the
+    /// menu bar and the bar itself, so the capture would encode 20-30 frames a second of a still
+    /// screen. Changes only there are then taken a few times a second (`FramePacing`). Without a
+    /// recording every frame is taken, as before.
+    func updateQuietZones() {
+        var busy: [CGRect] = []
+        if let frame = hud.frame {
+            busy.append(frame)
+        }
+        let enabled = recording != nil
+        for buffer in buffers {
+            // The pointer on or right next to the bar is about to press its buttons, not working on
+            // the recorded screen.
+            buffer.setQuietZones(busyWindows: busy, ownWindows: busy, enabled: enabled)
+        }
     }
 
     func stopRecording() async {
@@ -761,6 +772,7 @@ final class AppState {
         hud.hide()
         overlay.hide()
         recordingOutline.hide()
+        updateQuietZones()
         let app = lastExternalApp
         isSaving = true
         defer {
@@ -798,6 +810,7 @@ final class AppState {
         hud.hide()
         overlay.hide()
         recordingOutline.hide()
+        updateQuietZones()
         for buffer in buffers {
             buffer.pin(from: nil)
         }
@@ -845,6 +858,7 @@ final class AppState {
         overlay.isDrawing.toggle()
         DispatchQueue.main.async {
             self.hud.resize()
+            self.updateQuietZones()
         }
     }
 
@@ -853,6 +867,7 @@ final class AppState {
         if recording == nil {
             hud.hide()
         }
+        updateQuietZones()
     }
 
     func setCamera(_ on: Bool) async {

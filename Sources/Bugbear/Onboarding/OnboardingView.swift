@@ -169,6 +169,7 @@ struct OnboardingView: View {
                 )
             }
             .fixedSize(horizontal: false, vertical: true)
+            ScreenCaptureIndicatorNote()
             if settings.startBufferOnLaunch && NSScreen.screens.count > 1 {
                 Toggle(isOn: $settings.captureAllDisplays) {
                     Text("Keep all \(NSScreen.screens.count) screens, so a bug on any of them is saved. Pick the screen in the editor.")
@@ -544,5 +545,30 @@ private struct BufferTimeline: View {
         .clipShape(RoundedRectangle(cornerRadius: 10))
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("A timeline of the last three minutes. The bug happened shortly before now, and the shortcut saves that part.")
+    }
+}
+
+/// macOS shows a purple icon in the menu bar whenever an app captures the screen. People who see it
+/// for the first time may think something is spying on them, so the guide shows it and says why.
+struct ScreenCaptureIndicatorNote: View {
+    var body: some View {
+        HStack(spacing: 12) {
+            // Drawn like the system's own indicator: a purple capsule with a screen and a person.
+            Image(systemName: "rectangle.inset.filled.and.person.filled")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(Color.white)
+                .frame(width: 44, height: 24)
+                .background(Capsule().fill(Color(hex: 0x6E5BE8)))
+                .accessibilityHidden(true)
+            Text("While the buffer or a recording runs, macOS shows this purple icon in the menu bar. That's normal: it only means the screen is being captured, and nothing leaves your Mac.")
+                .font(.system(size: 12))
+                .foregroundStyle(Theme.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Theme.panel)
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .tip("The purple icon is macOS's own sign that an app captures the screen. Apps cannot hide it.")
     }
 }

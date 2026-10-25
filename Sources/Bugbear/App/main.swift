@@ -131,7 +131,9 @@ struct MenuBarLabel: View {
 
     private var accessibilityText: String {
         if app.recording != nil {
-            return "Bugbear, recording \(app.menuBarText)"
+            // No running time here: a label that changes every second redraws the menu bar item,
+            // and every redraw is a new frame for the capture to encode.
+            return "Bugbear, recording"
         }
         if app.bufferState == .running {
             return "Bugbear, buffer running"

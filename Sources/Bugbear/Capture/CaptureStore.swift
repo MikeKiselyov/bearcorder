@@ -277,7 +277,11 @@ final class CaptureStore {
     @discardableResult
     func cleanUp(maxAgeDays: Int, maxGB: Int, crashClipDays: Int = 0) async -> Int {
         if maxAgeDays <= 0 && maxGB <= 0 && crashClipDays <= 0 { return 0 }
-        let sizes = await measureSizes()
+        // Sizes only matter for the size limit; measuring walks every capture folder.
+        var sizes: [UUID: Int64] = [:]
+        if maxGB > 0 {
+            sizes = await measureSizes()
+        }
         var items: [StoragePolicy.Item] = []
         for capture in captures {
             let isCrashClip = FileManager.default.fileExists(atPath: capture.crashReportURL.path)
