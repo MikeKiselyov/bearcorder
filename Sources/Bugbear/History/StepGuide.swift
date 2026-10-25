@@ -230,20 +230,20 @@ struct StepGuideView: View {
                     .textFieldStyle(.roundedBorder)
                     .font(.system(size: 15, weight: .semibold))
                     .frame(maxWidth: 420)
-                    .help("Title shown at the top of the guide")
+                    .tip("Title shown at the top of the guide")
                 Spacer()
                 if let message = model.message {
                     Text(message).font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
                 }
                 Button("Copy image") { model.copyImage() }
                     .buttonStyle(SecondaryButtonStyle())
-                    .help("Copy the whole guide as one image to paste anywhere")
+                    .tip("Copy the whole guide as one image to paste anywhere")
                 Button("Save PDF…") { model.save(asPDF: true) }
                     .buttonStyle(SecondaryButtonStyle())
-                    .help("Save the guide as a PDF file")
+                    .tip("Save the guide as a PDF file")
                 Button("Save PNG…") { model.save(asPDF: false) }
                     .buttonStyle(AccentButtonStyle())
-                    .help("Save the guide as one tall PNG image")
+                    .tip("Save the guide as one tall PNG image")
             }
             .padding(.horizontal, 16)
             .padding(.top, 36)
@@ -288,16 +288,16 @@ struct StepGuideView: View {
                 }), axis: .vertical)
                 .textFieldStyle(.roundedBorder)
                 .lineLimit(1...4)
-                .help("Caption for this step, shown under its number in the guide")
+                .tip("Caption for this step, shown under its number in the guide")
                 HStack(spacing: 10) {
                     Button { model.move(index, by: -1) } label: { Image(systemName: "arrow.up") }
                         .disabled(index == 0)
-                        .help("Move this step up in the guide")
+                        .tip("Move this step up in the guide")
                     Button { model.move(index, by: 1) } label: { Image(systemName: "arrow.down") }
                         .disabled(index == model.steps.count - 1)
-                        .help("Move this step down in the guide")
+                        .tip("Move this step down in the guide")
                     Button(role: .destructive) { model.remove(index) } label: { Image(systemName: "trash") }
-                        .help("Remove from the guide")
+                        .tip("Remove from the guide")
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(Theme.textSecondary)

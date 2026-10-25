@@ -58,7 +58,7 @@ struct RecordingHUDView: View {
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel(color.rawValue)
-                    .help("Draw in \(color.rawValue)")
+                    .tip("Draw in \(color.rawValue)")
                 }
                 divider
                 HUDButton(systemImage: overlay.autoFade ? "timer" : "pin.fill", help: overlay.autoFade ? "Marks fade after 3 s (click to keep)" : "Marks stay (click to fade)") {
@@ -92,7 +92,7 @@ struct RecordingHUDView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 7))
                 }
                 .buttonStyle(.plain)
-                .help("Stop recording and open it in the editor (\(HotKeySettings.shared.text(for: .recordToggle)))")
+                .tip("Stop recording and open it in the editor (\(HotKeySettings.shared.text(for: .recordToggle)))")
             } else {
                 HUDButton(systemImage: "xmark", help: "Close the drawing bar") {
                     app.hideOverlay()
@@ -136,7 +136,7 @@ struct HUDButton: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .help(help)
+        .tip(help)
         .accessibilityLabel(help)
     }
 }

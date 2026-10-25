@@ -53,4 +53,18 @@ final class StoragePolicyTests: XCTestCase {
     func testNoLimits() {
         XCTAssertTrue(StoragePolicy.itemsToDelete([item(400, 9000)], now: now, maxAgeDays: 0, maxBytes: 0, protected: []).isEmpty)
     }
+
+    func testCrashClipsHaveTheirOwnTime() {
+        var oldCrash = item(10, 5)
+        oldCrash.isCrashClip = true
+        var freshCrash = item(2, 5)
+        freshCrash.isCrashClip = true
+        var openCrash = item(20, 5)
+        openCrash.isCrashClip = true
+        let oldScreenshot = item(10, 5)
+        let doomed = StoragePolicy.itemsToDelete([oldCrash, freshCrash, openCrash, oldScreenshot], now: now, maxAgeDays: 0, maxBytes: 0, protected: [openCrash.id], crashClipMaxAgeDays: 7)
+        XCTAssertEqual(doomed, [oldCrash.id])
+        // 0 keeps crash clips.
+        XCTAssertTrue(StoragePolicy.itemsToDelete([oldCrash], now: now, maxAgeDays: 0, maxBytes: 0, protected: [], crashClipMaxAgeDays: 0).isEmpty)
+    }
 }

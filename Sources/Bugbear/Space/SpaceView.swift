@@ -37,8 +37,18 @@ struct CleanupRow: View {
     var compact = false
 
     var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            row
+            if model.confirmingID == category.id && model.cleaningID != category.id {
+                confirmation
+            }
+        }
+        .padding(.vertical, compact ? 6 : 10)
+    }
+
+    private var row: some View {
         let bytes = model.sizes[category.id] ?? 0
-        HStack(alignment: .top, spacing: 12) {
+        return HStack(alignment: .top, spacing: 12) {
             Image(systemName: category.symbol)
                 .font(.system(size: 15))
                 .foregroundStyle(Theme.accentSoft)
@@ -58,7 +68,32 @@ struct CleanupRow: View {
                 .foregroundStyle(Theme.textSecondary)
             actions
         }
-        .padding(.vertical, compact ? 6 : 10)
+    }
+
+    /// Asked after Clean, on its own line so the buttons keep their full names: what goes, how
+    /// much, and that it cannot be undone.
+    private var confirmation: some View {
+        let size = SpaceModel.format(model.sizes[category.id] ?? 0)
+        return VStack(alignment: .leading, spacing: 8) {
+            Text("Delete \(size) from \(category.title)? This cannot be undone.")
+                .font(.system(size: 12))
+                .fixedSize(horizontal: false, vertical: true)
+            HStack(spacing: 8) {
+                Spacer(minLength: 0)
+                Button("Cancel") { model.confirmingID = nil }
+                    .buttonStyle(SecondaryButtonStyle())
+                    .keyboardShortcut(.cancelAction)
+                    .tip("Keep these files")
+                Button("Delete \(size)") {
+                    Task { await model.clean(category) }
+                }
+                .buttonStyle(AccentButtonStyle())
+                .tip("Delete for good; this cannot be undone")
+            }
+        }
+        .padding(10)
+        .background(Theme.control)
+        .clipShape(RoundedRectangle(cornerRadius: 8))
     }
 
     @ViewBuilder
@@ -69,26 +104,15 @@ struct CleanupRow: View {
                 WindowManager.shared.openHistory()
             }
             .buttonStyle(SecondaryButtonStyle())
-            .help("Open the captures history to delete screenshots and clips you no longer need")
+            .tip("Open the captures history to delete screenshots and clips you no longer need")
         case .deleteContents:
             if model.cleaningID == category.id {
                 ProgressView().controlSize(.small).frame(width: 60)
-            } else if model.confirmingID == category.id {
-                HStack(spacing: 6) {
-                    Button("Cancel") { model.confirmingID = nil }
-                        .buttonStyle(SecondaryButtonStyle())
-                        .help("Keep these files")
-                    Button("Delete") {
-                        Task { await model.clean(category) }
-                    }
-                    .buttonStyle(AccentButtonStyle())
-                    .help("Delete for good; this cannot be undone")
-                }
             } else {
                 Button("Clean") { model.confirmingID = category.id }
                     .buttonStyle(SecondaryButtonStyle())
-                    .disabled((model.sizes[category.id] ?? 0) == 0 || model.cleaningID != nil)
-                    .help("Delete the contents of \(category.title) to free space; asks to confirm first")
+                    .disabled((model.sizes[category.id] ?? 0) == 0 || model.cleaningID != nil || model.confirmingID == category.id)
+                    .tip("Delete the contents of \(category.title) to free space; asks to confirm first")
             }
         }
     }
@@ -124,7 +148,7 @@ struct SpaceView: View {
                 }
                 .pickerStyle(.segmented)
                 .fixedSize()
-                .help("Switch between safe clean-up, folders by size and the largest files")
+                .tip("Switch between safe clean-up, folders by size and the largest files")
                 Spacer()
                 if let message = model.message {
                     Text(message)
@@ -170,7 +194,7 @@ struct SpaceView: View {
                 }
                 .buttonStyle(SecondaryButtonStyle())
                 .disabled(model.isMeasuring)
-                .help("Measure the clean-up categories again to get fresh sizes")
+                .tip("Measure the clean-up categories again to get fresh sizes")
             }
             Text("Caches are made again by apps when they need them. Deleting them cannot be undone, so each one asks first.")
                 .font(.system(size: 12))
@@ -210,10 +234,10 @@ struct SpaceView: View {
             Toggle("Include other apps' private data (Docker, Slack, Telegram…). macOS asks once.", isOn: $model.includeAppData)
                 .toggleStyle(.checkbox)
                 .font(.system(size: 12))
-                .help("Also count other apps' data folders in the scan; macOS asks for permission once")
+                .tip("Also count other apps' data folders in the scan; macOS asks for permission once")
             Button("Scan home folder and Applications") { model.startScan() }
                 .buttonStyle(AccentButtonStyle())
-                .help("Add up every folder and find the biggest files; takes a minute or two")
+                .tip("Add up every folder and find the biggest files; takes a minute or two")
         }
     }
 
@@ -238,7 +262,7 @@ struct SpaceView: View {
                 }
                 Button("Stop") { model.cancelScan() }
                     .buttonStyle(SecondaryButtonStyle())
-                    .help("Stop the scan")
+                    .tip("Stop the scan")
             }
             VStack(alignment: .leading, spacing: 8) {
                 if !model.accessChecks.isEmpty {
@@ -320,7 +344,7 @@ struct SpaceView: View {
                     Button("This Mac") { model.folderPath = [] }
                         .buttonStyle(.plain)
                         .foregroundStyle(Theme.link)
-                        .help("Go back to the top level")
+                        .tip("Go back to the top level")
                     ForEach(Array(model.folderPath.enumerated()), id: \.offset) { item in
                         Image(systemName: "chevron.right").font(.system(size: 10)).foregroundStyle(Theme.textTertiary)
                         Button(item.element) {
@@ -328,18 +352,18 @@ struct SpaceView: View {
                         }
                         .buttonStyle(.plain)
                         .foregroundStyle(item.offset == model.folderPath.count - 1 ? Theme.text : Theme.link)
-                        .help("Go back to \(item.element)")
+                        .tip("Go back to \(item.element)")
                     }
                     Spacer()
                     Text(SpaceModel.format(folder.bytes)).font(.system(size: 13, design: .monospaced))
                     if let url = model.url(forFolder: model.folderPath) {
                         Button("Show in Finder") { model.reveal(url) }
                             .buttonStyle(SecondaryButtonStyle())
-                            .help("Open this folder in Finder")
+                            .tip("Open this folder in Finder")
                     }
                     Button("Scan again") { model.startScan() }
                         .buttonStyle(SecondaryButtonStyle())
-                        .help("Scan the disk again to get fresh numbers")
+                        .tip("Scan the disk again to get fresh numbers")
                 }
                 .font(.system(size: 13))
                 ScrollView {
@@ -424,7 +448,7 @@ struct SpaceView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .help(canOpen ? "Open this folder to see what is inside" : "\(child.name) has no subfolders")
+        .tip(canOpen ? "Open this folder to see what is inside" : "\(child.name) has no subfolders")
     }
 
     // MARK: Largest files
@@ -478,18 +502,18 @@ struct SpaceView: View {
                 .frame(width: 90, alignment: .trailing)
             Button("Show") { model.reveal(url) }
                 .buttonStyle(SecondaryButtonStyle())
-                .help("Show this file in Finder")
+                .tip("Show this file in Finder")
             if model.confirmingFile == file.path {
                 Button("Cancel") { model.confirmingFile = nil }
                     .buttonStyle(SecondaryButtonStyle())
-                    .help("Keep this file")
+                    .tip("Keep this file")
                 Button("Move") { model.moveToTrash(file.path) }
                     .buttonStyle(AccentButtonStyle())
-                    .help("Confirm: move the file to the Trash")
+                    .tip("Confirm: move the file to the Trash")
             } else {
                 Button("Move to Trash") { model.confirmingFile = file.path }
                     .buttonStyle(SecondaryButtonStyle())
-                    .help("Move this file to the Trash; asks to confirm first and you can still restore it from the Trash")
+                    .tip("Move this file to the Trash; asks to confirm first and you can still restore it from the Trash")
             }
         }
         .padding(.vertical, 8)
@@ -525,10 +549,10 @@ struct SpaceTabSection: View {
             HStack(spacing: 8) {
                 Button("All categories") { WindowManager.shared.openSpace(section: .cleanUp) }
                     .buttonStyle(SecondaryButtonStyle())
-                    .help("Open the Disk Space window with every clean-up category")
+                    .tip("Open the Disk Space window with every clean-up category")
                 Button("What takes space…") { WindowManager.shared.openSpace(section: .folders) }
                     .buttonStyle(SecondaryButtonStyle())
-                    .help("Scan folders to see what takes the most space on this Mac")
+                    .tip("Scan folders to see what takes the most space on this Mac")
             }
         }
         .padding(16)

@@ -79,6 +79,10 @@ final class AppSettings {
     var keepCapturesDays: Int {
         didSet { defaults.set(keepCapturesDays, forKey: "keepCapturesDays") }
     }
+    /// Clips saved by themselves when an app crashed are deleted after this many days; 0 keeps them.
+    var keepCrashClipsDays: Int {
+        didSet { defaults.set(keepCrashClipsDays, forKey: "keepCrashClipsDays") }
+    }
     /// Keep all captures under this many GB, deleting the oldest; 0 for no limit.
     var maxCapturesGB: Int {
         didSet { defaults.set(maxCapturesGB, forKey: "maxCapturesGB") }
@@ -119,6 +123,7 @@ final class AppSettings {
             "checkForUpdates": true,
             "bugReportFormat": BugReport.Format.markdown.rawValue,
             "keepCapturesDays": 0,
+            "keepCrashClipsDays": 7,
             "maxCapturesGB": 0,
         ])
         bufferMinutes = defaults.integer(forKey: "bufferMinutes")
@@ -143,6 +148,12 @@ final class AppSettings {
         bugReportFormat = defaults.string(forKey: "bugReportFormat") ?? BugReport.Format.markdown.rawValue
         keepCapturesDays = defaults.integer(forKey: "keepCapturesDays")
         maxCapturesGB = defaults.integer(forKey: "maxCapturesGB")
+        // People who used Bugbear before this setting existed keep all their crash clips until they
+        // choose otherwise; new installs pick a time in the welcome guide (7 days by default).
+        if defaults.object(forKey: "keepCrashClipsDays") == nil && defaults.bool(forKey: "onboardingCompleted") {
+            defaults.set(0, forKey: "keepCrashClipsDays")
+        }
+        keepCrashClipsDays = defaults.integer(forKey: "keepCrashClipsDays")
         reportFields = []
         if let data = defaults.data(forKey: "reportFields"), let fields = try? JSONDecoder().decode([EnvironmentSnapshot.Field].self, from: data) {
             reportFields = fields

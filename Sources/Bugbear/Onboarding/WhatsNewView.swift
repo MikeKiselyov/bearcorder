@@ -121,7 +121,7 @@ struct WhatsNewView: View {
                 Button("Got it") { WindowManager.shared.close(id: "whats-new") }
                     .buttonStyle(AccentButtonStyle())
                     .keyboardShortcut(.defaultAction)
-                    .help("Close this window (Return)")
+                    .tip("Close this window (Return)")
             }
             .padding(.horizontal, 32)
             .padding(.vertical, 16)

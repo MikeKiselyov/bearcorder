@@ -20,13 +20,13 @@ struct TimeTool: View {
                             input = String(Int(now.timeIntervalSince1970))
                         }
                         .buttonStyle(SecondaryButtonStyle())
-                        .help("Use the current time as a Unix timestamp")
+                        .tip("Use the current time as a Unix timestamp")
                     }
                     HStack(spacing: 10) {
                         TextField("1792839492, 2026-10-24T10:58:12Z, in 3 days…", text: $input)
                             .textFieldStyle(.plain)
                             .font(.system(size: 16, design: .monospaced))
-                            .help("Type a timestamp or date in any format to see it in every other format")
+                            .tip("Type a timestamp or date in any format to see it in every other format")
                         if let result = parsed {
                             Text(result.format)
                                 .font(.system(size: 12, weight: .semibold))
@@ -95,7 +95,7 @@ struct TimeTool: View {
                 .buttonStyle(.plain)
                 .foregroundStyle(Theme.textTertiary)
                 .accessibilityLabel("Remove \(city)")
-                .help("Remove \(city) from your time zones")
+                .tip("Remove \(city) from your time zones")
             }
             HStack(alignment: .firstTextBaseline, spacing: 4) {
                 Text(value.time).font(.system(size: 15, design: .monospaced))
@@ -125,7 +125,7 @@ struct TimeTool: View {
         }
         .menuStyle(.borderlessButton)
         .frame(maxWidth: .infinity, minHeight: 50)
-        .help("Add a time zone to compare this time with")
+        .tip("Add a time zone to compare this time with")
         .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color(hex: 0x45484F), style: StrokeStyle(lineWidth: 1, dash: [4, 3])))
     }
 
@@ -236,7 +236,7 @@ struct QuickConvertTool: View {
             TextField(placeholder, text: text)
                 .textFieldStyle(.plain)
                 .font(.system(size: 14, design: .monospaced))
-                .help("Type a value to see it in other formats, for example \(placeholder)")
+                .tip("Type a value to see it in other formats, for example \(placeholder)")
                 .padding(.horizontal, 10)
                 .frame(height: 34)
                 .background(Theme.well)
@@ -266,16 +266,16 @@ struct GenerateTool: View {
                     HStack(spacing: 12) {
                         PillPicker(options: [4, 7], selection: $version) { value in "v\(value)" }
                             .frame(width: 120)
-                            .help("v4 is fully random, v7 starts with a timestamp so IDs sort by creation time")
+                            .tip("v4 is fully random, v7 starts with a timestamp so IDs sort by creation time")
                         Stepper("Count: \(count)", value: $count, in: 1...50)
                             .font(.system(size: 12))
-                            .help("How many UUIDs to generate")
+                            .tip("How many UUIDs to generate")
                         Toggle("Uppercase", isOn: $uppercase).toggleStyle(.checkbox).font(.system(size: 12))
-                            .help("Use uppercase hex letters in the UUIDs")
+                            .tip("Use uppercase hex letters in the UUIDs")
                         Spacer()
                         Button("Generate") { generate() }
                             .buttonStyle(SecondaryButtonStyle())
-                            .help("Generate a new batch of UUIDs")
+                            .tip("Generate a new batch of UUIDs")
                         CopyButton(text: uuids.joined(separator: "\n"), title: "Copy all", primary: false)
                     }
                     VStack(spacing: 6) {

@@ -39,6 +39,8 @@ enum AnnotationRenderer {
     static func draw(_ annotation: Annotation, baseImage: CGImage?) {
         let color = annotation.color.nsColor
         switch annotation.tool {
+        case .image:
+            drawPlacedImage(annotation)
         case .arrow:
             drawArrow(from: annotation.start, to: annotation.end, width: annotation.lineWidth, color: color)
         case .line:
@@ -261,6 +263,34 @@ enum AnnotationRenderer {
         context.interpolationQuality = .medium
         context.draw(cropped, in: CGRect(x: 0, y: 0, width: smallWidth, height: smallHeight))
         return context.makeImage()
+    }
+
+    /// Pictures of image marks, loaded once.
+    private static let placedImages = NSCache<NSString, CGImage>()
+
+    static func placedImage(at path: String) -> CGImage? {
+        if let cached = placedImages.object(forKey: path as NSString) {
+            return cached
+        }
+        guard let image = ImageFiles.load(URL(fileURLWithPath: path)) else { return nil }
+        placedImages.setObject(image, forKey: path as NSString)
+        return image
+    }
+
+    /// A placed picture with a soft shadow and a thin edge, so it stands apart from the screenshot.
+    static func drawPlacedImage(_ annotation: Annotation) {
+        let frame = annotation.rect
+        guard frame.width > 2, frame.height > 2, let path = annotation.imagePath, let image = placedImage(at: path) else { return }
+        withShadow(width: 8) {
+            NSColor.white.setFill()
+            NSBezierPath(rect: frame).fill()
+        }
+        let picture = NSImage(cgImage: image, size: frame.size)
+        picture.draw(in: frame, from: .zero, operation: .sourceOver, fraction: 1, respectFlipped: true, hints: [.interpolation: NSNumber(value: NSImageInterpolation.high.rawValue)])
+        let edge = NSBezierPath(rect: frame)
+        edge.lineWidth = max(1, frame.width / 600)
+        NSColor.black.withAlphaComponent(0.25).setStroke()
+        edge.stroke()
     }
 
     static func drawMagnifier(_ annotation: Annotation, baseImage: CGImage?) {

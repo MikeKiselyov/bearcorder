@@ -261,19 +261,20 @@ final class CaptureStore {
     /// Applies Settings → Storage. Captures open in an editor are never deleted.
     /// Returns how many captures were deleted.
     @discardableResult
-    func cleanUp(maxAgeDays: Int, maxGB: Int) async -> Int {
-        if maxAgeDays <= 0 && maxGB <= 0 { return 0 }
+    func cleanUp(maxAgeDays: Int, maxGB: Int, crashClipDays: Int = 0) async -> Int {
+        if maxAgeDays <= 0 && maxGB <= 0 && crashClipDays <= 0 { return 0 }
         let sizes = await measureSizes()
         var items: [StoragePolicy.Item] = []
         for capture in captures {
-            items.append(StoragePolicy.Item(id: capture.id, createdAt: capture.createdAt, bytes: sizes[capture.id] ?? 0))
+            let isCrashClip = FileManager.default.fileExists(atPath: capture.crashReportURL.path)
+            items.append(StoragePolicy.Item(id: capture.id, createdAt: capture.createdAt, bytes: sizes[capture.id] ?? 0, isCrashClip: isCrashClip))
         }
         var protected: Set<UUID> = []
         for capture in captures where WindowManager.shared.isOpen(id: "screenshot:\(capture.id)") || WindowManager.shared.isOpen(id: "video:\(capture.id)") {
             protected.insert(capture.id)
         }
         let maxBytes = Int64(maxGB) * 1_000_000_000
-        let doomed = StoragePolicy.itemsToDelete(items, now: Date(), maxAgeDays: maxAgeDays, maxBytes: maxBytes, protected: protected)
+        let doomed = StoragePolicy.itemsToDelete(items, now: Date(), maxAgeDays: maxAgeDays, maxBytes: maxBytes, protected: protected, crashClipMaxAgeDays: crashClipDays)
         for id in doomed {
             if let capture = captures.first(where: { item in item.id == id }) {
                 delete(capture)

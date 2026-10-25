@@ -64,13 +64,17 @@ private struct ScreenshotEditorContent: View {
                 AnnotationCanvas(document: document)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .overlay(alignment: .top) { cropHint }
-                    .background(DeleteKeyMonitor {
+                    .background(DeleteKeyMonitor(onDelete: {
                         if document.selectedId == nil {
                             return false
                         }
                         document.deleteSelected()
                         return true
-                    })
+                    }, onPaste: {
+                        guard let image = CanvasView.image(from: NSPasteboard.general) else { return false }
+                        document.insertImage(image)
+                        return true
+                    }))
                 Divider().overlay(Theme.border)
                 sidebar
             }
@@ -97,6 +101,9 @@ private struct ScreenshotEditorContent: View {
                     document.tool = tool
                 }
             }
+            ToolButton(systemImage: "photo.badge.plus", help: "Insert an image on top of this one: pick a file, paste one with ⌘V (Command + V) or drop it here") {
+                insertImage()
+            }
             ToolButton(systemImage: "rectangle.split.2x1", help: "Combine with another screenshot: places other images to the right") {
                 combine()
             }
@@ -114,13 +121,8 @@ private struct ScreenshotEditorContent: View {
                 FillToggle(isFilled: document.isFilled, isEnabled: document.fillTarget != nil) { filled in
                     document.setFilled(filled)
                 }
-                SizeStepper(value: "\(Int(document.stroke.width))", name: "line") { direction in
-                    document.stroke = document.stroke.stepped(direction)
-                    document.applySizeToSelection()
-                }
-                SizeStepper(value: "\(Int(document.textPoints))", name: "text") { direction in
-                    document.textPoints = TextSizes.stepped(from: document.textPoints, direction)
-                    document.applySizeToSelection()
+                SizeStepper(value: "\(document.sizeValue)", name: document.sizeIsText ? "text size" : "line width", symbol: document.sizeIsText ? "textformat.size" : "lineweight") { direction in
+                    document.changeSize(by: direction)
                 }
             }
 
@@ -347,7 +349,7 @@ private struct ScreenshotEditorContent: View {
                     ProgressView().controlSize(.small)
                 }
             }
-            .help("Which screen is in the screenshot. Each one keeps its own marks.")
+            .tip("Which screen is in the screenshot. Each one keeps its own marks.")
             .padding(.leading, 8)
         }
     }
@@ -400,7 +402,7 @@ private struct ScreenshotEditorContent: View {
             .pickerStyle(.menu)
             .frame(width: 210)
             .labelsHidden()
-            .help("File type and quality for Save, Drag and the file in Copy, with the size it comes out at. \(document.exportFormat.detail)")
+            .tip("File type and quality for Save, Drag and the file in Copy, with the size it comes out at. \(document.exportFormat.detail)")
 
             Button("Save to folder") {
                 if let url = document.saveToFolder() {
@@ -430,6 +432,17 @@ private struct ScreenshotEditorContent: View {
 
     private func setZoom(_ value: CGFloat) {
         document.zoom = max(0.05, min(8, value))
+    }
+
+    private func insertImage() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.image]
+        panel.allowsMultipleSelection = false
+        panel.message = "Pick a screenshot or picture to place on this one"
+        panel.directoryURL = AppSettings.shared.outputFolder
+        if panel.runModal() == .OK, let url = panel.url, let image = ImageFiles.load(url) {
+            document.insertImage(image)
+        }
     }
 
     private func combine() {
@@ -463,7 +476,7 @@ private struct DragOutHandle: View {
         .frame(height: 32)
         .overlay(RoundedRectangle(cornerRadius: 7).stroke(Theme.borderStrong, style: StrokeStyle(lineWidth: 1, dash: [4, 3])))
         .contentShape(Rectangle())
-        .help("Drag the edited image into another app")
+        .tip("Drag the edited image into another app")
         .onDrag {
             guard let url = document.renderToTemporaryFile() else { return NSItemProvider() }
             return NSItemProvider(contentsOf: url) ?? NSItemProvider()

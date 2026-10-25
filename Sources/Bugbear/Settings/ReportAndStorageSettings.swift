@@ -15,7 +15,7 @@ struct ReportSettingsSection: View {
                     Text(format.rawValue).tag(format.rawValue)
                 }
             }
-            .help("Format used when you copy a bug report from the editor")
+            .tip("Format used when you copy a bug report from the editor")
             VStack(alignment: .leading, spacing: 8) {
                 Text("Your fields")
                 Text("Added to every new capture: the environment panel, the badge and the bug report. Empty values are skipped.")
@@ -25,16 +25,16 @@ struct ReportSettingsSection: View {
                     HStack(spacing: 8) {
                         TextField("Name", text: fieldBinding(index, name: true))
                             .frame(width: 130)
-                            .help("Field name, for example Stand or Build")
+                            .tip("Field name, for example Stand or Build")
                         TextField("Value", text: fieldBinding(index, name: false))
-                            .help("Field value added to every new capture; leave empty to skip it")
+                            .tip("Field value added to every new capture; leave empty to skip it")
                         Button {
                             settings.reportFields.remove(at: index)
                         } label: {
                             Image(systemName: "minus.circle")
                         }
                         .buttonStyle(.plain)
-                        .help("Remove this field")
+                        .tip("Remove this field")
                     }
                     .textFieldStyle(.roundedBorder)
                 }
@@ -42,7 +42,7 @@ struct ReportSettingsSection: View {
                     Button("Add field") {
                         settings.reportFields.append(EnvironmentSnapshot.Field(name: "", value: ""))
                     }
-                    .help("Add your own field to every new capture and bug report")
+                    .tip("Add your own field to every new capture and bug report")
                     ForEach(unusedSuggestions, id: \.self) { name in
                         Button(name) {
                             settings.reportFields.append(EnvironmentSnapshot.Field(name: name, value: ""))
@@ -50,7 +50,7 @@ struct ReportSettingsSection: View {
                         .buttonStyle(.plain)
                         .font(.system(size: 12))
                         .foregroundStyle(Theme.link)
-                        .help("Add a \(name) field to every new capture")
+                        .tip("Add a \(name) field to every new capture")
                     }
                 }
             }
@@ -96,7 +96,7 @@ struct StorageSettingsSection: View {
                 Spacer()
                 Text(usedText).foregroundStyle(Theme.textSecondary)
                 Button("Show in Finder") { NSWorkspace.shared.open(AppPaths.captures) }
-                    .help("Open the captures folder in Finder")
+                    .tip("Open the captures folder in Finder")
             }
             Picker("Delete captures older than", selection: $settings.keepCapturesDays) {
                 Text("Never").tag(0)
@@ -104,7 +104,14 @@ struct StorageSettingsSection: View {
                 Text("30 days").tag(30)
                 Text("90 days").tag(90)
             }
-            .help("Automatically delete captures older than this")
+            .tip("Automatically delete captures older than this")
+            Picker("Delete crash clips older than", selection: $settings.keepCrashClipsDays) {
+                Text("3 days").tag(3)
+                Text("7 days").tag(7)
+                Text("30 days").tag(30)
+                Text("Never").tag(0)
+            }
+            .tip("Clips Bugbear saved by itself when an app crashed, with the crash report")
             Picker("Keep captures under", selection: $settings.maxCapturesGB) {
                 Text("No limit").tag(0)
                 Text("2 GB").tag(2)
@@ -112,7 +119,7 @@ struct StorageSettingsSection: View {
                 Text("10 GB").tag(10)
                 Text("20 GB").tag(20)
             }
-            .help("Delete the oldest captures when they take more space than this")
+            .tip("Delete the oldest captures when they take more space than this")
             HStack {
                 Text("Applied after launch and once a day; the oldest go first. Captures open in an editor are kept.")
                     .font(.system(size: 12))
@@ -125,8 +132,8 @@ struct StorageSettingsSection: View {
                         await measure()
                     }
                 }
-                .disabled(settings.keepCapturesDays == 0 && settings.maxCapturesGB == 0)
-                .help("Apply the clean-up rules right now instead of waiting for the daily run")
+                .disabled(settings.keepCapturesDays == 0 && settings.maxCapturesGB == 0 && settings.keepCrashClipsDays == 0)
+                .tip("Apply the clean-up rules right now instead of waiting for the daily run")
             }
             if !resultText.isEmpty {
                 Text(resultText).font(.system(size: 12)).foregroundStyle(Theme.textSecondary)

@@ -73,7 +73,7 @@ struct JSONDiffTool: View {
             .buttonStyle(.plain)
             .font(.system(size: 12))
             .foregroundStyle(Theme.link)
-            .help("Replace this side with the JSON on the clipboard")
+            .tip("Replace this side with the JSON on the clipboard")
     }
 
     private func changesTitle(_ changes: [JSONDiff.Change]) -> String {
@@ -165,13 +165,13 @@ struct JSONPathTool: View {
                 TextField("$.items[*].price", text: $expression)
                     .textFieldStyle(.roundedBorder)
                     .font(.system(size: 13, design: .monospaced))
-                    .help("JSONPath expression to select values from the JSON below, for example $..id")
+                    .tip("JSONPath expression to select values from the JSON below, for example $..id")
                 ForEach(["$..id", "$.items[*]", "$.items[0]", "$..*"], id: \.self) { example in
                     Button(example) { expression = example }
                         .buttonStyle(.plain)
                         .font(.system(size: 11, design: .monospaced))
                         .foregroundStyle(Theme.link)
-                        .help("Try the example expression \(example)")
+                        .tip("Try the example expression \(example)")
                 }
             }
             .padding(12)
@@ -182,7 +182,7 @@ struct JSONPathTool: View {
                         .buttonStyle(.plain)
                         .font(.system(size: 12))
                         .foregroundStyle(Theme.link)
-                        .help("Replace the JSON with the clipboard contents")
+                        .tip("Replace the JSON with the clipboard contents")
                 }
                 CodeTextView(text: $input)
             } right: {
@@ -229,14 +229,14 @@ struct CronTool: View {
                     TextField("minute hour day month weekday", text: $input)
                         .textFieldStyle(.roundedBorder)
                         .font(.system(size: 15, design: .monospaced))
-                        .help("Cron expression to explain: minute, hour, day of month, month, weekday")
+                        .tip("Cron expression to explain: minute, hour, day of month, month, weekday")
                     HStack(spacing: 10) {
                         ForEach(examples, id: \.self) { example in
                             Button(example) { input = example }
                                 .buttonStyle(.plain)
                                 .font(.system(size: 11, design: .monospaced))
                                 .foregroundStyle(Theme.link)
-                                .help("Try the example expression \(example)")
+                                .tip("Try the example expression \(example)")
                         }
                     }
                     Text("minute (0-59) · hour (0-23) · day of month (1-31) · month (1-12 or JAN) · weekday (0-7 or MON, 0 and 7 are Sunday)")
@@ -297,7 +297,7 @@ struct HTTPTool: View {
                     .buttonStyle(.plain)
                     .font(.system(size: 12))
                     .foregroundStyle(Theme.link)
-                    .help("Replace the input with the request or response on the clipboard")
+                    .tip("Replace the input with the request or response on the clipboard")
             }
             CodeTextView(text: $input)
         } right: {
@@ -401,12 +401,12 @@ struct LengthTool: View {
                         TextField("Length", value: $length, format: .number)
                             .textFieldStyle(.roundedBorder)
                             .frame(width: 100)
-                            .help("Exact length of the string to generate, in characters")
+                            .tip("Exact length of the string to generate, in characters")
                         Stepper("", value: $length, in: 0...LengthString.maximum).labelsHidden()
-                            .help("Make the string one character longer or shorter")
+                            .tip("Make the string one character longer or shorter")
                         PillPicker(options: LengthString.Style.allCases, selection: $style) { value in value.rawValue }
                             .frame(width: 380)
-                            .help("What to fill the string with: a counterstring shows where a field cuts it, Cyrillic and emoji test byte limits")
+                            .tip("What to fill the string with: a counterstring shows where a field cuts it, Cyrillic and emoji test byte limits")
                         Spacer()
                         CopyButton(text: generated, title: "Copy", primary: false)
                     }
@@ -416,7 +416,7 @@ struct LengthTool: View {
                                 .buttonStyle(.plain)
                                 .font(.system(size: 12, design: .monospaced))
                                 .foregroundStyle(length == value ? Theme.text : Theme.link)
-                                .help("Set the length to \(value), a common field limit")
+                                .tip("Set the length to \(value), a common field limit")
                         }
                         Text("±1 around a limit: 254, 255, 256").font(.system(size: 11)).foregroundStyle(Theme.textSecondary)
                     }

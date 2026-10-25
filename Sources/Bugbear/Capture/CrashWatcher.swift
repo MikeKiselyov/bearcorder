@@ -25,6 +25,8 @@ final class CrashWatcher {
     func start(folder watchedFolder: URL = CrashWatcher.defaultFolder) {
         stop()
         folder = watchedFolder
+        // macOS makes this folder with the first crash report; after a clean-up it can be missing.
+        try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         seenFiles = Set(listReports())
         let descriptor = open(folder.path, O_EVTONLY)
         if descriptor < 0 {

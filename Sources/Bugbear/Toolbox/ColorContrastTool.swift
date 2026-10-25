@@ -23,7 +23,7 @@ enum ColorPick {
         let hex = ColorConverter.formats(color).hex
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(hex, forType: .string)
-        Toast.shared.show("Copied \(hex)", symbol: "eyedropper")
+        Toast.shared.showCopied("Color copied", preview: hex, symbol: "eyedropper")
     }
 }
 
@@ -47,7 +47,7 @@ struct ColorContrastTool: View {
                     }
                     .buttonStyle(.plain)
                     .padding(.top, 34)
-                    .help("Swap the text and background colors")
+                    .tip("Swap the text and background colors")
                     colorInput("Background", value: $background, parsed: back)
                 }
                 if let textColor = text, let backColor = back {
@@ -73,7 +73,7 @@ struct ColorContrastTool: View {
                 TextField("#RRGGBB", text: value)
                     .textFieldStyle(.roundedBorder)
                     .font(.system(size: 13, design: .monospaced))
-                    .help("\(title) color as #RRGGBB, rgb(…) or hsl(…)")
+                    .tip("\(title) color as #RRGGBB, rgb(…) or hsl(…)")
                 Button {
                     Task {
                         if let picked = await ColorPick.pick() {
@@ -83,7 +83,7 @@ struct ColorContrastTool: View {
                 } label: {
                     Image(systemName: "eyedropper")
                 }
-                .help("Pick the \(title.lowercased()) color from anywhere on the screen")
+                .tip("Pick the \(title.lowercased()) color from anywhere on the screen")
             }
         }
         .frame(maxWidth: .infinity)

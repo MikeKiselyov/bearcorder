@@ -90,7 +90,7 @@ struct Base64Tool: View {
         let output = convert()
         CodecLayout(direction: $direction, input: $input, output: output.text, error: output.error) {
             Toggle("URL-safe alphabet (encode)", isOn: $urlSafe).toggleStyle(.checkbox)
-                .help("Use - and _ instead of + and / so the result is safe in URLs and file names")
+                .tip("Use - and _ instead of + and / so the result is safe in URLs and file names")
         } footer: {
             Text(direction == .decode ? "Accepts standard and URL-safe Base64, with or without padding." : "UTF-8 text in, Base64 out.")
                 .foregroundStyle(Theme.textSecondary)
@@ -120,7 +120,7 @@ struct URLTool: View {
         let items = URLCodec.queryItems(input)
         CodecLayout(direction: $direction, input: $input, output: output, error: nil) {
             Toggle("Encode as a query component (also / ? & =)", isOn: $componentOnly).toggleStyle(.checkbox)
-                .help("Also encode / ? & = so the text can go inside a single query parameter")
+                .tip("Also encode / ? & = so the text can go inside a single query parameter")
         } footer: {
             if input.contains("=") && !items.isEmpty {
                 Menu("Query parameters (\(items.count))") {
@@ -132,7 +132,7 @@ struct URLTool: View {
                 }
                 .menuStyle(.borderlessButton)
                 .fixedSize()
-                .help("Query parameters found in the URL, pick one to copy its value")
+                .tip("Query parameters found in the URL, pick one to copy its value")
                 Text("Click a parameter to copy its value").foregroundStyle(Theme.textSecondary)
             } else {
                 Text("Decodes %XX and + as space.").foregroundStyle(Theme.textSecondary)
@@ -150,7 +150,7 @@ struct EntitiesTool: View {
         let output = direction == .decode ? HTMLEntityCodec.decode(input) : HTMLEntityCodec.encode(input, nonASCII: nonASCII)
         CodecLayout(direction: $direction, input: $input, output: output, error: nil) {
             Toggle("Encode non-ASCII as &#…;", isOn: $nonASCII).toggleStyle(.checkbox)
-                .help("Also turn non-ASCII characters like ü or emoji into numeric references")
+                .tip("Also turn non-ASCII characters like ü or emoji into numeric references")
         } footer: {
             Text("Named entities like &amp;copy; plus decimal and hex references.").foregroundStyle(Theme.textSecondary)
         }
@@ -171,7 +171,7 @@ struct CodecLayout<Options: View, Footer: View>: View {
             HStack(spacing: 14) {
                 PillPicker(options: CodecDirection.allCases, selection: $direction) { value in value.rawValue }
                     .frame(width: 170)
-                    .help("Choose whether to decode or encode the input")
+                    .tip("Choose whether to decode or encode the input")
                 options()
                 Spacer()
                 Button {
@@ -183,7 +183,7 @@ struct CodecLayout<Options: View, Footer: View>: View {
                 .buttonStyle(.plain)
                 .foregroundStyle(Theme.link)
                 .disabled(output.isEmpty)
-                .help("Use the output as the new input and flip the direction")
+                .tip("Use the output as the new input and flip the direction")
             }
             .font(.system(size: 12))
             .padding(.horizontal, 16)

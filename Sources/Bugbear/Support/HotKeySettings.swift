@@ -19,6 +19,17 @@ struct Shortcut: Codable, Equatable {
         return text + key
     }
 
+    /// The same in words, for people who do not know the symbols: "Option + Shift + 1".
+    var spoken: String {
+        var parts: [String] = []
+        if modifiers & UInt32(controlKey) != 0 { parts.append("Control") }
+        if modifiers & UInt32(optionKey) != 0 { parts.append("Option") }
+        if modifiers & UInt32(shiftKey) != 0 { parts.append("Shift") }
+        if modifiers & UInt32(cmdKey) != 0 { parts.append("Command") }
+        parts.append(key)
+        return parts.joined(separator: " + ")
+    }
+
     static func optionShift(_ keyCode: Int, _ key: String) -> Shortcut {
         return Shortcut(keyCode: UInt32(keyCode), modifiers: UInt32(optionKey | shiftKey), key: key)
     }
@@ -177,6 +188,17 @@ final class HotKeySettings {
 
     func text(for action: HotKeyAction) -> String {
         return shortcut(for: action)?.display ?? ""
+    }
+
+    /// "⌥⇧1 (Option + Shift + 1)" for instructions.
+    func readable(for action: HotKeyAction) -> String {
+        guard let current = shortcut(for: action) else { return "" }
+        return "\(current.display) (\(current.spoken))"
+    }
+
+    /// "Option + Shift + 1".
+    func spoken(for action: HotKeyAction) -> String {
+        return shortcut(for: action)?.spoken ?? ""
     }
 
     /// The action that already uses this shortcut, if any.

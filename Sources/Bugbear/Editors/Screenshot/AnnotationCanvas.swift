@@ -39,6 +39,7 @@ struct AnnotationCanvas: NSViewRepresentable {
         _ = document.editingTextId
         guard let canvas = context.coordinator.canvas else { return }
         canvas.updateGeometry()
+        canvas.refreshTypingField()
         canvas.needsDisplay = true
         if context.coordinator.lastFitRequest != document.fitRequest {
             context.coordinator.lastFitRequest = document.fitRequest
@@ -132,6 +133,52 @@ final class CanvasView: NSView, NSTextFieldDelegate {
         self.document = document
         super.init(frame: CGRect(origin: .zero, size: document.imageSize))
         updateGeometry()
+        // Drop screenshots or picture files on the canvas to place them on top.
+        registerForDraggedTypes([.fileURL, .png, .tiff])
+    }
+
+    // MARK: Placed pictures
+
+    /// ⌘V with a picture on the clipboard places it in the middle. Nil when there is none.
+    @MainActor
+    func pasteImage() -> Bool {
+        guard let image = CanvasView.image(from: NSPasteboard.general) else { return false }
+        document.insertImage(image)
+        needsDisplay = true
+        return true
+    }
+
+    /// The first picture on a pasteboard: a file of an image type, or image data.
+    static func image(from pasteboard: NSPasteboard) -> CGImage? {
+        if let urls = pasteboard.readObjects(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]) as? [URL] {
+            for url in urls {
+                if let image = ImageFiles.load(url) {
+                    return image
+                }
+            }
+        }
+        if let picture = NSImage(pasteboard: pasteboard) {
+            var rect = CGRect(origin: .zero, size: picture.size)
+            return picture.cgImage(forProposedRect: &rect, context: nil, hints: nil)
+        }
+        return nil
+    }
+
+    override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
+        if CanvasView.image(from: sender.draggingPasteboard) == nil {
+            return []
+        }
+        return .copy
+    }
+
+    override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
+        return MainActor.assumeIsolated {
+            guard let image = CanvasView.image(from: sender.draggingPasteboard) else { return false }
+            let point = convert(sender.draggingLocation, from: nil)
+            document.insertImage(image, at: point)
+            needsDisplay = true
+            return true
+        }
     }
 
     required init?(coder: NSCoder) {
@@ -333,7 +380,7 @@ final class CanvasView: NSView, NSTextFieldDelegate {
 
     private func hasHandles(_ annotation: Annotation) -> Bool {
         switch annotation.tool {
-        case .arrow, .line, .rectangle, .ellipse, .blur, .magnifier:
+        case .arrow, .line, .rectangle, .ellipse, .blur, .magnifier, .image:
             return true
         default:
             return false
@@ -455,6 +502,9 @@ final class CanvasView: NSView, NSTextFieldDelegate {
             } else {
                 resized.end = point
             }
+            if original.tool == .image {
+                resized = keepingProportions(resized, original: original, movedStart: isStart)
+            }
             document.replace(resized)
         case .crop(let start):
             let full = fullImageRect
@@ -494,6 +544,33 @@ final class CanvasView: NSView, NSTextFieldDelegate {
             maxY = min(full.maxY, max(point.y, minY + smallest))
         }
         return CGRect(x: minX, y: minY, width: maxX - minX, height: maxY - minY).integral
+    }
+
+    /// A placed picture keeps its proportions while a corner is dragged; the other corner stays.
+    private func keepingProportions(_ resized: Annotation, original: Annotation, movedStart: Bool) -> Annotation {
+        let ratio = original.rect.width / max(1, original.rect.height)
+        var result = resized
+        let fixed = movedStart ? original.end : original.start
+        let moved = movedStart ? resized.start : resized.end
+        var width = abs(moved.x - fixed.x)
+        var height = width / max(0.01, ratio)
+        if abs(moved.y - fixed.y) > height {
+            height = abs(moved.y - fixed.y)
+            width = height * ratio
+        }
+        var corner = CGPoint(x: fixed.x + width, y: fixed.y + height)
+        if moved.x < fixed.x {
+            corner.x = fixed.x - width
+        }
+        if moved.y < fixed.y {
+            corner.y = fixed.y - height
+        }
+        if movedStart {
+            result.start = corner
+        } else {
+            result.end = corner
+        }
+        return result
     }
 
     private func constrained(start: CGPoint, end: CGPoint, tool: AnnotationTool) -> CGPoint {
@@ -607,6 +684,9 @@ final class CanvasView: NSView, NSTextFieldDelegate {
                 document.undo()
                 return true
             }
+            if key == "v" {
+                return pasteImage()
+            }
             return false
         }
         switch event.keyCode {
@@ -676,26 +756,57 @@ final class CanvasView: NSView, NSTextFieldDelegate {
         document.editingTextId = annotation.id
         document.selectedId = annotation.id
         let field = NSTextField(string: annotation.text)
-        field.font = NSFont.systemFont(ofSize: annotation.fontSize, weight: .bold)
-        if annotation.hasClearBackground {
-            field.textColor = annotation.color.nsColor
-            field.drawsBackground = false
-        } else {
-            field.textColor = annotation.color.contrastingText
-            field.backgroundColor = annotation.color.nsColor
-            field.drawsBackground = true
-        }
         field.isBordered = false
         field.focusRingType = .none
         field.placeholderString = "Type…"
         field.delegate = self
         field.lineBreakMode = .byClipping
-        let padding = annotation.fontSize * 0.45
-        let width = max(AnnotationRenderer.textSize(annotation).width, annotation.fontSize * 8)
-        field.frame = CGRect(x: annotation.start.x + padding * 0.6, y: annotation.start.y + padding * 0.3, width: width, height: annotation.fontSize * 1.5)
+        style(field, as: annotation)
         addSubview(field)
         window?.makeFirstResponder(field)
         textField = field
+        // The field editor exists now; it takes the caret color.
+        style(field, as: annotation)
+    }
+
+    /// The typing field is see-through and only shows the caret: the canvas draws the text as it
+    /// will look, label or outline. Drawing the text in the field too showed it twice.
+    @MainActor
+    private func style(_ field: NSTextField, as annotation: Annotation) {
+        field.font = NSFont.systemFont(ofSize: annotation.fontSize, weight: .bold)
+        field.textColor = .clear
+        field.drawsBackground = false
+        if let editor = field.currentEditor() as? NSTextView {
+            editor.insertionPointColor = annotation.hasClearBackground ? annotation.color.nsColor : annotation.color.contrastingText
+            editor.textColor = .clear
+        }
+        let padding = annotation.fontSize * 0.45
+        let width = max(AnnotationRenderer.textSize(annotation).width, annotation.fontSize * 8)
+        field.frame = CGRect(x: annotation.start.x + padding * 0.6, y: annotation.start.y + padding * 0.3, width: width, height: annotation.fontSize * 1.5)
+    }
+
+    /// Background, color or size changed while typing: the field shows it right away.
+    @MainActor
+    func refreshTypingField() {
+        guard let field = textField, let id = document.editingTextId else { return }
+        guard let annotation = document.annotations.first(where: { item in item.id == id }) else { return }
+        style(field, as: annotation)
+    }
+
+    /// For checks: what a click with the Text tool does at `point`.
+    @MainActor
+    func startTypingForChecks(at point: CGPoint) {
+        var annotation = Annotation(tool: .text, start: point, end: point, color: document.color, lineWidth: document.lineWidth)
+        annotation.clearBackground = document.clearTextBackground
+        annotation.fontSize = document.fontSize
+        document.add(annotation)
+        beginTextEditing(annotation)
+    }
+
+    /// For checks: whether the typing field draws anything besides the caret.
+    var typingFieldDrawsText: Bool? {
+        guard let field = textField else { return nil }
+        return field.drawsBackground || field.textColor != .clear
     }
 
     func controlTextDidChange(_ notification: Notification) {

@@ -114,7 +114,7 @@ struct MenuBarView: View {
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .help(item.help)
+                .tip(item.help)
                 .accessibilityAddTraits(isSelected ? .isSelected : [])
             }
         }
@@ -190,10 +190,10 @@ struct MenuBarView: View {
                     HStack {
                         Button("Grant access") { app.requestScreenRecordingAccess() }
                             .buttonStyle(AccentButtonStyle())
-                            .help("Ask macOS for Screen Recording access so the buffer can run")
+                            .tip("Ask macOS for Screen Recording access so the buffer can run")
                         Button("Relaunch") { relaunch() }
                             .buttonStyle(SecondaryButtonStyle())
-                            .help("Restart Bugbear so a newly granted permission takes effect")
+                            .tip("Restart Bugbear so a newly granted permission takes effect")
                     }
                 }
             } else {
@@ -285,7 +285,7 @@ struct MenuBarView: View {
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
-                    .help("Save the last \(option.label) of the screen from the buffer as a clip (\(option.shortcut))")
+                    .tip("Save the last \(option.label) of the screen from the buffer as a clip (\(option.shortcut))")
                     .disabled(!available || app.isSaving)
                 }
             }
@@ -300,30 +300,30 @@ struct MenuBarView: View {
             MenuRow(systemImage: "viewfinder", title: "Screenshot area", shortcut: HotKeySettings.shared.text(for: .screenshotArea)) {
                 Task { await app.takeScreenshot(.area) }
             }
-            .help("Select an area of the screen and capture it (\(HotKeySettings.shared.text(for: .screenshotArea)))")
+            .tip("Select an area of the screen and capture it (\(HotKeySettings.shared.text(for: .screenshotArea)))")
             MenuRow(systemImage: "macwindow", title: "Screenshot window", shortcut: HotKeySettings.shared.text(for: .screenshotWindow)) {
                 Task { await app.takeScreenshot(.window) }
             }
-            .help("Click a window to capture just that window (\(HotKeySettings.shared.text(for: .screenshotWindow)))")
+            .tip("Click a window to capture just that window (\(HotKeySettings.shared.text(for: .screenshotWindow)))")
             if app.displayCount > 1 {
                 MenuRow(systemImage: "rectangle.split.2x1", title: "Screenshot all displays", shortcut: "") {
                     Task { await app.takeScreenshot(.allDisplays) }
                 }
-                .help("Capture every connected display in one image")
+                .tip("Capture every connected display in one image")
             } else {
                 MenuRow(systemImage: "display", title: "Screenshot full screen", shortcut: "") {
                     Task { await app.takeScreenshot(.fullScreen) }
                 }
-                .help("Capture the whole screen")
+                .tip("Capture the whole screen")
             }
             MenuRow(systemImage: "arrow.down.to.line.compact", title: "Scrolling screenshot", shortcut: HotKeySettings.shared.text(for: .scrollingScreenshot)) {
                 Task { await app.takeScrollingScreenshot() }
             }
-            .help("Capture a long page by scrolling it into one tall image (\(HotKeySettings.shared.text(for: .scrollingScreenshot)))")
+            .tip("Capture a long page by scrolling it into one tall image (\(HotKeySettings.shared.text(for: .scrollingScreenshot)))")
             MenuRow(systemImage: "text.viewfinder", title: "Copy text from screen", shortcut: HotKeySettings.shared.text(for: .copyText)) {
                 Task { await app.copyTextFromScreen() }
             }
-            .help("Select an area and copy the text in it to the clipboard (\(HotKeySettings.shared.text(for: .copyText)))")
+            .tip("Select an area and copy the text in it to the clipboard (\(HotKeySettings.shared.text(for: .copyText)))")
         }
         .padding(8)
     }
@@ -351,10 +351,10 @@ struct MenuBarView: View {
                         Spacer()
                         Button(session.isPaused ? "Resume" : "Pause") { session.togglePause() }
                             .buttonStyle(SecondaryButtonStyle())
-                            .help("Pause or resume the recording (\(HotKeySettings.shared.text(for: .recordPause)))")
+                            .tip("Pause or resume the recording (\(HotKeySettings.shared.text(for: .recordPause)))")
                         Button("Stop") { Task { await app.stopRecording() } }
                             .buttonStyle(AccentButtonStyle())
-                            .help("Stop and save the recording (\(HotKeySettings.shared.text(for: .recordToggle)))")
+                            .tip("Stop and save the recording (\(HotKeySettings.shared.text(for: .recordToggle)))")
                     }
                 }
             } else {
@@ -366,22 +366,22 @@ struct MenuBarView: View {
                         return "Area…"
                     }
                 }
-                .help("Choose what to record: the full screen or an area you select")
+                .tip("Choose what to record: the full screen or an area you select")
                 HStack(spacing: 6) {
                     ToggleChip(systemImage: "mic.fill", title: "Mic", isOn: app.settings.recordMicrophone) {
                         app.settings.recordMicrophone.toggle()
                         Task { await app.restartBufferIfRunning() }
                     }
-                    .help("Record your microphone together with the screen")
+                    .tip("Record your microphone together with the screen")
                     ToggleChip(systemImage: "speaker.wave.2.fill", title: "System audio", isOn: app.settings.recordSystemAudio) {
                         app.settings.recordSystemAudio.toggle()
                         Task { await app.restartBufferIfRunning() }
                     }
-                    .help("Record the sound your Mac plays together with the screen")
+                    .tip("Record the sound your Mac plays together with the screen")
                     ToggleChip(systemImage: "web.camera.fill", title: "Camera", isOn: app.cameraOn) {
                         Task { await app.setCamera(!app.cameraOn) }
                     }
-                    .help("Show your camera in a bubble on screen so it gets into the recording")
+                    .tip("Show your camera in a bubble on screen so it gets into the recording")
                 }
                 HStack(spacing: 8) {
                     Button {
@@ -394,7 +394,7 @@ struct MenuBarView: View {
                         .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(AccentButtonStyle())
-                    .help("Start recording the screen to a video (\(HotKeySettings.shared.text(for: .recordToggle)))")
+                    .tip("Start recording the screen to a video (\(HotKeySettings.shared.text(for: .recordToggle)))")
                     Button {
                         app.closeMenuPanel()
                         app.toggleDrawing()
@@ -405,7 +405,7 @@ struct MenuBarView: View {
                         }
                     }
                     .buttonStyle(SecondaryButtonStyle())
-                    .help("Draw arrows and boxes on screen (\(HotKeySettings.shared.text(for: .draw)))")
+                    .tip("Draw arrows and boxes on screen (\(HotKeySettings.shared.text(for: .draw)))")
                 }
             }
             Divider().overlay(Theme.border).padding(.vertical, 2)
@@ -436,17 +436,17 @@ struct MenuBarView: View {
             .menuStyle(.button)
             .buttonStyle(.plain)
             .menuIndicator(.hidden)
-            .help("Resize the last app window to a desktop or mobile preset to test responsive layouts")
+            .tip("Resize the last app window to a desktop or mobile preset to test responsive layouts")
             Button { app.startRuler() } label: {
                 checkRowLabel("ruler", "Measure on screen", detail: "")
             }
             .buttonStyle(.plain)
-            .help("Measure distances in pixels between points on the screen")
+            .tip("Measure distances in pixels between points on the screen")
             Button { app.pickColor() } label: {
                 checkRowLabel("eyedropper", "Pick a color", detail: "copies hex")
             }
             .buttonStyle(.plain)
-            .help("Pick any color on the screen and copy its hex value")
+            .tip("Pick any color on the screen and copy its hex value")
             Menu {
                 Button("From a file…") { app.openDesignOverlay(fromClipboard: false) }
                 Button("From the clipboard") { app.openDesignOverlay(fromClipboard: true) }
@@ -456,7 +456,7 @@ struct MenuBarView: View {
             .menuStyle(.button)
             .buttonStyle(.plain)
             .menuIndicator(.hidden)
-            .help("Lay a design mockup over the screen to compare it with the real UI")
+            .tip("Lay a design mockup over the screen to compare it with the real UI")
         }
     }
 
@@ -489,7 +489,7 @@ struct MenuBarView: View {
             } trailing: {
                 Button("All tools") { app.openToolbox(tool: nil) }
                     .buttonStyle(.plain)
-                    .help("Open the dev toolbox window with every tool (\(HotKeySettings.shared.text(for: .toolbox)))")
+                    .tip("Open the dev toolbox window with every tool (\(HotKeySettings.shared.text(for: .toolbox)))")
                     .font(.system(size: 12))
                     .foregroundStyle(Theme.link)
                     .frame(height: 28)
@@ -535,7 +535,7 @@ struct MenuBarView: View {
                     WindowManager.shared.openHistory()
                 }
                 .buttonStyle(.plain)
-                .help("Open the history window with all your screenshots and clips")
+                .tip("Open the history window with all your screenshots and clips")
                 .font(.system(size: 12))
                 .foregroundStyle(Theme.link)
             }
@@ -554,7 +554,7 @@ struct MenuBarView: View {
                             CaptureThumbnail(capture: capture, height: 58)
                         }
                         .buttonStyle(.plain)
-                        .help("Open this capture in the editor")
+                        .tip("Open this capture in the editor")
                     }
                 }
             }
@@ -580,7 +580,7 @@ struct MenuBarView: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .help("The buffer keeps the last minutes of the screen so you can save a bug after it happened")
+            .tip("The buffer keeps the last minutes of the screen so you can save a bug after it happened")
             Spacer()
             ToolButton(systemImage: "gearshape", help: "Open settings: buffer, shortcuts, storage and more") {
                 app.closeMenuPanel()
@@ -679,7 +679,7 @@ struct FlowChips<Trailing: View>: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .help("Open \(item.0) in the dev toolbox")
+                .tip("Open \(item.0) in the dev toolbox")
             }
             trailing()
         }
@@ -791,7 +791,7 @@ struct WorldClockSection: View {
                     Spacer()
                     Button("Compare…") { app.openToolbox(tool: .timeZones) }
                         .buttonStyle(.plain)
-                        .help("Open the time zones tool to compare times across cities")
+                        .tip("Open the time zones tool to compare times across cities")
                         .font(.system(size: 12))
                         .foregroundStyle(Theme.link)
                 }
@@ -813,7 +813,7 @@ struct WorldClockSection: View {
                                 Image(systemName: info.dayPart == .night ? "moon.fill" : "sun.haze")
                                     .font(.system(size: 10))
                                     .foregroundStyle(Theme.textSecondary)
-                                    .help(info.dayPart.title)
+                                    .tip(info.dayPart.title)
                             }
                             Text(info.time + (info.dayHint.isEmpty ? "" : " ·"))
                                 .font(.system(size: 13, design: .monospaced))

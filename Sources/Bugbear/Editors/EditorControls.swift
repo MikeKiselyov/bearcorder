@@ -1,10 +1,13 @@
 import AppKit
 import SwiftUI
 
-/// The last colors picked in the color panel, newest first, so they are one click away.
+/// The five colors in the editors. They start as the usual ones; a color picked in the color
+/// panel takes the first slot on the left, the others move right and the last one drops off.
 @MainActor
 enum RecentColors {
-    static let limit = 4
+    static let limit = 5
+    static let defaults: [AnnotationColor] = [.coral, .yellow, .blue, .green, .purple]
+    static let changed = Notification.Name("BugbearRecentColorsChanged")
     private static let key = "recentAnnotationColors"
 
     static func load() -> [AnnotationColor] {
@@ -14,63 +17,161 @@ enum RecentColors {
                 colors.append(AnnotationColor(hex: hex))
             }
         }
+        if colors.isEmpty {
+            return defaults
+        }
         return colors
     }
 
-    /// Puts a picked color first. Palette colors are always shown, so they are not kept.
-    static func remember(_ color: AnnotationColor) {
-        if color.isInPalette {
-            return
+    /// A picked color goes to the first slot and the others move right. While the same pick goes
+    /// on (`replacingNewest`), the first slot changes instead of the others moving again.
+    static func remember(_ color: AnnotationColor, replacingNewest: Bool) {
+        let colors = load()
+        var updated: [AnnotationColor] = []
+        if replacingNewest && !colors.isEmpty {
+            // Only the first slot changes; the others stay even if the drag passes over their color.
+            updated = colors
+            updated[0] = color
+        } else {
+            updated = [color]
+            for existing in colors where existing != color {
+                updated.append(existing)
+            }
         }
-        var colors = [color]
-        for existing in load() where existing != color {
-            colors.append(existing)
-        }
-        while colors.count > limit {
-            colors.removeLast()
+        while updated.count > limit {
+            updated.removeLast()
         }
         var names: [String] = []
-        for kept in colors {
-            names.append(kept.name)
+        for kept in updated {
+            names.append(String(format: "#%06X", kept.hex))
         }
         UserDefaults.standard.set(names, forKey: key)
+        NotificationCenter.default.post(name: changed, object: nil)
+    }
+
+    /// Back to the usual five.
+    static func clear() {
+        UserDefaults.standard.removeObject(forKey: key)
+        NotificationCenter.default.post(name: changed, object: nil)
     }
 }
 
-/// Palette swatches, then the last picked colors, then a well that opens the color panel.
+/// The system color panel, opened from the palette. One opening is one pick: the first color
+/// takes a new slot in the recent colors, the next ones while dragging update that same slot.
+@MainActor
+final class ColorPanelPicker: NSObject {
+    static let shared = ColorPanelPicker()
+
+    private var onPick: ((AnnotationColor) -> Void)?
+    /// The editor window the panel was opened from; picks only go there, and not after it closes.
+    private weak var ownerWindow: NSWindow?
+    private var pickedInThisOpening = false
+    private var settingColor = false
+    private var pending: Task<Void, Never>?
+
+    func open(current: AnnotationColor, onPick: @escaping (AnnotationColor) -> Void) {
+        self.onPick = onPick
+        ownerWindow = NSApp.keyWindow
+        onPickNeedsWindow = ownerWindow != nil
+        pickedInThisOpening = false
+        let panel = NSColorPanel.shared
+        panel.showsAlpha = false
+        panel.isContinuous = true
+        panel.setTarget(self)
+        panel.setAction(#selector(colorChanged(_:)))
+        settingColor = true
+        panel.color = current.nsColor
+        settingColor = false
+        panel.orderFront(nil)
+    }
+
+    /// A palette swatch was clicked: the next panel color starts a new slot.
+    func endPick() {
+        pickedInThisOpening = false
+    }
+
+    @objc private func colorChanged(_ sender: NSColorPanel) {
+        if settingColor {
+            return
+        }
+        pick(AnnotationColor(sender.color))
+    }
+
+    /// Used by the color panel and by checks. Waits until the color settles, so dragging in the
+    /// panel is one undo step and one slot.
+    func pick(_ color: AnnotationColor, wait: Double = 0.25) {
+        pending?.cancel()
+        pending = Task { @MainActor in
+            if wait > 0 {
+                try? await Task.sleep(nanoseconds: UInt64(wait * 1_000_000_000))
+            }
+            if Task.isCancelled {
+                return
+            }
+            // The editor that opened the panel was closed, or another one is in front now.
+            if let owner = self.ownerWindow {
+                if !owner.isVisible || (NSApp.mainWindow != nil && NSApp.mainWindow !== owner) {
+                    return
+                }
+            } else if self.onPickNeedsWindow {
+                self.onPick = nil
+                return
+            }
+            self.onPick?(color)
+            RecentColors.remember(color, replacingNewest: self.pickedInThisOpening)
+            self.pickedInThisOpening = true
+        }
+    }
+
+    /// True when the panel was opened from a window; a pick after that window is gone is dropped.
+    private var onPickNeedsWindow = false
+
+    /// For checks: pretend the panel was opened with this handler, without a window.
+    func beginForChecks(onPick: @escaping (AnnotationColor) -> Void) {
+        self.onPick = onPick
+        ownerWindow = nil
+        onPickNeedsWindow = false
+        pickedInThisOpening = false
+    }
+}
+
+/// Five color slots and a round button that opens the color panel for any color.
 struct ColorPalette: View {
     var selection: AnnotationColor
     var swatchSize: CGFloat = 20
     var onSelect: (AnnotationColor) -> Void
 
-    @State private var recent: [AnnotationColor] = RecentColors.load()
-    @State private var pickerColor: Color = .white
-    @State private var pendingPick: Task<Void, Never>?
+    @State private var colors: [AnnotationColor] = RecentColors.load()
 
     var body: some View {
         HStack(spacing: 4) {
-            ForEach(AnnotationColor.palette) { color in
+            ForEach(colors) { color in
                 swatch(color)
             }
-            if !recent.isEmpty {
-                Rectangle().fill(Theme.borderStrong).frame(width: 1, height: swatchSize - 4).padding(.horizontal, 2)
-                ForEach(recent) { color in
-                    swatch(color)
+            Button {
+                ColorPanelPicker.shared.open(current: selection) { color in
+                    onSelect(color)
                 }
+            } label: {
+                Circle()
+                    .fill(AngularGradient(colors: [.red, .yellow, .green, .cyan, .blue, .purple, .red], center: .center))
+                    .frame(width: swatchSize, height: swatchSize)
+                    .overlay(Circle().stroke(Theme.borderStrong, lineWidth: 1))
+                    .frame(width: swatchSize + 4, height: swatchSize + 8)
+                    .contentShape(Rectangle())
             }
-            ColorPicker("", selection: Binding(get: { pickerColor }, set: { value in pick(value) }), supportsOpacity: false)
-                .labelsHidden()
-                .frame(width: swatchSize + 8)
-                .help("Any color: opens the color panel. The last \(RecentColors.limit) picked colors stay next to the palette")
-                .accessibilityLabel("Pick any color")
+            .buttonStyle(.plain)
+            .tip("Any color: opens the color panel. The picked color takes the first slot, the others move right")
+            .accessibilityLabel("Pick any color")
         }
-        .onAppear {
-            pickerColor = selection.color
+        .onReceive(NotificationCenter.default.publisher(for: RecentColors.changed)) { _ in
+            colors = RecentColors.load()
         }
     }
 
     private func swatch(_ color: AnnotationColor) -> some View {
         Button {
+            ColorPanelPicker.shared.endPick()
             onSelect(color)
         } label: {
             Circle()
@@ -82,36 +183,13 @@ struct ColorPalette: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .help(swatchHelp(color))
+        .tip("Color \(color.name): for new marks and the selected one")
         .accessibilityLabel(color.name)
-    }
-
-    private func swatchHelp(_ color: AnnotationColor) -> String {
-        if color.isInPalette {
-            return "Color: \(color.name). Used for new marks and the selected one"
-        }
-        return "Recently picked color \(color.name)"
-    }
-
-    /// The color panel reports every step while you drag in it; the color is used once it settles.
-    private func pick(_ value: Color) {
-        pickerColor = value
-        pendingPick?.cancel()
-        pendingPick = Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 350_000_000)
-            if Task.isCancelled {
-                return
-            }
-            let picked = AnnotationColor(NSColor(value))
-            onSelect(picked)
-            RecentColors.remember(picked)
-            recent = RecentColors.load()
-        }
     }
 }
 
-/// Two buttons: transparent background or filled. Text gets a label behind it, rectangles and
-/// ellipses a see-through fill.
+/// Fill for the mark: "No fill" or "Fill", with words so it is clear which is which. Text gets a
+/// label behind it, rectangles and ellipses a see-through fill.
 struct FillToggle: View {
     var isFilled: Bool
     var isEnabled: Bool
@@ -119,8 +197,8 @@ struct FillToggle: View {
 
     var body: some View {
         HStack(spacing: 2) {
-            option(filled: false, symbol: "square.dashed", help: "Transparent: text without a label, shapes as outlines only")
-            option(filled: true, symbol: "square.fill", help: "Filled: text on a colored label, shapes with a see-through fill")
+            option(filled: false, symbol: "square.dashed", title: "No fill", help: "No fill: text without a label behind it, shapes as outlines only")
+            option(filled: true, symbol: "square.fill", title: "Fill", help: "Fill: text on a colored label, shapes with a see-through fill")
         }
         .padding(3)
         .background(Theme.control)
@@ -129,27 +207,31 @@ struct FillToggle: View {
         .disabled(!isEnabled)
     }
 
-    private func option(filled: Bool, symbol: String, help: String) -> some View {
+    private func option(filled: Bool, symbol: String, title: String, help: String) -> some View {
         Button {
             onChange(filled)
         } label: {
-            Image(systemName: symbol)
-                .font(.system(size: 13))
-                .frame(width: 26, height: 26)
-                .background(isFilled == filled ? Color(hex: 0x45484F) : Color.clear)
-                .clipShape(RoundedRectangle(cornerRadius: 5))
-                .contentShape(Rectangle())
+            HStack(spacing: 5) {
+                Image(systemName: symbol).font(.system(size: 11))
+                Text(title).font(.system(size: 12, weight: isFilled == filled ? .semibold : .regular))
+            }
+            .padding(.horizontal, 8)
+            .frame(height: 26)
+            .background(isFilled == filled ? Color(hex: 0x45484F) : Color.clear)
+            .clipShape(RoundedRectangle(cornerRadius: 5))
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .help(isEnabled ? help : "\(help). Works with Text, Rectangle and Ellipse")
-        .accessibilityLabel(filled ? "Filled" : "Transparent")
+        .tip(isEnabled ? help : "\(help). Pick Text, Rectangle or Ellipse to use it")
+        .accessibilityLabel(title)
     }
 }
 
-/// "− value +" for a size, with the value in between.
+/// "− value +" for one size, with a symbol saying what the size is of.
 struct SizeStepper: View {
     var value: String
     var name: String
+    var symbol: String = ""
     var onStep: (Int) -> Void
 
     var body: some View {
@@ -160,19 +242,23 @@ struct SizeStepper: View {
                 Image(systemName: "minus").font(.system(size: 11, weight: .semibold)).frame(width: 24, height: 28).contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .help("Smaller \(name) (-)")
+            .tip("Smaller \(name) (-)")
             .accessibilityLabel("Smaller \(name)")
-            Text(value)
-                .font(.system(size: 12, design: .monospaced))
-                .frame(minWidth: 26)
-                .help("\(name.capitalized): \(value)")
+            HStack(spacing: 4) {
+                if !symbol.isEmpty {
+                    Image(systemName: symbol).font(.system(size: 10)).foregroundStyle(Theme.textSecondary)
+                }
+                Text(value).font(.system(size: 12, design: .monospaced))
+            }
+            .frame(minWidth: 40)
+            .tip("\(name.capitalized): \(value)")
             Button {
                 onStep(1)
             } label: {
                 Image(systemName: "plus").font(.system(size: 11, weight: .semibold)).frame(width: 24, height: 28).contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .help("Bigger \(name) (+)")
+            .tip("Bigger \(name) (+)")
             .accessibilityLabel("Bigger \(name)")
         }
         .padding(.horizontal, 3)
@@ -185,19 +271,24 @@ struct SizeStepper: View {
 /// the canvas has focus, except while typing in a text field.
 struct DeleteKeyMonitor: NSViewRepresentable {
     var onDelete: () -> Bool
+    /// ⌘V anywhere in the window; return false to let the key go on (e.g. no picture to paste).
+    var onPaste: (() -> Bool)? = nil
 
     func makeNSView(context: Context) -> MonitorView {
         let view = MonitorView()
         view.onDelete = onDelete
+        view.onPaste = onPaste
         return view
     }
 
     func updateNSView(_ view: MonitorView, context: Context) {
         view.onDelete = onDelete
+        view.onPaste = onPaste
     }
 
     final class MonitorView: NSView {
         var onDelete: (() -> Bool)?
+        var onPaste: (() -> Bool)?
         private var monitor: Any?
 
         override func viewDidMoveToWindow() {
@@ -221,7 +312,15 @@ struct DeleteKeyMonitor: NSViewRepresentable {
 
         @MainActor
         private func handle(_ event: NSEvent) -> Bool {
-            guard event.window === window, event.keyCode == 51 || event.keyCode == 117 else { return false }
+            guard event.window === window else { return false }
+            let commandOnly = event.modifierFlags.intersection([.command, .option, .control, .shift]) == [.command]
+            if commandOnly && event.charactersIgnoringModifiers?.lowercased() == "v" {
+                if window?.firstResponder is NSText {
+                    return false
+                }
+                return onPaste?() ?? false
+            }
+            guard event.keyCode == 51 || event.keyCode == 117 else { return false }
             let flags = event.modifierFlags.intersection([.command, .option, .control])
             if !flags.isEmpty {
                 return false

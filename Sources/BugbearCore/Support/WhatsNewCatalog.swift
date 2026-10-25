@@ -3,6 +3,19 @@
 /// top entry, the update badge compares it with GitHub, and CI refuses a pull request without one.
 public enum WhatsNewCatalog {
     public static let releases: [WhatsNewRelease] = [
+        WhatsNewRelease(id: 14, version: "0.9.0", title: "Tooltips everywhere, a calmer palette", items: [
+            WhatsNewRelease.Item(symbol: "text.bubble", title: "Tooltips that show up", text: "Hover any button for a moment to see what it does, in the editors and in the menu bar panel, even while another app is in front.", shortcut: "Hover"),
+            WhatsNewRelease.Item(symbol: "paintpalette", title: "Five colors that follow you", text: "Five colors and a round button for any color. A picked color takes the first slot and the others move right; while you drag in the color panel only that slot changes.", shortcut: "Editors"),
+            WhatsNewRelease.Item(symbol: "square.dashed", title: "No fill or Fill, in words", text: "One clear switch for text labels and shape fills, and it changes the text you are typing right away. One size control: text size for text, line width for shapes.", shortcut: "Screenshot editor"),
+            WhatsNewRelease.Item(symbol: "keyboard", title: "Shortcuts in words", text: "The guide says Option + Shift + 1 next to ⌥⇧1, and follows the shortcuts you set.", shortcut: "Welcome guide"),
+            WhatsNewRelease.Item(symbol: "exclamationmark.triangle", title: "Crash clips keep their time", text: "Choose how long clips saved after a crash stay: 3, 7 or 30 days, or always. Cleaning logs keeps crash reports.", shortcut: "Welcome guide"),
+            WhatsNewRelease.Item(symbol: "photo.badge.plus", title: "Pictures on a screenshot", text: "Put another screenshot on top of this one: paste it with ⌘V, drop a file, or pick one. Drag it, resize it by the corners.", shortcut: "⌘V"),
+            WhatsNewRelease.Item(symbol: "doc.on.clipboard", title: "You see what was copied", text: "Copying text from the screen, a QR code, a color or a screenshot shows what is on the clipboard and how to paste it.", shortcut: "⌥⇧O"),
+            WhatsNewRelease.Item(symbol: "arrow.down.circle", title: "Updates list pull requests", text: "The update badge lists what was merged, each with a link to its pull request.", shortcut: "Menu bar"),
+        ]),
+        WhatsNewRelease(id: 13, version: "0.8.1", title: "Clear clean-up", items: [
+            WhatsNewRelease.Item(symbol: "trash", title: "You see what goes", text: "After Clean the question gets its own line: what is deleted, how much, and full Cancel and Delete buttons instead of squeezed ones.", shortcut: "Space tab"),
+        ]),
         WhatsNewRelease(id: 12, version: "0.8.0", title: "Pick the quality, see the size", items: [
             WhatsNewRelease.Item(symbol: "photo", title: "Screenshot quality", text: "Save as PNG, PNG at half size, or JPEG in high, medium or small quality. Each choice shows how big the file comes out.", shortcut: "Screenshot editor"),
             WhatsNewRelease.Item(symbol: "film", title: "Video quality with sizes", text: "Original, 1080p, 720p or the new 480p, each with the expected file size for this clip.", shortcut: "Video editor"),

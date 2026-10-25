@@ -32,7 +32,7 @@ struct CleanupCategory: Identifiable {
         CleanupCategory(id: "homebrew", title: "Homebrew downloads", detail: "Installers Homebrew kept after installing. Installed tools stay.", symbol: "mug", folders: ["Library/Caches/Homebrew"], keep: [], action: .deleteContents),
         CleanupCategory(id: "cocoapods", title: "CocoaPods cache", detail: "Downloaded pods. Projects keep their own copies.", symbol: "leaf", folders: ["Library/Caches/CocoaPods"], keep: [], action: .deleteContents),
         CleanupCategory(id: "pip", title: "pip cache", detail: "Downloaded Python packages. Installed packages stay.", symbol: "chevron.left.forwardslash.chevron.right", folders: ["Library/Caches/pip", ".cache/pip"], keep: [], action: .deleteContents),
-        CleanupCategory(id: "logs", title: "Logs", detail: "Logs apps wrote for troubleshooting. Bugbear's own log stays.", symbol: "doc.text", folders: ["Library/Logs"], keep: ["Library/Logs/Bugbear"], action: .deleteContents),
+        CleanupCategory(id: "logs", title: "Logs", detail: "Logs apps wrote for troubleshooting. Bugbear's own log and crash reports stay.", symbol: "doc.text", folders: ["Library/Logs"], keep: ["Library/Logs/Bugbear", "Library/Logs/DiagnosticReports"], action: .deleteContents),
         CleanupCategory(id: "captures", title: "Bugbear captures", detail: "Your screenshots and clips. Delete them in Recent, or set limits in Settings → Storage.", symbol: "photo.on.rectangle", folders: ["Library/Application Support/Bugbear/Captures"], keep: [], action: .openCaptures),
     ]
 }
