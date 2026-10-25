@@ -3,6 +3,9 @@
 /// top entry, the update badge compares it with GitHub, and CI refuses a pull request without one.
 public enum WhatsNewCatalog {
     public static let releases: [WhatsNewRelease] = [
+        WhatsNewRelease(id: 15, version: "0.9.1", title: "Steadier display switching", items: [
+            WhatsNewRelease.Item(symbol: "rectangle.on.rectangle", title: "Picking the shown display", text: "Choosing the display a clip or screenshot already shows could fail with \"Invalid argument\" and leave a stray file. Now it just stays as it is.", shortcut: "Editor"),
+        ]),
         WhatsNewRelease(id: 14, version: "0.9.0", title: "Tooltips everywhere, a calmer palette", items: [
             WhatsNewRelease.Item(symbol: "text.bubble", title: "Tooltips that show up", text: "Hover any button for a moment to see what it does, in the editors and in the menu bar panel, even while another app is in front.", shortcut: "Hover"),
             WhatsNewRelease.Item(symbol: "paintpalette", title: "Five colors that follow you", text: "Five colors and a round button for any color. A picked color takes the first slot and the others move right; while you drag in the color panel only that slot changes.", shortcut: "Editors"),

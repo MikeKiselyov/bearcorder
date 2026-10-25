@@ -121,6 +121,18 @@ final class CaptureStore {
     /// Shows the clip or screenshot from another display, or from all of them side by side (for clips
     /// built once, ~1 s per 10 s of video). Clip edits stay: every picture has the same timeline.
     /// Screenshot marks belong to each picture and come back when you switch back.
+    /// True when both paths are names of one file on disk (hard links): same volume, same file number.
+    static func isSameFile(_ first: URL, _ second: URL) -> Bool {
+        let files = FileManager.default
+        guard let firstAttributes = try? files.attributesOfItem(atPath: first.path),
+              let secondAttributes = try? files.attributesOfItem(atPath: second.path) else { return false }
+        guard let firstNumber = firstAttributes[.systemFileNumber] as? Int,
+              let secondNumber = secondAttributes[.systemFileNumber] as? Int,
+              let firstVolume = firstAttributes[.systemNumber] as? Int,
+              let secondVolume = secondAttributes[.systemNumber] as? Int else { return false }
+        return firstNumber == secondNumber && firstVolume == secondVolume
+    }
+
     func selectScreen(_ id: String, of capture: Capture, framesPerSecond: Int) async throws -> Capture {
         guard let screens = capture.screens, let variant = screens.first(where: { item in item.id == id }) else { return capture }
         let files = FileManager.default
@@ -152,21 +164,23 @@ final class CaptureStore {
 
         // 2. original.* becomes a second name for the chosen file. It is swapped in one step, so a
         // failure leaves the old picture in place.
-        let staged = capture.folder.appendingPathComponent("staged-\(UUID().uuidString).\(capture.mediaURL.pathExtension)")
-        do {
-            try files.linkItem(at: file, to: staged)
-        } catch {
-            try files.copyItem(at: file, to: staged)
-        }
-        do {
-            if files.fileExists(atPath: capture.mediaURL.path) {
-                _ = try files.replaceItemAt(capture.mediaURL, withItemAt: staged)
-            } else {
-                try files.moveItem(at: staged, to: capture.mediaURL)
+        // Already showing this display (original.* is another name of the same file): nothing to swap.
+        // Swapping a file with itself made FileManager fail with "Invalid argument".
+        if !CaptureStore.isSameFile(file, capture.mediaURL) {
+            let staged = capture.folder.appendingPathComponent("staged-\(UUID().uuidString).\(capture.mediaURL.pathExtension)")
+            do {
+                try files.linkItem(at: file, to: staged)
+            } catch {
+                try files.copyItem(at: file, to: staged)
             }
-        } catch {
+            // rename() puts the new name in place in one step and replaces the old one.
+            if rename(staged.path, capture.mediaURL.path) != 0 {
+                let code = errno
+                try? files.removeItem(at: staged)
+                throw CocoaError(.fileWriteUnknown, userInfo: [NSFilePathErrorKey: capture.mediaURL.path, NSUnderlyingErrorKey: POSIXError(POSIXErrorCode(rawValue: code) ?? .EIO)])
+            }
+            // Gone after the rename; left behind only if both names were already one file.
             try? files.removeItem(at: staged)
-            throw error
         }
 
         // 3. Only now the marks follow: they are drawn on a picture, so every display keeps its
