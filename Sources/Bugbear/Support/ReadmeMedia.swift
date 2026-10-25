@@ -316,7 +316,7 @@ enum ReadmeMedia {
             building.append(Terminal.text("      " + tips[index / 5], Terminal.dim))
             frame(command, building)
         }
-        lines.append(Terminal.done("Built and signed (Apple Development certificate)"))
+        lines.append(Terminal.done("Built and signed (your Apple Development certificate)"))
         frame(command, lines, repeats: 2)
         lines.append(Terminal.done("Installed to /Applications/Bugbear.app"))
         frame(command, lines, repeats: 2)
@@ -395,7 +395,6 @@ private enum Terminal {
     static let plain = Color.white.opacity(0.88)
     static let dim = Color.white.opacity(0.5)
     static let bear = Color.white
-    static let bun = Color(red: 1, green: 0.69, blue: 0.53)
     static let bug = Color(red: 1, green: 0.37, blue: 0.37)
     static let ok = Color(red: 0.53, green: 0.84, blue: 0.53)
 
@@ -422,8 +421,6 @@ private enum Terminal {
                 let name = rest[rest.index(rest.startIndex, offsetBy: 2)..<close]
                 if name == "H" {
                     color = bear
-                } else if name == "B" {
-                    color = bun
                 } else if name == "C" {
                     color = bug
                 } else {

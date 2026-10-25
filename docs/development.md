@@ -63,7 +63,7 @@ scripts/                  install, update, build, e2e and perf checks, README pi
 docs/                     these docs; images/ holds the README pictures
 ```
 
-The logo (a bear eating a bun) is one flat shape drawn in code in `Support/Logo.swift`: the menu bar
+The logo (a bear looking at a bug through a magnifying glass) is one flat shape drawn in code in `Support/Logo.swift`: the menu bar
 glyph, the in-app logo and the app icon are the same picture. The build script renders the `.icns` from it.
 
 Where the app keeps captures, the buffer and logs: [uninstall.md](uninstall.md#where-bugbear-keeps-things).

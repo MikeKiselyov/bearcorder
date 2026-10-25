@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/images/logo.png" width="128" alt="Bugbear logo: a bear peeking over a bun with a bug on it">
+  <img src="docs/images/logo.png" width="128" alt="Bugbear logo: a bear looking at a bug through a magnifying glass">
 </p>
 
 <h1 align="center">Bugbear</h1>
