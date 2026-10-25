@@ -108,7 +108,7 @@ final class AppSettings {
             "readBrowserURL": true,
             "copyScreenshots": true,
             "startBufferOnLaunch": true,
-            "outputFolderPath": FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Desktop").path,
+            "outputFolderPath": FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Desktop/Bugbear").path,
             "timeZones": ["UTC", "Europe/Lisbon", "Europe/Minsk", "America/New_York", "Asia/Tokyo"],
             "captureAllDisplays": true,
             "recordSystemAudio": false,
@@ -149,8 +149,11 @@ final class AppSettings {
         }
     }
 
+    /// Where saved files go. The default Desktop/Bugbear folder is made on first use.
     var outputFolder: URL {
-        return URL(fileURLWithPath: outputFolderPath, isDirectory: true)
+        let folder = URL(fileURLWithPath: outputFolderPath, isDirectory: true)
+        try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        return folder
     }
 
     var bufferSeconds: Double {

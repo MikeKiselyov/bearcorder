@@ -77,11 +77,13 @@ struct UpdateBadge: View {
                 Spacer()
                 Button("Later") { showsDetails = false }
                     .buttonStyle(SecondaryButtonStyle())
+                    .help("Close this and update another time")
                 Button("Update now") {
                     showsDetails = false
                     updater.update()
                 }
                 .buttonStyle(AccentButtonStyle())
+                .help("Pull, build and install the new version, then restart Bugbear")
             }
         }
         .padding(16)
@@ -95,12 +97,14 @@ struct UpdateBadge: View {
             HStack {
                 Button("Show log") { updater.showLog() }
                     .buttonStyle(SecondaryButtonStyle())
+                    .help("Open the update log to see what went wrong")
                 Spacer()
                 Button("Check again") {
                     showsDetails = false
                     Task { await updater.check(userInitiated: true) }
                 }
                 .buttonStyle(AccentButtonStyle())
+                .help("Try checking GitHub for a new version again")
             }
         }
         .padding(16)
@@ -124,14 +128,17 @@ struct UpdateSettingsSection: View {
                 Text("What's new")
                 Spacer()
                 Button("Show…") { WhatsNewTracker.openLatest() }
+                    .help("Show what changed in this version")
             }
             if updater.canCheck {
                 Toggle("Check GitHub for new versions", isOn: $settings.checkForUpdates)
+                    .help("Check for a newer Bugbear release every 6 hours and show a badge in the menu bar panel")
                 HStack {
                     Text(statusText).font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
                     Spacer()
                     Button("Check now") { Task { await updater.check(userInitiated: true) } }
                         .disabled(updater.state == .checking || updater.state == .updating)
+                        .help("Check GitHub for a new version right now")
                 }
             } else {
                 Text("Updates work for copies built from a git clone of a GitHub repository, as scripts/install.sh does. This copy has no repository or commit to compare.")

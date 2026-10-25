@@ -192,16 +192,19 @@ struct DesignOverlayControls: View {
                 Text("Opacity").font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
                 Slider(value: $overlay.opacity, in: 0.1...1)
                     .frame(width: 140)
+                    .help("How see-through the design is, so you can compare it with the real UI under it")
                 Text("\(Int(overlay.opacity * 100))%").font(.system(size: 12, design: .monospaced)).frame(width: 40)
             }
             HStack(spacing: 8) {
                 Text("Export").font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
                 PillPicker(options: [1.0, 2.0, 3.0], selection: $overlay.scale) { value in "@\(Int(value))x" }
                     .frame(width: 150)
+                    .help("Scale the design was exported at, so it shows at its real size in points")
             }
             Toggle("Click through to the app", isOn: $overlay.clickThrough)
                 .toggleStyle(.switch)
                 .font(.system(size: 12))
+                .help("Let clicks pass through the design to the app underneath")
             Text("Drag the design to line it up; arrows nudge 1 pt, Shift 10 pt.")
                 .font(.system(size: 11))
                 .foregroundStyle(Theme.textSecondary)

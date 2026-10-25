@@ -49,6 +49,10 @@ final class ScreenshotDocument {
     var clearTextBackground: Bool = UserDefaults.standard.bool(forKey: "clearTextBackground") {
         didSet { UserDefaults.standard.set(clearTextBackground, forKey: "clearTextBackground") }
     }
+    /// New rectangles and ellipses get a see-through fill of their color.
+    var shapeFill: Bool = UserDefaults.standard.bool(forKey: "shapeFill") {
+        didSet { UserDefaults.standard.set(shapeFill, forKey: "shapeFill") }
+    }
     var showBadge = false
     var badgeCorner: BadgeCorner = .topRight
     var exportFormat: ExportFormat = .png
@@ -187,6 +191,57 @@ final class ScreenshotDocument {
         }
         if annotations[index].tool == .text {
             annotations[index].clearBackground = clearTextBackground
+        }
+        if annotations[index].tool == .rectangle || annotations[index].tool == .ellipse {
+            annotations[index].fill = shapeFill
+        }
+        saveProject()
+    }
+
+    /// What the fill buttons change: the label behind text, or the inside of a rectangle or
+    /// ellipse. Nil for marks without either.
+    enum FillTarget {
+        case text
+        case shape
+    }
+
+    var fillTarget: FillTarget? {
+        var targetTool = tool
+        if let selectedMark = selected {
+            targetTool = selectedMark.tool
+        }
+        if targetTool == .text {
+            return .text
+        }
+        if targetTool == .rectangle || targetTool == .ellipse {
+            return .shape
+        }
+        return nil
+    }
+
+    /// True when the current target has a background or fill.
+    var isFilled: Bool {
+        if fillTarget == .text {
+            return !clearTextBackground
+        }
+        return shapeFill
+    }
+
+    /// The fill buttons: a label or fill on (true) or a transparent background (false),
+    /// for new marks of that kind and the selected one.
+    func setFilled(_ filled: Bool) {
+        if fillTarget == .text {
+            clearTextBackground = !filled
+        } else {
+            shapeFill = filled
+        }
+        guard let id = selectedId, let index = annotations.firstIndex(where: { item in item.id == id }) else { return }
+        checkpoint()
+        if annotations[index].tool == .text {
+            annotations[index].clearBackground = !filled
+        }
+        if annotations[index].tool == .rectangle || annotations[index].tool == .ellipse {
+            annotations[index].fill = filled
         }
         saveProject()
     }

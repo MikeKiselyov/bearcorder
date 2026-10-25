@@ -51,6 +51,24 @@ enum AnnotationTool: String, CaseIterable, Identifiable, Codable {
         }
     }
 
+    /// What the tool is for, for tooltips.
+    var purpose: String {
+        switch self {
+        case .select: return "pick, move and resize marks"
+        case .arrow: return "point at something"
+        case .rectangle: return "frame an area"
+        case .ellipse: return "circle an area"
+        case .line: return "draw a straight line"
+        case .highlighter: return "mark text like a marker pen"
+        case .pen: return "draw freehand"
+        case .text: return "write a note on the image"
+        case .step: return "number the steps to reproduce"
+        case .blur: return "hide private data"
+        case .magnifier: return "show a small detail bigger"
+        case .crop: return "cut the image down to the part that matters"
+        }
+    }
+
     var keyboardShortcut: Character? {
         switch self {
         case .select: return "v"
@@ -69,46 +87,103 @@ enum AnnotationTool: String, CaseIterable, Identifiable, Codable {
     }
 }
 
-enum AnnotationColor: String, CaseIterable, Codable, Identifiable {
-    case coral
-    case yellow
-    case blue
-    case green
-    case purple
-    case white
-    case black
+/// A mark color: one of the palette colors or any color picked in the color panel.
+/// Saved as the palette name ("coral") or as "#RRGGBB" for a picked color, so older projects load.
+struct AnnotationColor: Codable, Hashable, Identifiable {
+    var hex: UInt32
 
-    var id: String { rawValue }
+    static let coral = AnnotationColor(hex: 0xFF6B4A)
+    static let yellow = AnnotationColor(hex: 0xFFC93C)
+    static let blue = AnnotationColor(hex: 0x4C9BFF)
+    static let green = AnnotationColor(hex: 0x3DD68C)
+    static let purple = AnnotationColor(hex: 0x9B6BFF)
+    static let white = AnnotationColor(hex: 0xF4F4F5)
+    static let black = AnnotationColor(hex: 0x1C1D20)
 
-    var nsColor: NSColor {
-        switch self {
-        case .coral: return NSColor(hex: 0xFF6B4A)
-        case .yellow: return NSColor(hex: 0xFFC93C)
-        case .blue: return NSColor(hex: 0x4C9BFF)
-        case .green: return NSColor(hex: 0x3DD68C)
-        case .purple: return NSColor(hex: 0x9B6BFF)
-        case .white: return NSColor(hex: 0xF4F4F5)
-        case .black: return NSColor(hex: 0x1C1D20)
+    /// The swatches in the editors, in order.
+    static let palette: [AnnotationColor] = [.coral, .yellow, .blue, .green, .purple, .white, .black]
+    private static let paletteNames = ["coral", "yellow", "blue", "green", "purple", "white", "black"]
+
+    var id: UInt32 { hex }
+
+    /// The palette name, or "#RRGGBB" for a picked color.
+    var name: String {
+        for (index, color) in AnnotationColor.palette.enumerated() where color == self {
+            return AnnotationColor.paletteNames[index]
+        }
+        return String(format: "#%06X", hex)
+    }
+
+    /// The same as `name`, for code that still reads it like the old enum.
+    var rawValue: String { name }
+
+    var isInPalette: Bool {
+        return AnnotationColor.palette.contains(self)
+    }
+
+    init(hex: UInt32) {
+        self.hex = hex
+    }
+
+    /// A color picked in the color panel, rounded to 8 bits per channel.
+    init(_ color: NSColor) {
+        let srgb = color.usingColorSpace(.sRGB) ?? NSColor(hex: 0xFF6B4A)
+        let red = UInt32((srgb.redComponent * 255).rounded())
+        let green = UInt32((srgb.greenComponent * 255).rounded())
+        let blue = UInt32((srgb.blueComponent * 255).rounded())
+        self.hex = (red << 16) | (green << 8) | blue
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        let value = try container.decode(String.self)
+        self.hex = AnnotationColor.coral.hex
+        if value.hasPrefix("#"), let parsed = UInt32(value.dropFirst(), radix: 16) {
+            self.hex = parsed
+            return
+        }
+        for (index, name) in AnnotationColor.paletteNames.enumerated() where name == value {
+            self.hex = AnnotationColor.palette[index].hex
         }
     }
 
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(name)
+    }
+
+    var nsColor: NSColor { NSColor(hex: hex) }
+
     var color: Color { Color(nsColor: nsColor) }
+
+    /// How light the color looks, 0 (black) to 1 (white).
+    private var brightness: CGFloat {
+        let red = CGFloat((hex >> 16) & 0xFF) / 255
+        let green = CGFloat((hex >> 8) & 0xFF) / 255
+        let blue = CGFloat(hex & 0xFF) / 255
+        return red * 0.299 + green * 0.587 + blue * 0.114
+    }
 
     /// Outline around text drawn in this color without a label, so it stays readable.
     var outline: NSColor {
-        switch self {
-        case .black: return NSColor(hex: 0xF4F4F5)
-        default: return NSColor(hex: 0x1A0B06)
+        if brightness < 0.25 {
+            return NSColor(hex: 0xF4F4F5)
         }
+        return NSColor(hex: 0x1A0B06)
     }
 
     /// Text color that reads on top of this color.
     var contrastingText: NSColor {
-        switch self {
-        case .yellow, .white, .green: return NSColor(hex: 0x1A0B06)
-        case .coral: return NSColor(hex: 0x1A0B06)
-        default: return .white
+        if self == .coral || self == .yellow || self == .white || self == .green {
+            return NSColor(hex: 0x1A0B06)
         }
+        if isInPalette {
+            return .white
+        }
+        if brightness > 0.6 {
+            return NSColor(hex: 0x1A0B06)
+        }
+        return .white
     }
 }
 
@@ -201,6 +276,14 @@ struct Annotation: Identifiable, Codable, Equatable {
         return clearBackground ?? false
     }
 
+    /// Rectangles and ellipses filled with a see-through tint of their color. Optional so older
+    /// project.json files still load.
+    var fill: Bool?
+
+    var isFilled: Bool {
+        return fill ?? false
+    }
+
     var rect: CGRect {
         return CGRect(x: min(start.x, end.x), y: min(start.y, end.y), width: abs(end.x - start.x), height: abs(end.y - start.y))
     }
@@ -262,8 +345,11 @@ struct Annotation: Identifiable, Codable, Equatable {
             }
             return false
         case .rectangle, .ellipse:
-            // Outline shapes: hit near the border or inside small shapes.
+            // Outline shapes: hit near the border or inside small shapes. Filled ones anywhere inside.
             let outer = rect.insetBy(dx: -tolerance, dy: -tolerance)
+            if isFilled {
+                return outer.contains(point)
+            }
             let inner = rect.insetBy(dx: tolerance, dy: tolerance)
             if !outer.contains(point) { return false }
             if inner.width <= 0 || inner.height <= 0 { return true }

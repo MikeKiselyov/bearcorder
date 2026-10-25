@@ -47,9 +47,11 @@ struct TestDataTool: View {
                 SectionLabel("People")
                 PillPicker(options: TestData.PhoneCountry.allCases, selection: $country) { value in value.rawValue }
                     .frame(width: 260)
+                    .help("Country for names and phone number formats")
                 Spacer()
                 Button("Generate") { generatePeople() }
                     .buttonStyle(SecondaryButtonStyle())
+                    .help("Generate five new fake people")
                 CopyButton(text: peopleAsText(), title: "Copy all", primary: false)
             }
             Text("Emails use reserved test domains, US and UK phones come from ranges set aside for fiction: nothing reaches a real person.")
@@ -72,9 +74,11 @@ struct TestDataTool: View {
                 SectionLabel("Card")
                 PillPicker(options: TestData.CardBrand.allCases, selection: $brand) { value in value.rawValue }
                     .frame(width: 300)
+                    .help("Card brand, sets the number prefix and length")
                 Spacer()
                 Button("Generate") { generateCard() }
                     .buttonStyle(SecondaryButtonStyle())
+                    .help("Generate a new fake card number, expiry and CVC")
             }
             HStack(spacing: 6) {
                 ValueRow(label: "Number · passes Luhn", value: card)
@@ -96,9 +100,11 @@ struct TestDataTool: View {
                 SectionLabel("IBAN")
                 PillPicker(options: TestData.IBANCountry.allCases, selection: $ibanCountry) { value in value.rawValue }
                     .frame(width: 220)
+                    .help("Country of the IBAN, sets its length and format")
                 Spacer()
                 Button("Generate") { generateIBAN() }
                     .buttonStyle(SecondaryButtonStyle())
+                    .help("Generate a new IBAN with valid check digits")
             }
             ValueRow(label: "Valid check digits", value: iban)
         }
@@ -111,12 +117,17 @@ struct TestDataTool: View {
                 SectionLabel("Passwords")
                 Stepper("Length: \(passwordLength)", value: $passwordLength, in: 4...64)
                     .font(.system(size: 12))
+                    .help("Length of the generated passwords")
                 Toggle("A-Z", isOn: $passwordUppercase).toggleStyle(.checkbox).font(.system(size: 12))
+                    .help("Include uppercase letters")
                 Toggle("0-9", isOn: $passwordDigits).toggleStyle(.checkbox).font(.system(size: 12))
+                    .help("Include digits")
                 Toggle("!@#", isOn: $passwordSymbols).toggleStyle(.checkbox).font(.system(size: 12))
+                    .help("Include symbols")
                 Spacer()
                 Button("Generate") { generatePasswords() }
                     .buttonStyle(SecondaryButtonStyle())
+                    .help("Generate three new passwords")
             }
             ForEach(passwords, id: \.self) { password in
                 ValueRow(label: "\(password.count) characters", value: password)
@@ -134,6 +145,7 @@ struct TestDataTool: View {
             TextField("Paste a card number or IBAN", text: $checkInput)
                 .textFieldStyle(.roundedBorder)
                 .font(.system(size: 13, design: .monospaced))
+                .help("Check whether a card number passes Luhn or an IBAN has valid check digits")
             if !checkInput.trimmingCharacters(in: .whitespaces).isEmpty {
                 HStack(spacing: 16) {
                     checkResult("Luhn (cards)", TestData.isValidLuhn(checkInput))
@@ -248,6 +260,7 @@ struct RegexTool: View {
                     .buttonStyle(.plain)
                     .font(.system(size: 12))
                     .foregroundStyle(Theme.link)
+                    .help("Replace the text with the clipboard contents")
                 }
                 CodeTextView(text: $input)
             } right: {
@@ -286,8 +299,9 @@ struct RegexTool: View {
                 TextField("Pattern", text: $pattern)
                     .textFieldStyle(.roundedBorder)
                     .font(.system(size: 13, design: .monospaced))
+                    .help("Regular expression to test; matches are highlighted on the right")
                 Text("/").foregroundStyle(Theme.textSecondary)
-                Toggle("i", isOn: $caseInsensitive).toggleStyle(.checkbox).help("Ignore case")
+                Toggle("i", isOn: $caseInsensitive).toggleStyle(.checkbox).help("Ignore case: A matches a")
                 Toggle("m", isOn: $multiline).toggleStyle(.checkbox).help("^ and $ match at every line")
                 Toggle("s", isOn: $dotAll).toggleStyle(.checkbox).help(". matches line breaks")
             }
@@ -296,6 +310,7 @@ struct RegexTool: View {
                 TextField("Template, e.g. [$1] or ${id}", text: $replacement)
                     .textFieldStyle(.roundedBorder)
                     .font(.system(size: 13, design: .monospaced))
+                    .help("Optional replacement to preview; use $1 or ${name} for groups")
                 if let error = current.error {
                     Text(error).font(.system(size: 12)).foregroundStyle(Theme.warning)
                 }
@@ -366,10 +381,12 @@ struct QRTool: View {
                     .buttonStyle(.plain)
                     .font(.system(size: 12))
                     .foregroundStyle(Theme.link)
+                    .help("Select an area of the screen with a QR code and read it")
                 Button("Read from clipboard image") { Task { await readFromClipboard() } }
                     .buttonStyle(.plain)
                     .font(.system(size: 12))
                     .foregroundStyle(Theme.link)
+                    .help("Read a QR code from an image on the clipboard")
             }
             CodeTextView(text: $input)
             ToolFooter {
@@ -405,9 +422,11 @@ struct QRTool: View {
                 Button("Save PNG…") { save(image) }
                     .buttonStyle(SecondaryButtonStyle())
                     .disabled(image == nil)
+                    .help("Save the QR code as a PNG file")
                 Button("Copy image") { copy(image) }
                     .buttonStyle(AccentButtonStyle(isEnabled: image != nil))
                     .disabled(image == nil)
+                    .help("Copy the QR code image to paste into a chat or document")
             }
         }
     }

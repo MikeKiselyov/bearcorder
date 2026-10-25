@@ -85,22 +85,11 @@ struct VideoSidebar: View {
                     .font(.system(size: 12))
                 }
                 if overlay.kind != .blur {
-                    HStack(spacing: 6) {
-                        ForEach([AnnotationColor.coral, .yellow, .blue, .green, .purple, .white]) { color in
-                            Button {
-                                var updated = overlay
-                                updated.color = color
-                                model.checkpoint()
-                                model.updateOverlay(updated)
-                            } label: {
-                                Circle()
-                                    .fill(color.color)
-                                    .frame(width: 18, height: 18)
-                                    .overlay(Circle().stroke(Theme.text, lineWidth: overlay.color == color ? 2 : 0))
-                            }
-                            .buttonStyle(.plain)
-                            .accessibilityLabel(color.rawValue)
-                        }
+                    ColorPalette(selection: overlay.color, swatchSize: 16) { color in
+                        var updated = model.selectedOverlay ?? overlay
+                        updated.color = color
+                        model.checkpoint()
+                        model.updateOverlay(updated)
                     }
                 }
                 if overlay.kind != .blur {

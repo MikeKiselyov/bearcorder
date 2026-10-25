@@ -72,12 +72,14 @@ struct TimeZonesTool: View {
                 Text("Compare at").font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
                 Slider(value: $shiftMinutes, in: -720...720, step: 30)
                     .tint(Theme.accent)
+                    .help("Move the time forward or back to see what time it will be in every zone, for example to plan a call")
                 Text(shiftLabel)
                     .font(.system(size: 12, design: .monospaced))
                     .frame(width: 90, alignment: .trailing)
                 Button("Now") { shiftMinutes = 0 }
                     .buttonStyle(SecondaryButtonStyle())
                     .disabled(shiftMinutes == 0)
+                    .help("Go back to the current time")
             }
         }
         .padding(14)
@@ -106,11 +108,13 @@ struct TimeZonesTool: View {
                     .onSubmit {
                         if let first = results.first { add(first) }
                     }
+                    .help("Find a time zone to add, Return adds the first match")
                 if !query.isEmpty {
                     Button { query = "" } label: { Image(systemName: "xmark.circle.fill") }
                         .buttonStyle(.plain)
                         .foregroundStyle(Theme.textSecondary)
                         .accessibilityLabel("Clear search")
+                        .help("Clear the search")
                 }
             }
             .padding(.horizontal, 12)
@@ -167,6 +171,7 @@ struct TimeZonesTool: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(isSaved ? "\(identifier), added" : "Add \(identifier)")
+        .help(isSaved ? "Already in your time zones" : "Add this time zone to compare with")
     }
 
     private func add(_ identifier: String) {
@@ -355,6 +360,7 @@ private struct ZoneRow: View {
                 .foregroundStyle(Theme.textTertiary)
                 .frame(width: 16)
                 .accessibilityLabel("Remove \(title)")
+                .help("Remove \(title) from your time zones")
             } else {
                 Color.clear.frame(width: 16)
             }

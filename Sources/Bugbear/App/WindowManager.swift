@@ -97,7 +97,7 @@ final class WindowManager: NSObject, NSWindowDelegate {
     func openEditor(for capture: Capture) {
         switch capture.kind {
         case .screenshot:
-            show(id: "screenshot:\(capture.id)", title: "Screenshot · \(capture.title)", size: CGSize(width: 1220, height: 780), minSize: CGSize(width: 900, height: 560)) {
+            show(id: "screenshot:\(capture.id)", title: "Screenshot · \(capture.title)", size: CGSize(width: 1280, height: 780), minSize: CGSize(width: 1080, height: 560)) {
                 ScreenshotEditorView(capture: capture)
             }
         case .video:

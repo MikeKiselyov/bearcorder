@@ -64,9 +64,27 @@ enum DevChecks {
 
     // MARK: Self test
 
+    /// Projects saved before picked colors keep loading, and a picked color survives a save.
+    private static func checkAnnotationColors() {
+        let decoder = JSONDecoder()
+        let encoder = JSONEncoder()
+        let old = try? decoder.decode([AnnotationColor].self, from: Data(#"["coral","black"]"#.utf8))
+        check(old == [.coral, .black], "old projects: palette colors load by name")
+        let picked = AnnotationColor(hex: 0x12AB34)
+        var roundTrip: AnnotationColor?
+        if let data = try? encoder.encode([picked]) {
+            check(String(decoding: data, as: UTF8.self) == ##"["#12AB34"]"##, "picked color saved as hex")
+            roundTrip = (try? decoder.decode([AnnotationColor].self, from: data))?.first
+        }
+        check(roundTrip == picked, "picked color loads back")
+        check(AnnotationColor(NSColor(hex: 0x12AB34)) == picked, "color panel color becomes the same hex")
+    }
+
+
     static func selfTest(folder: URL) async -> Int32 {
         try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         failures = []
+        checkAnnotationColors()
 
         // 1. Synthetic 6 s clip with a moving box and a 440 Hz tone.
         let video = folder.appendingPathComponent("synthetic-video.mov")
@@ -623,7 +641,7 @@ enum DevChecks {
         let other = RecordingOutlineView(frame: CGRect(origin: .zero, size: CGSize(width: 1200, height: 700)))
         renderAppKit(other, to: folder.appendingPathComponent("record-outline-other-display.png"))
 
-        for page in 0..<5 {
+        for page in 0..<6 {
             render(OnboardingView(startPage: page).environment(app).preferredColorScheme(.dark), size: CGSize(width: 680, height: 600), to: folder.appendingPathComponent("onboarding-\(page + 1).png"))
         }
 

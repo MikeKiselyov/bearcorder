@@ -3,6 +3,14 @@
 /// top entry, the update badge compares it with GitHub, and CI refuses a pull request without one.
 public enum WhatsNewCatalog {
     public static let releases: [WhatsNewRelease] = [
+        WhatsNewRelease(id: 11, version: "0.7.0", title: "Friendlier editors", items: [
+            WhatsNewRelease.Item(symbol: "paintpalette", title: "Any color, the last four kept", text: "Pick any color next to the palette. The last four picked colors stay there, one click away.", shortcut: "Editors"),
+            WhatsNewRelease.Item(symbol: "square.dashed", title: "Transparent or filled", text: "Text with or without a label, rectangles and ellipses as outlines or with a see-through fill. Line and text sizes have − and + buttons.", shortcut: "Screenshot editor"),
+            WhatsNewRelease.Item(symbol: "crop", title: "Crop by the edges", text: "Drag the edges and corners to shrink the screenshot, drag inside to move the area. The size shows while you drag.", shortcut: "C"),
+            WhatsNewRelease.Item(symbol: "delete.left", title: "Delete works everywhere", text: "Delete removes the selected mark wherever you clicked last in the editor. Undo and redo moved to the left of the toolbar.", shortcut: "Delete"),
+            WhatsNewRelease.Item(symbol: "stop.circle", title: "Stopped from the macOS menu", text: "Stop in the purple screen recording icon saves what the buffer holds and offers to open it in the editor.", shortcut: "Menu bar"),
+            WhatsNewRelease.Item(symbol: "folder", title: "Your folder, and tooltips", text: "Files go to Desktop/Bugbear unless you pick another folder in the guide or Settings. Every button explains itself when you hover over it.", shortcut: "Welcome guide"),
+        ]),
         WhatsNewRelease(id: 10, version: "0.6.0", title: "A new look", items: [
             WhatsNewRelease.Item(symbol: "magnifyingglass", title: "The bear goes bug hunting", text: "A new logo: the bear looks at a bug through a magnifying glass. In the menu bar, the app icon and the installer.", shortcut: "Menu bar"),
         ]),
