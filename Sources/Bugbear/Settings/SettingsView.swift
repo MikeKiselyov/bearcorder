@@ -78,6 +78,20 @@ struct SettingsView: View {
 
                 UpdateSettingsSection()
 
+                Section("Feedback") {
+                    HStack {
+                        Button("Report a problem…") { WindowManager.shared.openFeedback(kind: .problem) }
+                            .tip("Open a GitHub issue about Bugbear with the version, macOS and logs filled in")
+                        Button("Suggest a feature…") { WindowManager.shared.openFeedback(kind: .idea) }
+                            .tip("Share an idea for Bugbear as a GitHub issue")
+                    }
+                    Toggle("Offer a report after Bugbear crashes", isOn: $settings.offerCrashReports)
+                        .tip("When Bugbear quit unexpectedly, open a report with the crash details on the next launch")
+                    Text("Opens a filled issue on GitHub. You check it and submit it from your account.")
+                        .font(.system(size: 12))
+                        .foregroundStyle(Theme.textSecondary)
+                }
+
                 Section("Crashes and logs") {
                     Toggle("Save a clip when an app crashes", isOn: $settings.saveOnCrash)
                         .tip("Automatically save the minute before a crash together with the crash report")

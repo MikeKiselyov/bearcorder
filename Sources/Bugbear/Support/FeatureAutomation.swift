@@ -249,6 +249,131 @@ enum FeatureAutomation {
             let visible = screen.visibleFrame
             return "frame=\(Int(frame.minX)),\(Int(frame.minY)),\(Int(frame.width)),\(Int(frame.height)) visible=\(Int(visible.minX)),\(Int(visible.minY)),\(Int(visible.width)),\(Int(visible.height))"
 
+        case "open-feedback":
+            // Opens the feedback window for "problem" or "idea" and reports its frame and fields.
+            let kind = FeedbackReport.Kind(rawValue: argument) ?? .problem
+            WindowManager.shared.close(id: "feedback")
+            WindowManager.shared.openFeedback(kind: kind)
+            try? await Task.sleep(nanoseconds: 500_000_000)
+            guard let window = NSApp.windows.first(where: { $0.identifier?.rawValue == "feedback" }), let screen = window.screen else {
+                return "no window"
+            }
+            let frame = window.frame
+            let visible = screen.visibleFrame
+            let inside = visible.contains(frame)
+            WindowManager.shared.close(id: "feedback")
+            return "opened inside=\(inside) frame=\(Int(frame.width))x\(Int(frame.height))"
+
+        case "feedback-url":
+            // Builds the GitHub link for a problem or an idea without opening it. A log line with the
+            // home folder and the user name is written first, so the check proves they are hidden.
+            let kind = FeedbackReport.Kind(rawValue: argument) ?? .problem
+            Log.info("Feedback check: \(Feedback.homePath)/Desktop by \(NSUserName())")
+            try? await Task.sleep(nanoseconds: 300_000_000)
+            let model = FeedbackModel(kind: kind)
+            try? await Task.sleep(nanoseconds: 500_000_000)
+            model.title = "Automation check"
+            model.details = "Saved clip is black & silent + short"
+            guard let url = model.report.issueURL() else { return "no url" }
+            let text = url.absoluteString
+            let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
+            var template = ""
+            var hasVersion = false
+            var logs = ""
+            var allValues = ""
+            for item in components?.queryItems ?? [] {
+                let value = item.value ?? ""
+                allValues += value + "\n"
+                if item.name == "template" {
+                    template = value
+                }
+                if item.name == "environment" {
+                    hasVersion = value.contains("Bugbear: \(Updater.shared.version)")
+                }
+                if item.name == "logs" {
+                    logs = value
+                }
+            }
+            let logLines = logs.split(separator: "\n").count
+            let leaksHome = allValues.contains(Feedback.homePath)
+            let leaksUser = allValues.range(of: "(?<![A-Za-z0-9])" + NSRegularExpression.escapedPattern(for: NSUserName()) + "(?![A-Za-z0-9])", options: [.regularExpression, .caseInsensitive]) != nil
+            let planted = logs.contains("Feedback check: ~/Desktop by <user>")
+            return "template=\(template) version=\(hasVersion) logs=\(logLines) planted=\(planted) length=\(text.count) home=\(leaksHome) user=\(leaksUser)"
+
+        case "feedback-zip":
+            // Makes the log zip in a scratch folder and lists what is inside.
+            Log.info("Feedback zip check from \(Feedback.homePath)/Desktop by \(NSUserName())")
+            try? await Task.sleep(nanoseconds: 300_000_000)
+            let folder = FileManager.default.temporaryDirectory.appendingPathComponent("bugbear-feedback-check", isDirectory: true)
+            try? FileManager.default.removeItem(at: folder)
+            let environment = FeedbackModel(kind: .problem).report.environmentText
+            guard case .success(let archive) = Feedback.makeLogArchive(environmentText: environment, in: folder) else { return "no zip" }
+            let unpacked = folder.appendingPathComponent("unpacked", isDirectory: true)
+            let task = Process()
+            task.executableURL = URL(fileURLWithPath: "/usr/bin/ditto")
+            task.arguments = ["-x", "-k", archive.path, unpacked.path]
+            try? task.run()
+            task.waitUntilExit()
+            let inner = unpacked.appendingPathComponent("Bugbear logs", isDirectory: true)
+            let names = ((try? FileManager.default.contentsOfDirectory(atPath: inner.path)) ?? []).sorted()
+            var leaksHome = false
+            var leaksUser = false
+            var planted = false
+            for name in names {
+                let text = (try? String(contentsOf: inner.appendingPathComponent(name), encoding: .utf8)) ?? ""
+                if text.contains(Feedback.homePath) {
+                    leaksHome = true
+                }
+                if text.range(of: "(?<![A-Za-z0-9])" + NSRegularExpression.escapedPattern(for: NSUserName()) + "(?![A-Za-z0-9])", options: [.regularExpression, .caseInsensitive]) != nil {
+                    leaksUser = true
+                }
+                if text.contains("Feedback zip check from ~/Desktop by <user>") {
+                    planted = true
+                }
+            }
+            try? FileManager.default.removeItem(at: folder)
+            return "files=\(names.joined(separator: ",")) planted=\(planted) home=\(leaksHome) user=\(leaksUser)"
+
+        case "feedback-crash":
+            // The launch check with a fake crash of this Bugbear: "on" opens the report window with the
+            // crash filled in, "off" (setting turned off) opens nothing; both move the check time on.
+            let enabled = argument != "off"
+            let folder = FileManager.default.temporaryDirectory.appendingPathComponent("bugbear-crash-check", isDirectory: true)
+            try? FileManager.default.removeItem(at: folder)
+            try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+            let bundleId = Bundle.main.bundleIdentifier ?? ""
+            try? Data(DevChecks.fakeCrashReport(bundleId: bundleId).utf8).write(to: folder.appendingPathComponent("Bugbear-check.ips"))
+            let defaults = UserDefaults(suiteName: "bugbear-crash-check") ?? .standard
+            let before = Date().addingTimeInterval(-60)
+            defaults.set(before, forKey: Feedback.lastCrashCheckKey)
+            WindowManager.shared.close(id: "feedback")
+            let offered = await Feedback.offerReportAfterCrash(folder: folder, defaults: defaults, enabled: enabled, windowDelay: 0)
+            try? await Task.sleep(nanoseconds: 500_000_000)
+            let moved = ((defaults.object(forKey: Feedback.lastCrashCheckKey) as? Date) ?? before) > before
+            defaults.removePersistentDomain(forName: "bugbear-crash-check")
+            let open = WindowManager.shared.isOpen(id: "feedback")
+            let model = WindowManager.shared.feedbackModel
+            var url = ""
+            if let report = model?.report, let link = report.issueURL() {
+                url = link.absoluteString
+            }
+            let hasCrash = url.contains("crash=") && url.contains("EXC_BREAKPOINT")
+            let canSend = model?.canSend ?? false
+            let title = model?.title ?? ""
+            WindowManager.shared.close(id: "feedback")
+            try? FileManager.default.removeItem(at: folder)
+            return "offered=\(offered) open=\(open) crash=\(hasCrash) canSend=\(canSend) moved=\(moved) title=\(title)"
+
+        case "feedback-switch":
+            // Asking for an idea while the problem window is open shows the idea form.
+            WindowManager.shared.openFeedback(kind: .problem)
+            try? await Task.sleep(nanoseconds: 300_000_000)
+            WindowManager.shared.openFeedback(kind: .idea)
+            try? await Task.sleep(nanoseconds: 300_000_000)
+            let kind = WindowManager.shared.feedbackModel?.kind.rawValue ?? "none"
+            WindowManager.shared.close(id: "feedback")
+            return "kind=\(kind)"
+
         case "open-space":
             // open-space:<Clean up|Folders|Largest files>
             let section = SpaceView.Section(rawValue: argument) ?? .cleanUp

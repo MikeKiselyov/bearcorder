@@ -9,6 +9,8 @@ final class WindowManager: NSObject, NSWindowDelegate {
     static let shared = WindowManager()
 
     private var windows: [String: NSWindow] = [:]
+    /// The model of the open feedback window, for checks.
+    private(set) var feedbackModel: FeedbackModel?
 
     func show<Content: View>(id: String, title: String, size: CGSize, minSize: CGSize, @ViewBuilder content: () -> Content) {
         if let existing = windows[id] {
@@ -79,6 +81,9 @@ final class WindowManager: NSObject, NSWindowDelegate {
     func windowWillClose(_ notification: Notification) {
         guard let window = notification.object as? NSWindow, let id = window.identifier?.rawValue else { return }
         windows[id] = nil
+        if id == "feedback" {
+            feedbackModel = nil
+        }
         if windows.isEmpty {
             NSApp.setActivationPolicy(.accessory)
         }
@@ -170,6 +175,21 @@ final class WindowManager: NSObject, NSWindowDelegate {
         close(id: "compare")
         show(id: "compare", title: "Before and after", size: CGSize(width: 1300, height: 800), minSize: CGSize(width: 900, height: 560)) {
             CompareView(before: before, after: after)
+        }
+    }
+
+    /// Report a problem with Bugbear or suggest a feature on GitHub.
+    func openFeedback(kind: FeedbackReport.Kind) {
+        openFeedback(model: FeedbackModel(kind: kind))
+    }
+
+    /// An open feedback window is replaced, so the window always shows what was asked for.
+    func openFeedback(model: FeedbackModel) {
+        AppState.shared.closeMenuPanel()
+        close(id: "feedback")
+        feedbackModel = model
+        show(id: "feedback", title: "Feedback", size: CGSize(width: 560, height: 640), minSize: CGSize(width: 500, height: 560)) {
+            FeedbackView(model: model)
         }
     }
 

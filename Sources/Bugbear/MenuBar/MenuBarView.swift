@@ -196,6 +196,12 @@ struct MenuBarView: View {
                             .tip("Restart Bugbear so a newly granted permission takes effect")
                     }
                 }
+            } else if case .failed(let message) = app.bufferState {
+                Button("Report this problem") {
+                    Feedback.openErrorReport(title: "Buffer error", message: message)
+                }
+                .buttonStyle(SecondaryButtonStyle())
+                .tip("Open a GitHub issue about this error with the version, macOS and logs filled in")
             } else {
                 activityBars
                 HStack {
@@ -582,6 +588,9 @@ struct MenuBarView: View {
             .buttonStyle(.plain)
             .tip("The buffer keeps the last minutes of the screen so you can save a bug after it happened")
             Spacer()
+            ToolButton(systemImage: "exclamationmark.bubble", help: "Report a problem with Bugbear or suggest a feature on GitHub") {
+                WindowManager.shared.openFeedback(kind: .problem)
+            }
             ToolButton(systemImage: "gearshape", help: "Open settings: buffer, shortcuts, storage and more") {
                 app.closeMenuPanel()
                 WindowManager.shared.openSettings()

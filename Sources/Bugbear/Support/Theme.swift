@@ -121,6 +121,8 @@ struct PillPicker<Value: Hashable>: View {
     let options: [Value]
     @Binding var selection: Value
     let label: (Value) -> String
+    /// An SF Symbol shown before each label, when given.
+    var symbol: ((Value) -> String)? = nil
 
     var body: some View {
         HStack(spacing: 3) {
@@ -129,7 +131,12 @@ struct PillPicker<Value: Hashable>: View {
                 Button {
                     selection = option
                 } label: {
-                    Text(label(option))
+                    HStack(spacing: 6) {
+                        if let symbol = symbol {
+                            Image(systemName: symbol(option))
+                        }
+                        Text(label(option))
+                    }
                         .font(.system(size: 12, weight: isSelected ? .semibold : .regular))
                         .foregroundStyle(isSelected ? Theme.text : Color(hex: 0xC9CBD0))
                         .frame(maxWidth: .infinity)

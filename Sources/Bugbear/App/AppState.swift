@@ -125,6 +125,12 @@ final class AppState {
         Automation.install()
         Updater.shared.start()
         startStorageCleanUp()
+        // macOS writes the crash report a moment after the crash, so it is there by the next launch.
+        // Checked right away; test runs (automation on at launch) never get the window.
+        let offerCrashReport = settings.offerCrashReports && !Automation.isEnabled
+        Task { @MainActor in
+            await Feedback.offerReportAfterCrash(enabled: offerCrashReport)
+        }
         statusTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { _ in
             MainActor.assumeIsolated {
                 AppState.shared.refreshStatus()
