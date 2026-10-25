@@ -19,6 +19,8 @@ if [ -f "$ROOT/.env" ]; then
     set +a
 fi
 BUNDLE_ID="${BUGBEAR_BUNDLE_ID:-io.github.bugbear.app}"
+# shellcheck disable=SC1091
+source "$ROOT/scripts/test-app.sh"
 R=scripts/bugbear-run.sh
 BROWSER="${E2E_BROWSER:-Google Chrome}"
 WORK="$ROOT/build/e2e-features"
@@ -34,8 +36,8 @@ scripts/build-app.sh >/dev/null 2>&1 || { echo "build failed"; exit 1; }
 rm -rf "$WORK"
 mkdir -p "$WORK"
 defaults write "$BUNDLE_ID" automationEnabled -bool true
-pkill -x Bugbear 2>/dev/null; sleep 1
-open "$ROOT/build/Bugbear.app"
+quit_running_bugbear
+open "$TEST_APP"
 sleep 6
 $R setting:readBrowserURL:false 10 >/dev/null
 if [ "$($R ax 10)" = "trusted=true" ]; then pass "Accessibility is allowed"; else fail "Accessibility is allowed" "grant it in System Settings"; fi

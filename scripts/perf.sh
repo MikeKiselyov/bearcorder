@@ -16,6 +16,8 @@ if [ -f "$ROOT/.env" ]; then
     set +a
 fi
 BUNDLE_ID="${BUGBEAR_BUNDLE_ID:-io.github.bugbear.app}"
+# shellcheck disable=SC1091
+source "$ROOT/scripts/test-app.sh"
 LOG="$HOME/Library/Logs/Bugbear/bugbear.log"
 FAILURES=0
 
@@ -63,9 +65,9 @@ scripts/build-app.sh >/dev/null 2>&1 || { echo "build failed"; exit 1; }
 defaults write "$BUNDLE_ID" automationEnabled -bool true
 defaults write "$BUNDLE_ID" recordSystemAudio -bool false
 defaults write "$BUNDLE_ID" recordMicrophone -bool false
-pkill -x Bugbear 2>/dev/null; sleep 1
+quit_running_bugbear
 rm -f "$LOG"
-open "$ROOT/build/Bugbear.app"
+open "$TEST_APP"
 sleep 8
 
 echo "==> idle with the buffer running (20 s, screen mostly static)"
