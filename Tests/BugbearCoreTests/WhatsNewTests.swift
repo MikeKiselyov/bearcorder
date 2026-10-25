@@ -3,9 +3,9 @@ import XCTest
 
 final class WhatsNewTests: XCTestCase {
     let releases = [
-        WhatsNewRelease(id: 1, title: "First", items: [WhatsNewRelease.Item(symbol: "flag", title: "A", text: "a")]),
-        WhatsNewRelease(id: 2, title: "Second", items: [WhatsNewRelease.Item(symbol: "flag", title: "B", text: "b")]),
-        WhatsNewRelease(id: 3, title: "Third", items: [WhatsNewRelease.Item(symbol: "flag", title: "C", text: "c")]),
+        WhatsNewRelease(id: 1, version: "0.1.0", title: "First", items: [WhatsNewRelease.Item(symbol: "flag", title: "A", text: "a")]),
+        WhatsNewRelease(id: 2, version: "0.2.0", title: "Second", items: [WhatsNewRelease.Item(symbol: "flag", title: "B", text: "b")]),
+        WhatsNewRelease(id: 3, version: "0.3.0", title: "Third", items: [WhatsNewRelease.Item(symbol: "flag", title: "C", text: "c")]),
     ]
 
     func testUnseenNewestFirst() {

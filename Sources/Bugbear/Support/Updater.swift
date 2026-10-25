@@ -2,8 +2,8 @@ import AppKit
 import Observation
 import BugbearCore
 
-/// Tells when the GitHub repository this copy was built from has new commits,
-/// and rebuilds the app from its source folder with scripts/update.sh.
+/// Tells when the GitHub repository this copy was built from has a newer release
+/// (the top version in WhatsNewCatalog.swift), and rebuilds the app from its source folder with scripts/update.sh.
 /// Each person builds and signs their own copy, so there are no downloads to trust.
 @MainActor
 @Observable
@@ -58,8 +58,12 @@ final class Updater {
         return FileManager.default.isExecutableFile(atPath: updateScript.path)
     }
 
+    /// The newest release built into this copy.
+    var version: String {
+        return WhatsNew.latestVersion(WhatsNewCatalog.releases)
+    }
+
     var versionText: String {
-        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?"
         if commit.isEmpty {
             return version
         }
@@ -78,6 +82,13 @@ final class Updater {
         return UpdateInfo.compareURL(repository: repository, commit: commit, branch: branch)
     }
 
+    private var catalogURL: URL? {
+        if Automation.isEnabled, let override = UserDefaults.standard.string(forKey: "updateCatalogURL"), !override.isEmpty {
+            return URL(string: override)
+        }
+        return UpdateInfo.catalogURL(repository: repository, branch: branch)
+    }
+
     func start() {
         timer?.invalidate()
         timer = nil
@@ -94,34 +105,43 @@ final class Updater {
     }
 
     /// Background checks stay quiet on errors (offline, rate limit); a manual check reports them.
+    /// Only a higher release version counts as an update; the commits are fetched to list the changes.
     func check(userInitiated: Bool) async {
-        guard let url = compareURL else { return }
+        guard canCheck, let catalogURL else { return }
         if state == .updating || state == .checking { return }
         state = .checking
-        var request = URLRequest(url: url)
-        request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
+        var request = URLRequest(url: catalogURL)
         request.timeoutInterval = 20
+        request.cachePolicy = .reloadIgnoringLocalCacheData
         do {
             let (data, response) = try await URLSession.shared.data(for: request)
             let status = (response as? HTTPURLResponse)?.statusCode ?? 0
             lastChecked = Date()
-            if status == 404 {
-                state = userInitiated ? .failed("This build's commit is not on GitHub yet.") : .idle
-                return
-            }
-            guard let info = UpdateInfo.parse(compareJSON: data) else {
+            guard status == 200, let latest = ReleaseVersion.latest(inCatalogSource: String(decoding: data, as: UTF8.self)) else {
                 state = userInitiated ? .failed("GitHub did not answer (HTTP \(status)). Try again later.") : .idle
                 return
             }
-            if info.isAvailable {
-                Log.info("update available: \(info.newCommitCount) new commits")
-                state = .available(info)
-            } else {
+            if !ReleaseVersion.isNewer(latest, than: version) {
                 state = .upToDate
+                return
             }
+            var info = await fetchChanges() ?? UpdateInfo(newCommitCount: 0, changes: [])
+            info.version = latest
+            Log.info("update available: \(version) → \(latest), \(info.newCommitCount) new commits")
+            state = .available(info)
         } catch {
             state = userInitiated ? .failed("Could not reach GitHub: \(error.localizedDescription)") : .idle
         }
+    }
+
+    /// The commits since this build, for the list under the badge. Nil when GitHub does not say.
+    private func fetchChanges() async -> UpdateInfo? {
+        guard let url = compareURL else { return nil }
+        var request = URLRequest(url: url)
+        request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
+        request.timeoutInterval = 20
+        guard let (data, _) = try? await URLSession.shared.data(for: request) else { return nil }
+        return UpdateInfo.parse(compareJSON: data)
     }
 
     /// Runs scripts/update.sh: git pull, build, replace this app and relaunch it.

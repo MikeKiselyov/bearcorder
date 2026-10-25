@@ -1,0 +1,47 @@
+#!/bin/bash
+# Every change that reaches main is a new release: a pull request that touches the app
+# must add a release on top of WhatsNewCatalog.swift with a higher version.
+#
+#   scripts/check-release.sh origin/main
+#
+# Changes only to docs (*.md, docs/) or CI (.github/) need no release.
+set -euo pipefail
+
+cd "$(dirname "$0")/.."
+BASE="${1:?usage: scripts/check-release.sh <base ref>}"
+CATALOG="Sources/BugbearCore/Support/WhatsNewCatalog.swift"
+
+# latest_version reads the top "version:" from catalog source on stdin; 0.0.0 when there is none.
+latest_version() {
+    local found
+    found=$(grep -oE 'WhatsNewRelease\(id: *[0-9]+, *version: *"[0-9]+\.[0-9]+\.[0-9]+"' | head -1 | sed -E 's/.*"(.*)"/\1/' || true)
+    echo "${found:-0.0.0}"
+}
+
+merge_base=$(git merge-base "$BASE" HEAD)
+app_changes=$(git diff --name-only "$merge_base" HEAD | grep -vE '(\.md$|^docs/|^\.github/)' || true)
+if [ -z "$app_changes" ]; then
+    echo "Only docs or CI changed, no release needed."
+    exit 0
+fi
+
+new_version=$(cat "$CATALOG" 2>/dev/null | latest_version)
+old_version=$(git show "$merge_base:$CATALOG" 2>/dev/null | latest_version)
+echo "Version on $BASE: $old_version, in this branch: $new_version"
+
+highest=$(printf '%s\n%s\n' "$old_version" "$new_version" | sort -t. -k1,1n -k2,2n -k3,3n | tail -1)
+if [ "$new_version" = "$old_version" ] || [ "$highest" != "$new_version" ]; then
+    echo
+    echo "This branch changes the app but has no new release. Files:"
+    echo "$app_changes" | sed 's/^/  /'
+    echo
+    echo "Add a release on top of $CATALOG with the next id and a version above $old_version:"
+    echo "a patch (x.y.Z) for fixes, a minor (x.Y.0) for new features. Write it for people, not as a commit list."
+    exit 1
+fi
+
+if git rev-parse --verify --quiet "refs/tags/v$new_version" >/dev/null; then
+    echo "Tag v$new_version already exists, pick a higher version."
+    exit 1
+fi
+echo "Release $new_version is ready."

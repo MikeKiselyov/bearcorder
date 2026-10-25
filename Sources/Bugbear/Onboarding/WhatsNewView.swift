@@ -88,7 +88,16 @@ struct WhatsNewView: View {
                     header
                     ForEach(releases, id: \.id) { release in
                         VStack(alignment: .leading, spacing: 12) {
-                            Text(release.title).font(.system(size: 15, weight: .semibold))
+                            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                                Text(release.version)
+                                    .font(.system(size: 12, weight: .semibold).monospacedDigit())
+                                    .padding(.horizontal, 7)
+                                    .padding(.vertical, 2)
+                                    .foregroundStyle(Theme.accentText)
+                                    .background(Theme.accent)
+                                    .clipShape(Capsule())
+                                Text(release.title).font(.system(size: 15, weight: .semibold))
+                            }
                             LazyVGrid(columns: columns, spacing: 12) {
                                 ForEach(Array(release.items.enumerated()), id: \.offset) { _, item in
                                     card(item)
