@@ -1,92 +1,102 @@
 import AppKit
 import SwiftUI
 
-/// The Bugbear logo: a bear peeking over a sesame bun with a bug on it, as one flat shape.
+/// The Bugbear logo: a bear looking through a magnifying glass at a bug, as one flat shape.
 /// Drawn in code so the menu bar glyph, the in-app logo and the app icon are the same picture.
 enum Logo {
     static let tileTop = NSColor(hex: 0x3A3C41)
     static let tileBottom = NSColor(hex: 0x111214)
 
     /// The glyph's own size in points; everything else scales it.
-    static let glyphSize = CGSize(width: 20, height: 18)
+    static let glyphSize = CGSize(width: 20, height: 19)
 
-    /// Draws the glyph in `color`, scaled from its 20×18 design, origin bottom-left at `origin`:
-    /// a bear peeking over a sesame bun with a bug sitting on it.
+    /// Draws the glyph in `color`, scaled from its 20×19 design, origin bottom-left at `origin`:
+    /// a bear in the top left looks down through a magnifying glass at a bug.
     /// A filled dot means recording, a ring means the buffer is running.
     static func drawGlyph(in context: CGContext, origin: CGPoint, scale: CGFloat, color: NSColor, recording: Bool = false, buffering: Bool = false) {
         context.saveGState()
         // The shapes below use a top-left origin, like the SVG mockups they came from.
         context.translateBy(x: origin.x, y: origin.y + glyphSize.height * scale)
         context.scaleBy(x: scale, y: -scale)
-        context.translateBy(x: -0.6, y: -1.0)
+        context.translateBy(x: -0.6, y: -0.4)
         context.beginTransparencyLayer(auxiliaryInfo: nil)
         context.setFillColor(color.cgColor)
         context.setStrokeColor(color.cgColor)
         context.setLineCap(.round)
 
-        // Bear: ears, head, eyes, nose.
-        ellipse(context, 4.8, 4, 2.6, 2.6, .shape)
-        ellipse(context, 15.2, 4, 2.6, 2.6, .shape)
-        ellipse(context, 10, 8, 6.8, 5.9, .shape)
-        ellipse(context, 7.55, 6.8, 0.95, 0.95, .hole)
-        ellipse(context, 12.45, 6.8, 0.95, 0.95, .hole)
-        ellipse(context, 10, 9.2, 1.1, 0.75, .hole)
+        drawBear(in: context)
 
-        // The bun in front, with a gap around it and sesame seeds.
-        ellipse(context, 10, 14.1, 8.9, 4.3, .hole)
-        ellipse(context, 10, 14.1, 8, 3.45, .shape)
-        let seeds: [(x: CGFloat, y: CGFloat, angle: CGFloat)] = [(6.2, 13, -20), (8.6, 12.2, 5), (7.4, 14.9, 30), (10.2, 14.6, -10), (11.2, 12.5, 20)]
-        for seed in seeds {
-            ellipse(context, seed.x, seed.y, 0.42, 0.25, .hole, angle: seed.angle)
-        }
+        // The magnifying glass: the handle cut wide and drawn inside the cut, then a gap around
+        // the lens, the ring, and clear glass.
+        let handle = [CGPoint(x: 16.4, y: 15.1), CGPoint(x: 19.3, y: 17.8)]
+        use(.hole, in: context)
+        context.setLineWidth(3.4)
+        context.strokeLineSegments(between: handle)
+        use(.shape, in: context)
+        context.setLineWidth(2)
+        context.strokeLineSegments(between: handle)
+        ellipse(context, 13.1, 11.6, 5.45, 5.45, .hole)
+        ellipse(context, 13.1, 11.6, 4.7, 4.7, .shape)
+        ellipse(context, 13.1, 11.6, 3.85, 3.85, .hole)
 
         drawBug(in: context)
 
         if recording || buffering {
-            ellipse(context, 19.3, 2.6, 2.9, 2.9, .hole)
+            ellipse(context, 17.6, 2.8, 2.9, 2.9, .hole)
             if recording {
-                ellipse(context, 19.3, 2.6, 2.1, 2.1, .shape)
+                ellipse(context, 17.6, 2.8, 2.1, 2.1, .shape)
             } else {
                 context.setBlendMode(.normal)
                 context.setLineWidth(1.1)
-                context.strokeEllipse(in: CGRect(x: 19.3 - 1.5, y: 2.6 - 1.5, width: 3, height: 3))
+                context.strokeEllipse(in: CGRect(x: 17.6 - 1.5, y: 2.8 - 1.5, width: 3, height: 3))
             }
         }
         context.endTransparencyLayer()
         context.restoreGState()
     }
 
-    /// The bug on the bun: shell with a seam and spots, head, antennae and six legs.
+    /// The bear in the top left: ears, head, and eyes looking down at the glass, nose.
+    private static func drawBear(in context: CGContext) {
+        context.saveGState()
+        context.translateBy(x: -0.6, y: -0.5)
+        context.scaleBy(x: 0.78, y: 0.78)
+        ellipse(context, 4.8, 4, 2.6, 2.6, .shape)
+        ellipse(context, 15.2, 4, 2.6, 2.6, .shape)
+        ellipse(context, 10, 8, 6.8, 5.9, .shape)
+        ellipse(context, 8.05, 7.2, 0.95, 0.95, .hole)
+        ellipse(context, 12.95, 7.2, 0.95, 0.95, .hole)
+        ellipse(context, 10, 9.2, 1.1, 0.75, .hole)
+        context.restoreGState()
+    }
+
+    /// The bug in the glass: shell with a seam and two spots, head and antennae.
     private static func drawBug(in context: CGContext) {
         context.saveGState()
-        context.translateBy(x: 15.6, y: 11.4)
-        context.rotate(by: 28 * .pi / 180)
-        context.scaleBy(x: 0.72, y: 0.72)
+        context.translateBy(x: 13.1, y: 11.9)
+        context.rotate(by: 20 * .pi / 180)
+        context.scaleBy(x: 0.82, y: 0.82)
 
-        var legs: [(from: CGPoint, to: CGPoint)] = []
-        for side in [CGFloat(-1), CGFloat(1)] {
-            legs.append((from: CGPoint(x: side * 1.6, y: -0.4), to: CGPoint(x: side * 3.0, y: -1.3)))
-            legs.append((from: CGPoint(x: side * 1.9, y: 0.8), to: CGPoint(x: side * 3.3, y: 0.8)))
-            legs.append((from: CGPoint(x: side * 1.6, y: 2.0), to: CGPoint(x: side * 2.9, y: 3.1)))
-        }
-        // Each leg and antenna is cut out wide first, then drawn thin inside the cut.
-        strokeLegs(context, legs, width: 1.6, .hole)
-        strokeAntennae(context, width: 1.5, .hole)
-        ellipse(context, 0, 0.6, 2.75, 3.15, .hole)
-        ellipse(context, 0, -2.6, 1.7, 1.7, .hole)
-        strokeLegs(context, legs, width: 0.55, .shape)
-        strokeAntennae(context, width: 0.5, .shape)
-        ellipse(context, 0, 0.6, 2, 2.4, .shape)
-        ellipse(context, 0, -2.6, 1.05, 1.05, .shape)
+        let antennae = [
+            CGPoint(x: -0.5, y: -2.7), CGPoint(x: -1.3, y: -3.7),
+            CGPoint(x: 0.5, y: -2.7), CGPoint(x: 1.3, y: -3.7),
+        ]
+        // The antennae are cut out wide first, then drawn thin inside the cut.
+        use(.hole, in: context)
+        context.setLineWidth(1.5)
+        context.strokeLineSegments(between: antennae)
+        ellipse(context, 0, 0.5, 2.6, 2.8, .hole)
+        ellipse(context, 0, -1.9, 1.6, 1.6, .hole)
+        use(.shape, in: context)
+        context.setLineWidth(0.6)
+        context.strokeLineSegments(between: antennae)
+        ellipse(context, 0, 0.5, 1.9, 2.1, .shape)
+        ellipse(context, 0, -1.9, 0.95, 0.95, .shape)
 
-        context.setBlendMode(.clear)
-        context.setLineWidth(0.4)
-        context.strokeLineSegments(between: [CGPoint(x: 0, y: -1.6), CGPoint(x: 0, y: 3.0)])
-        ellipse(context, -0.9, 0.1, 0.38, 0.38, .hole)
-        ellipse(context, 0.9, 1.3, 0.38, 0.38, .hole)
-        ellipse(context, -0.8, 1.9, 0.38, 0.38, .hole)
-        ellipse(context, 0.85, -0.3, 0.38, 0.38, .hole)
-        context.setBlendMode(.normal)
+        use(.hole, in: context)
+        context.setLineWidth(0.5)
+        context.strokeLineSegments(between: [CGPoint(x: 0, y: -1.2), CGPoint(x: 0, y: 2.6)])
+        ellipse(context, -0.9, 0.2, 0.45, 0.45, .hole)
+        ellipse(context, 0.9, 1.3, 0.45, 0.45, .hole)
         context.restoreGState()
     }
 
@@ -111,25 +121,6 @@ enum Logo {
         context.rotate(by: angle * .pi / 180)
         context.fillEllipse(in: CGRect(x: -radiusX, y: -radiusY, width: radiusX * 2, height: radiusY * 2))
         context.restoreGState()
-    }
-
-    private static func strokeLegs(_ context: CGContext, _ legs: [(from: CGPoint, to: CGPoint)], width: CGFloat, _ ink: Ink) {
-        use(ink, in: context)
-        context.setLineWidth(width)
-        for leg in legs {
-            context.strokeLineSegments(between: [leg.from, leg.to])
-        }
-    }
-
-    private static func strokeAntennae(_ context: CGContext, width: CGFloat, _ ink: Ink) {
-        use(ink, in: context)
-        context.setLineWidth(width)
-        for side in [CGFloat(-1), CGFloat(1)] {
-            context.beginPath()
-            context.move(to: CGPoint(x: side * 0.5, y: -3.4))
-            context.addQuadCurve(to: CGPoint(x: side * 1.9, y: -4.7), control: CGPoint(x: side * 1.0, y: -4.4))
-            context.strokePath()
-        }
     }
 
     /// Draws the app icon into a context with origin bottom-left, `size` points square:
