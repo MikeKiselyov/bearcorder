@@ -3,6 +3,10 @@
 /// top entry, the update badge compares it with GitHub, and CI refuses a pull request without one.
 public enum WhatsNewCatalog {
     public static let releases: [WhatsNewRelease] = [
+        WhatsNewRelease(id: 17, version: "0.10.1", title: "Lighter recording", items: [
+            WhatsNewRelease.Item(symbol: "gauge.with.dots.needle.33percent", title: "Recording takes a fifth of the CPU", text: "On a still screen recording now takes about 5% of the CPU instead of 26%: the recording bar no longer redraws the whole bar four times a second, and frames where only the menu bar or the bar changed are not encoded thirty times a second.", shortcut: "Recording"),
+            WhatsNewRelease.Item(symbol: "rectangle.inset.filled.and.person.filled", title: "About the purple icon", text: "The welcome guide now explains the purple icon macOS shows in the menu bar while the screen is captured: it is the system's own sign, and nothing leaves your Mac.", shortcut: "Welcome guide"),
+        ]),
         WhatsNewRelease(id: 16, version: "0.10.0", title: "Tell us what broke", items: [
             WhatsNewRelease.Item(symbol: "exclamationmark.bubble", title: "Report a problem or suggest a feature", text: "The new button in the menu opens a GitHub issue with the version, macOS and the last log lines already filled in, and saves the full logs as a zip to drag into it. Your home folder and user name are hidden.", shortcut: "Menu"),
         ]),

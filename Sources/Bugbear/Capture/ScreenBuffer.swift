@@ -1,4 +1,5 @@
 import AVFoundation
+import BugbearCore
 import AppKit
 import CoreMedia
 import QuartzCore
@@ -85,6 +86,17 @@ final class ScreenBuffer: NSObject, SCStreamOutput, SCStreamDelegate {
     var onStop: ((Error?) -> Void)?
     /// Global AppKit frame of the captured display (origin bottom-left).
     private(set) var displayFrame: CGRect = .zero
+    /// Height of the menu bar on this display, 0 when it hides itself.
+    private var menuBarHeight: CGFloat = 0
+    /// While recording, frames that changed only in the menu bar or under the recording bar are
+    /// encoded a few times a second (see `FramePacing`). Queue only.
+    private var pacer = FramePacer()
+    /// The newest frame `pacer` held back. Queue only.
+    private var heldSample: CMSampleBuffer?
+    /// Inputs of the quiet zones, kept so the zones follow the current output size. Queue only.
+    private var busyWindows: [CGRect] = []
+    private var quietZonesEnabled = false
+    private var ownWindows: [CGRect] = []
 
     init(displayID: CGDirectDisplayID) {
         self.displayID = displayID
@@ -127,16 +139,17 @@ final class ScreenBuffer: NSObject, SCStreamOutput, SCStreamDelegate {
         capturedDisplay = display
         excludedApplications = excluded
 
-        let screenInfo = await MainActor.run { () -> (scale: CGFloat, frame: CGRect) in
+        let screenInfo = await MainActor.run { () -> (scale: CGFloat, frame: CGRect, menuBar: CGFloat) in
             for screen in NSScreen.screens {
                 let number = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber
                 if number?.uint32Value == self.displayID {
-                    return (scale: screen.backingScaleFactor, frame: screen.frame)
+                    return (scale: screen.backingScaleFactor, frame: screen.frame, menuBar: screen.frame.maxY - screen.visibleFrame.maxY)
                 }
             }
-            return (scale: 2, frame: NSScreen.main?.frame ?? .zero)
+            return (scale: 2, frame: NSScreen.main?.frame ?? .zero, menuBar: 0)
         }
         displayFrame = screenInfo.frame
+        menuBarHeight = max(0, screenInfo.menuBar)
 
         var width = Double(display.width) * Double(screenInfo.scale)
         var height = Double(display.height) * Double(screenInfo.scale)
@@ -189,7 +202,17 @@ final class ScreenBuffer: NSObject, SCStreamOutput, SCStreamDelegate {
             try? await current.stopCapture()
         }
         stream = nil
+        dropHeldFrame()
         await finishCurrentSegment()
+    }
+
+    /// A frame held back for later must not open a new segment after the capture stopped.
+    /// Queued ahead of the segment's finish, so it runs first.
+    private func dropHeldFrame() {
+        queue.async {
+            self.heldSample = nil
+            self.pacer.reset()
+        }
     }
 
     var isRunning: Bool {
@@ -233,6 +256,41 @@ final class ScreenBuffer: NSObject, SCStreamOutput, SCStreamDelegate {
         Log.info("buffer[\(displayID)] now \(framesPerSecond) fps")
     }
 
+    /// While recording, changes only in the menu bar or under the recording bar (`windows`, global
+    /// AppKit frames) are encoded a few times a second instead of every frame.
+    /// `ownWindows`: our windows themselves; the pointer over them is not work on the recorded screen.
+    func setQuietZones(busyWindows windows: [CGRect], ownWindows: [CGRect], enabled: Bool) {
+        queue.async {
+            self.busyWindows = windows
+            self.ownWindows = ownWindows
+            self.quietZonesEnabled = enabled
+            self.updatePacerZones()
+        }
+    }
+
+    /// Queue only.
+    private func updatePacerZones() {
+        if quietZonesEnabled {
+            pacer.zones = FramePacing.zones(displayFrame: displayFrame, menuBarHeight: menuBarHeight, busyWindows: busyWindows, outputSize: outputSize)
+        } else {
+            pacer.zones = []
+            flushHeldFrame(force: true)
+        }
+    }
+
+    /// Encodes the frame held back by the pacer once it is due, or at once with `force`. Queue only.
+    private func flushHeldFrame(force: Bool) {
+        guard let sample = heldSample, writer != nil else { return }
+        guard let time = pacer.takeHeld(now: CACurrentMediaTime(), lastKept: lastFrameTime, force: force) else {
+            if pacer.heldTime == nil {
+                heldSample = nil
+            }
+            return
+        }
+        heldSample = nil
+        appendVideo(sample, at: time)
+    }
+
     /// Leaves our own windows out of the capture again, and lets the listed ones (drawing overlay,
     /// camera bubble) in.
     func allowOwnWindows(_ windowNumbers: [Int]) async {
@@ -255,6 +313,7 @@ final class ScreenBuffer: NSObject, SCStreamOutput, SCStreamDelegate {
         Log.error("buffer[\(displayID)] stream stopped: \(error.localizedDescription)")
         self.stream = nil
         stopHeartbeat()
+        dropHeldFrame()
         Task {
             await finishCurrentSegment()
             await MainActor.run {
@@ -280,6 +339,28 @@ final class ScreenBuffer: NSObject, SCStreamOutput, SCStreamDelegate {
         }
         guard CMSampleBufferGetImageBuffer(sampleBuffer) != nil else { return }
         let time = CMSampleBufferGetPresentationTimeStamp(sampleBuffer).seconds
+        if !pacer.zones.isEmpty {
+            var dirty: [CGRect] = []
+            for item in attachments.first?[.dirtyRects] as? [NSDictionary] ?? [] {
+                if let rect = CGRect(dictionaryRepresentation: item) {
+                    dirty.append(rect)
+                }
+            }
+            let mouse = NSEvent.mouseLocation
+            var pointer = FramePacing.pixelPoint(mouse, displayFrame: displayFrame, outputSize: outputSize)
+            for window in ownWindows where window.contains(mouse) {
+                pointer = nil
+            }
+            if pacer.receive(dirty: dirty, at: time, lastKept: lastFrameTime, pointer: pointer) == .hold {
+                // Kept for later: if the screen goes still now, this is its last picture.
+                heldSample = sampleBuffer
+                queue.asyncAfter(deadline: .now() + FramePacing.quietInterval) { [weak self] in
+                    self?.flushHeldFrame(force: false)
+                }
+                return
+            }
+            heldSample = nil
+        }
         appendVideo(sampleBuffer, at: time)
     }
 
@@ -301,6 +382,7 @@ final class ScreenBuffer: NSObject, SCStreamOutput, SCStreamDelegate {
 
     /// Queue only.
     private func repeatLastFrameIfIdle() {
+        flushHeldFrame(force: false)
         let now = CACurrentMediaTime()
         guard let last = lastSampleBuffer, now - lastFrameTime >= 0.45 else { return }
         if let copy = ScreenBuffer.retimed(last, to: now) {
@@ -548,6 +630,7 @@ final class ScreenBuffer: NSObject, SCStreamOutput, SCStreamDelegate {
     func prepareForExport() async {
         await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
             queue.async {
+                self.flushHeldFrame(force: true)
                 let now = CACurrentMediaTime()
                 if let last = self.lastSampleBuffer, now - self.lastFrameTime > 0.1, self.writer != nil {
                     if let copy = ScreenBuffer.retimed(last, to: now) {
