@@ -141,6 +141,11 @@ fi
 swift_version="$(swift --version 2>/dev/null | sed -nE 's/.*Swift version ([0-9.]+).*/\1/p' | head -1)"
 swift_major="$(echo "$swift_version" | cut -d. -f1)"
 if [ -z "$swift_major" ] || [ "$swift_major" -lt 6 ]; then
+    # Command Line Tools with Swift 6 need macOS 14.5 or later, so an older Sonoma updates macOS first.
+    macos_minor="$(echo "$macos_version" | cut -d. -f2)"
+    if [ "$macos_major" -eq 14 ] && [ "${macos_minor:-0}" -lt 5 ]; then
+        stop "Swift 6 needs macOS 14.5 or later (this Mac has $macos_version). Update macOS in System Settings → General → Software Update, then run this command again."
+    fi
     stop "Swift 6 or later is needed (found: ${swift_version:-none}). Update Xcode or the Command Line Tools in Software Update."
 fi
 done_step "Swift $swift_version"
