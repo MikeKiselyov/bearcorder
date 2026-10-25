@@ -37,8 +37,18 @@ struct CleanupRow: View {
     var compact = false
 
     var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            row
+            if model.confirmingID == category.id && model.cleaningID != category.id {
+                confirmation
+            }
+        }
+        .padding(.vertical, compact ? 6 : 10)
+    }
+
+    private var row: some View {
         let bytes = model.sizes[category.id] ?? 0
-        HStack(alignment: .top, spacing: 12) {
+        return HStack(alignment: .top, spacing: 12) {
             Image(systemName: category.symbol)
                 .font(.system(size: 15))
                 .foregroundStyle(Theme.accentSoft)
@@ -58,7 +68,32 @@ struct CleanupRow: View {
                 .foregroundStyle(Theme.textSecondary)
             actions
         }
-        .padding(.vertical, compact ? 6 : 10)
+    }
+
+    /// Asked after Clean, on its own line so the buttons keep their full names: what goes, how
+    /// much, and that it cannot be undone.
+    private var confirmation: some View {
+        let size = SpaceModel.format(model.sizes[category.id] ?? 0)
+        return VStack(alignment: .leading, spacing: 8) {
+            Text("Delete \(size) from \(category.title)? This cannot be undone.")
+                .font(.system(size: 12))
+                .fixedSize(horizontal: false, vertical: true)
+            HStack(spacing: 8) {
+                Spacer(minLength: 0)
+                Button("Cancel") { model.confirmingID = nil }
+                    .buttonStyle(SecondaryButtonStyle())
+                    .keyboardShortcut(.cancelAction)
+                    .help("Keep these files")
+                Button("Delete \(size)") {
+                    Task { await model.clean(category) }
+                }
+                .buttonStyle(AccentButtonStyle())
+                .help("Delete for good; this cannot be undone")
+            }
+        }
+        .padding(10)
+        .background(Theme.control)
+        .clipShape(RoundedRectangle(cornerRadius: 8))
     }
 
     @ViewBuilder
@@ -73,21 +108,10 @@ struct CleanupRow: View {
         case .deleteContents:
             if model.cleaningID == category.id {
                 ProgressView().controlSize(.small).frame(width: 60)
-            } else if model.confirmingID == category.id {
-                HStack(spacing: 6) {
-                    Button("Cancel") { model.confirmingID = nil }
-                        .buttonStyle(SecondaryButtonStyle())
-                        .help("Keep these files")
-                    Button("Delete") {
-                        Task { await model.clean(category) }
-                    }
-                    .buttonStyle(AccentButtonStyle())
-                    .help("Delete for good; this cannot be undone")
-                }
             } else {
                 Button("Clean") { model.confirmingID = category.id }
                     .buttonStyle(SecondaryButtonStyle())
-                    .disabled((model.sizes[category.id] ?? 0) == 0 || model.cleaningID != nil)
+                    .disabled((model.sizes[category.id] ?? 0) == 0 || model.cleaningID != nil || model.confirmingID == category.id)
                     .help("Delete the contents of \(category.title) to free space; asks to confirm first")
             }
         }

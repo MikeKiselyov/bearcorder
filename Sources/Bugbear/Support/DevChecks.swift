@@ -659,6 +659,14 @@ enum DevChecks {
             UpdateInfo.Change(title: "Fix menu height", shortSHA: "2222222"),
         ]))
 
+        // Clean asks on its own line, with full button names, in the narrow menu panel.
+        if let category = CleanupCategory.all.first(where: { item in item.action == .deleteContents }) {
+            let space = SpaceModel.shared
+            space.confirmingID = category.id
+            render(CleanupRow(model: space, category: category, compact: true).padding(.horizontal, 16).background(Theme.window).environment(app).preferredColorScheme(.dark), size: CGSize(width: 360, height: 150), to: folder.appendingPathComponent("space-confirm.png"))
+            space.confirmingID = nil
+        }
+
         for tab in MenuTab.allCases {
             UserDefaults.standard.set(tab.rawValue, forKey: "menuTab")
             render(MenuBarView().environment(app), size: CGSize(width: 360, height: 719), to: folder.appendingPathComponent("menu-\(tab.rawValue.lowercased()).png"))
