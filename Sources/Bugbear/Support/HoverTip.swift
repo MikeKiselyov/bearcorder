@@ -171,12 +171,13 @@ private struct HoverTracker: NSViewRepresentable {
             return nil
         }
 
+        // One area for the view's whole life: .inVisibleRect follows its size, so it is not rebuilt on
+        // every layout (the recording bar redraws all the time).
         override func updateTrackingAreas() {
             super.updateTrackingAreas()
-            for area in trackingAreas {
-                removeTrackingArea(area)
+            if trackingAreas.isEmpty {
+                addTrackingArea(NSTrackingArea(rect: .zero, options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect], owner: self, userInfo: nil))
             }
-            addTrackingArea(NSTrackingArea(rect: .zero, options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect], owner: self, userInfo: nil))
         }
 
         override func mouseEntered(with event: NSEvent) {

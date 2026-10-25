@@ -58,26 +58,37 @@ html = (f'<!doctype html><html><head><meta charset="utf-8"><title>Scroll test</t
         f'<header>Bugbear scroll test · sticky header</header>{"".join(rows)}<footer>Sticky footer · end of page</footer></body></html>')
 open(sys.argv[1], "w").write(html)
 EOF
-# A new window, so the browser windows you have open are not moved or resized: bring the browser
-# forward, ⌘N, then type the address like a person would.
-$R "activate-app:$BROWSER" 10 >/dev/null
-sleep 1
-front=$($R screen 10 | sed -n 's/.*front=//p')
-if [ "$front" != "$BROWSER" ]; then
-    echo "STOP  $BROWSER is not in front ($front is), so windows are left alone."
-    $R setting:readBrowserURL:true 10 >/dev/null
-    defaults write "$BUNDLE_ID" automationEnabled -bool false
-    exit 1
-fi
-$R post-key:45:cmd 10 >/dev/null
-sleep 1.5
-printf '%s' "file://$WORK/long.html" | pbcopy
-$R post-key:37:cmd 10 >/dev/null
-sleep 0.3
-$R post-key:9:cmd 10 >/dev/null
-sleep 0.3
-$R post-key:36:none 10 >/dev/null
-sleep 3
+# A new window, so the browser windows you have open are not moved or resized.
+case "$BROWSER" in
+    *Chrome*|*Chromium*|*Edge*|*Brave*)
+        # Chromium browsers open the page in a new window of the usual profile; nothing is typed into
+        # whatever browser window happened to be in front.
+        open -na "$BROWSER" --args --new-window "file://$WORK/long.html"
+        sleep 4
+        $R "activate-app:$BROWSER" 10 >/dev/null
+        sleep 1
+        ;;
+    *)
+        $R "activate-app:$BROWSER" 10 >/dev/null
+        sleep 1
+        front=$($R screen 10 | sed -n 's/.*front=//p')
+        if [ "$front" = "$BROWSER" ]; then
+            $R post-key:45:cmd 10 >/dev/null
+            sleep 1.5
+            printf '%s' "file://$WORK/long.html" | pbcopy
+            $R post-key:37:cmd 10 >/dev/null
+            sleep 0.3
+            $R post-key:9:cmd 10 >/dev/null
+            sleep 0.3
+            $R post-key:36:none 10 >/dev/null
+            sleep 3
+        else
+            # Other browsers ignore --new-window; they open the page in a window of their own choice.
+            open -a "$BROWSER" "file://$WORK/long.html"
+            sleep 4
+        fi
+        ;;
+esac
 # Resizing, moving and scrolling act on the front window: only ever on the test page.
 title=$($R front-title 10 | sed -n 's/^title=//p')
 case "$title" in
@@ -90,17 +101,39 @@ case "$title" in
         ;;
 esac
 
+# Steps below resize the front window or press keys in it: each one checks it is still the test page.
+stop_unless_test_page() {
+    if ! $R front-title 10 | grep -q "^title=Scroll test"; then
+        echo "STOP  the front window is no longer the test page, so windows are left alone."
+        $R setting:readBrowserURL:true 10 >/dev/null
+        $R browser-accessibility-off 10 >/dev/null
+        defaults write "$BUNDLE_ID" automationEnabled -bool false
+        exit 1
+    fi
+}
+
 echo "==> window size"
+stop_unless_test_page
 result=$($R resize-front:1280x720 10)
 if echo "$result" | grep -q "app=$BROWSER size=1280x720"; then pass "resize $BROWSER to 1280×720"; else fail "resize $BROWSER" "$result"; fi
+stop_unless_test_page
 $R resize-front:1100x760 10 >/dev/null
 sleep 1
 
 echo "==> scrolling screenshot"
+stop_unless_test_page
 $R post-key:115:none 10 >/dev/null
 sleep 1
 # The page area from Accessibility: normalized on its display, global frame, display width.
-web=$($R web-area 10)
+# Chrome builds its accessibility tree for a page on the first requests, so ask a few times.
+web=""
+for attempt in 1 2 3 4 5; do
+    web=$($R web-area 10)
+    if [ "$web" != "no web area" ] && [ -n "$web" ]; then
+        break
+    fi
+    sleep 1
+done
 normalized=$(echo "$web" | cut -d' ' -f1)
 global=$(echo "$web" | cut -d' ' -f2)
 screen_width=$(echo "$web" | cut -d' ' -f3)
@@ -138,16 +171,24 @@ echo "==> color picker"
 ( $R pick-color-test 30 > "$WORK/pick.txt" ) &
 sleep 2
 # The middle of the sticky footer: 20 pt above the bottom of the page area.
-footer_point=$(echo "$global" | awk -F, '{ printf "%d,%d", $1 + $3 / 2, $2 + $4 - 20 }')
-$R post-click:$footer_point 10 >/dev/null
-wait
-if grep -q "hex=#FF6B4A" "$WORK/pick.txt"; then pass "picks #FF6B4A from the footer"; else fail "color picker" "$(cat "$WORK/pick.txt")"; fi
+if [ -n "$global" ] && echo "$global" | grep -q ","; then
+    footer_point=$(echo "$global" | awk -F, '{ printf "%d,%d", $1 + $3 / 2, $2 + $4 - 20 }')
+    $R post-click:$footer_point 10 >/dev/null
+    wait
+    if grep -q "hex=#FF6B4A" "$WORK/pick.txt"; then pass "picks #FF6B4A from the footer"; else fail "color picker" "$(cat "$WORK/pick.txt")"; fi
+else
+    # Without the page area there is no safe point to click: cancel the picker instead.
+    $R post-key:53:none 10 >/dev/null
+    wait
+    fail "color picker" "the page area was not found"
+fi
 
 echo "==> ruler"
 $R ruler-start 10 >/dev/null
 $R post-drag:400,300:700,500 10 >/dev/null
 $R "activate-app:$BROWSER" 10 >/dev/null
 sleep 1
+stop_unless_test_page
 $R post-key:53:none 10 >/dev/null
 sleep 1
 if [ "$($R ruler-state 10)" = "active=false" ]; then pass "Esc closes the ruler even with $BROWSER in front"; else fail "ruler Esc"; $R ruler-stop 10 >/dev/null; fi
@@ -230,6 +271,11 @@ if [ "$display_count" -ge 2 ]; then
     one_width=$(echo "$one" | sed -n 's/.*size=\([0-9]*\)x.*/\1/p')
     both_width=$(echo "$both" | sed -n 's/.*size=\([0-9]*\)x.*/\1/p')
     if [ -n "$one_width" ] && [ -n "$both_width" ] && [ "$both_width" -gt "$one_width" ]; then pass "clip switches between one display and side by side ($one_width → $both_width px)"; else fail "clip display switch" "$one / $both"; fi
+    if echo "$one $both" | grep -q "staged=0.*staged=0"; then pass "switching displays leaves no stray files"; else fail "stray files after switching" "$one / $both"; fi
+    # Picking the display that is already shown (original.* is the same file) changes nothing.
+    $R "select-screen:$first" 60 >/dev/null
+    again=$($R "select-screen:$first" 60)
+    if echo "$again" | grep -q "^selected=$first .*staged=0"; then pass "picking the clip's shown display again works"; else fail "clip shown display again" "$again"; fi
     $R "select-screen:$first" 60 >/dev/null
     $R screenshot-full 40 >/dev/null
     $R close-windows 10 >/dev/null
@@ -238,6 +284,9 @@ if [ "$display_count" -ge 2 ]; then
     one_width=$(echo "$one" | sed -n 's/.*size=\([0-9]*\)x.*/\1/p')
     both_width=$(echo "$both" | sed -n 's/.*size=\([0-9]*\)x.*/\1/p')
     if [ -n "$one_width" ] && [ -n "$both_width" ] && [ "$both_width" -gt "$one_width" ]; then pass "screenshot switches between one display and both ($one_width → $both_width px)"; else fail "screenshot display switch" "$one / $both"; fi
+    $R "select-screen:$first" 60 >/dev/null
+    again=$($R "select-screen:$first" 60)
+    if echo "$again" | grep -q "^selected=$first .*staged=0"; then pass "picking the screenshot's shown display again works"; else fail "screenshot shown display again" "$again"; fi
     $R "select-screen:$first" 60 >/dev/null
 else
     echo "SKIP  one display: connect a second one to check display switching"
@@ -266,7 +315,7 @@ if echo "$result" | grep -q "sizeFollowsSelection=true"; then pass "the size con
 if echo "$result" | grep -q "typingNoFillAtOnce=true"; then pass "No fill takes the label off text while typing"; else fail "No fill while typing" "$result"; fi
 if echo "$result" | grep -q "textDrawnOnce=true"; then pass "text being typed is drawn once, not twice"; else fail "text drawn twice while typing" "$result"; fi
 if echo "$result" | grep -q "pasteImage=true"; then pass "⌘V places a picture on the screenshot"; else fail "paste a picture" "$result"; fi
-if echo "$result" | grep -q "deleteFromAnywhere=true"; then pass "Delete removes the selected mark with the focus away from the canvas"; else fail "Delete key" "$result"; fi
+if echo "$result" | grep -q "deleteInEditorWindow=true"; then pass "Delete in the editor window removes the selected mark with the focus away from the canvas"; else fail "Delete key" "$result"; fi
 $R close-windows 10 >/dev/null
 $R press-status-item 10 >/dev/null
 sleep 1
@@ -321,6 +370,7 @@ if $R front-title 10 | grep -q "^title=Scroll test"; then
 fi
 
 $R setting:readBrowserURL:true 10 >/dev/null
+$R browser-accessibility-off 10 >/dev/null
 defaults write "$BUNDLE_ID" automationEnabled -bool false
 echo
 echo "$PASSES passed, $FAILURES failed."

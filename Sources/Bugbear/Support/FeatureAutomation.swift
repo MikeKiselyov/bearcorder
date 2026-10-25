@@ -40,6 +40,13 @@ enum FeatureAutomation {
             let height = frame.height / screen.frame.height
             return String(format: "%.4f,%.4f,%.4f,%.4f %d,%d,%d,%d %d", x, y, width, height, Int(frame.minX), Int(frame.minY), Int(frame.width), Int(frame.height), Int(screen.frame.width))
 
+        case "browser-accessibility-off":
+            // Undo what web-area asked of the browser, so it does not keep the page tree up to date.
+            guard let pid = browserWithAccessibility else { return "nothing to undo" }
+            AXUIElementSetAttributeValue(AXUIElementCreateApplication(pid), "AXManualAccessibility" as CFString, kCFBooleanFalse)
+            browserWithAccessibility = nil
+            return "off"
+
         case "scroll-capture":
             // scroll-capture:x,y,w,h (normalized area on the screen under the pointer)
             guard let area = selection(argument) else { return "bad area" }
@@ -115,14 +122,18 @@ enum FeatureAutomation {
             let started = Date()
             do {
                 let updated = try await app.store.selectScreen(argument, of: clip, framesPerSecond: app.settings.framesPerSecond)
+                var stagedFiles = 0
+                for name in (try? FileManager.default.contentsOfDirectory(atPath: updated.folder.path)) ?? [] where name.hasPrefix("staged-") {
+                    stagedFiles += 1
+                }
                 if updated.kind == .screenshot {
                     guard let image = ImageFiles.load(updated.mediaURL) else { return "no image" }
                     let marks = FileManager.default.fileExists(atPath: updated.projectURL.path)
-                    return "selected=\(updated.selectedScreen ?? "?") size=\(image.width)x\(image.height) project=\(marks)"
+                    return "selected=\(updated.selectedScreen ?? "?") size=\(image.width)x\(image.height) project=\(marks) staged=\(stagedFiles)"
                 }
                 guard let track = try await AVURLAsset(url: updated.mediaURL).loadTracks(withMediaType: .video).first else { return "no track" }
                 let size = try await track.load(.naturalSize)
-                return String(format: "selected=%@ size=%dx%d duration=%.2f took=%.2fs", updated.selectedScreen ?? "?", Int(size.width), Int(size.height), updated.duration, Date().timeIntervalSince(started))
+                return String(format: "selected=%@ size=%dx%d duration=%.2f took=%.2fs staged=%d", updated.selectedScreen ?? "?", Int(size.width), Int(size.height), updated.duration, Date().timeIntervalSince(started), stagedFiles)
             } catch {
                 let details = error as NSError
                 return "error \(details.domain) \(details.code) \(details.userInfo)"
@@ -384,7 +395,8 @@ enum FeatureAutomation {
                 }
             }
 
-            // Delete with the focus away from the canvas.
+            // Delete in the editor window with the focus away from the canvas: the window's key handling,
+            // not delivery from the keyboard (the key is posted into Bugbear's own event queue).
             let box = Annotation(tool: .rectangle, start: CGPoint(x: 20, y: 20), end: CGPoint(x: 60, y: 60), color: .coral, lineWidth: 4)
             document.add(box)
             document.tool = .select
@@ -393,14 +405,16 @@ enum FeatureAutomation {
             // Let the typing field from the step above give up the focus first; while a field types,
             // Delete belongs to it.
             try? await Task.sleep(nanoseconds: 400_000_000)
-            // The key goes to the app in front; without Bugbear there, it would land elsewhere.
-            guard NSApp.isActive && window.isKeyWindow else {
-                results.append("deleteFromAnywhere=notInFront")
-                return results.joined(separator: " ")
+            // The key is sent to Bugbear itself, never to whatever app is in front (the browser the
+            // features test opened can take the focus at any moment).
+            // It goes into Bugbear's own event queue for the editor window, so it takes the same way as
+            // a real key press (the window's key monitor included).
+            window.makeKeyAndOrderFront(nil)
+            for type in [NSEvent.EventType.keyDown, NSEvent.EventType.keyUp] {
+                if let key = NSEvent.keyEvent(with: type, location: .zero, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber, context: nil, characters: "\u{7F}", charactersIgnoringModifiers: "\u{7F}", isARepeat: false, keyCode: 51) {
+                    NSApp.postEvent(key, atStart: false)
+                }
             }
-            let source = CGEventSource(stateID: .hidSystemState)
-            CGEvent(keyboardEventSource: source, virtualKey: 51, keyDown: true)?.post(tap: .cghidEventTap)
-            CGEvent(keyboardEventSource: source, virtualKey: 51, keyDown: false)?.post(tap: .cghidEventTap)
             var deleted = false
             for _ in 0..<15 {
                 try? await Task.sleep(nanoseconds: 100_000_000)
@@ -409,7 +423,7 @@ enum FeatureAutomation {
                     break
                 }
             }
-            results.append("deleteFromAnywhere=\(deleted)")
+            results.append("deleteInEditorWindow=\(deleted)")
             return results.joined(separator: " ")
 
         case "tooltip-probe":
@@ -731,8 +745,15 @@ enum FeatureAutomation {
 
     /// Visible frame of the first AXWebArea in the app's focused window, in top-left screen points. The web
     /// area itself spans the whole page, so it is cut to the scroll area around it.
+    /// The browser web-area asked for its accessibility tree, so the tests can switch it off again.
+    private static var browserWithAccessibility: pid_t?
+
     private static func webAreaFrame(of running: NSRunningApplication) -> CGRect? {
         let application = AXUIElementCreateApplication(running.processIdentifier)
+        // Chromium browsers build the page's accessibility tree only on request (or while another
+        // assistive app runs): ask for it. Other apps ignore the attribute.
+        AXUIElementSetAttributeValue(application, "AXManualAccessibility" as CFString, kCFBooleanTrue)
+        browserWithAccessibility = running.processIdentifier
         var focused: AnyObject?
         guard AXUIElementCopyAttributeValue(application, kAXFocusedWindowAttribute as CFString, &focused) == .success, let window = focused, CFGetTypeID(window) == AXUIElementGetTypeID() else { return nil }
         var queue: [(element: AXUIElement, parent: AXUIElement?)] = [(element: window as! AXUIElement, parent: nil)]

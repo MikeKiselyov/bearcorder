@@ -110,6 +110,23 @@ enum DevChecks {
         }
     }
 
+    /// Two names of one file (how original.* points at a display's file) are recognized as one file,
+    /// so picking the display already shown swaps nothing.
+    private static func checkSameFile(folder: URL) {
+        let files = FileManager.default
+        let first = folder.appendingPathComponent("same-file-a.bin")
+        let link = folder.appendingPathComponent("same-file-b.bin")
+        let other = folder.appendingPathComponent("same-file-c.bin")
+        for url in [first, link, other] {
+            try? files.removeItem(at: url)
+        }
+        try? Data([1, 2, 3]).write(to: first)
+        try? Data([1, 2, 3]).write(to: other)
+        try? files.linkItem(at: first, to: link)
+        check(CaptureStore.isSameFile(first, link), "a hard link is the same file")
+        check(!CaptureStore.isSameFile(first, other), "an equal copy is another file")
+    }
+
     /// A picture placed on a screenshot is drawn in its frame, on top of the screenshot.
     private static func checkPlacedImage(folder: URL) {
         guard let red = CGContext(data: nil, width: 40, height: 30, bitsPerComponent: 8, bytesPerRow: 0, space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue),
@@ -217,6 +234,7 @@ enum DevChecks {
         checkShapeFill()
         checkTooltipSize(folder: folder)
         checkPlacedImage(folder: folder)
+        checkSameFile(folder: folder)
 
         // 1. Synthetic 6 s clip with a moving box and a 440 Hz tone.
         let video = folder.appendingPathComponent("synthetic-video.mov")
