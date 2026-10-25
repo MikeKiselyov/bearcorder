@@ -270,3 +270,9 @@ your Mac (1-2 minutes) and restarts it, then "What's new" shows what changed.
   [issue](https://github.com/MikeKiselyov/bugbear-app/issues).
 - For developers: [build from source](docs/development.md), [tests](docs/testing.md),
   [contributing and releases](CONTRIBUTING.md)
+
+## Support
+
+Bugbear is free and open source. If it saves you time, you can buy me a coffee:
+
+<a href="https://buymeacoffee.com/mike_kiselyov"><img src="https://img.shields.io/badge/Buy%20me%20a%20coffee-FFDD00?style=for-the-badge&logo=buymeacoffee&logoColor=black" alt="Buy me a coffee"></a>
