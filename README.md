@@ -22,12 +22,8 @@
 - [Shortcuts](#shortcuts)
 - [What it does](#what-it-does)
 - [Updates](#updates)
-- [Build from a clone](#build-from-a-clone)
 - [Permissions](#permissions)
-- [Uninstall](#uninstall)
-- [Tests and checks](#tests-and-checks)
-- [Releases and pull requests](#releases-and-pull-requests)
-- [Project layout](#project-layout)
+- [More: uninstall, help, development](#more)
 
 ## Install
 
@@ -51,7 +47,7 @@ What happens:
 4. Bugbear starts. Look for the **bear icon** in the menu bar. There is no Dock icon.
 
 Nothing is downloaded except the source code: every copy is built and signed on the Mac that runs it.
-Want to read the script first? It is [`scripts/install.sh`](scripts/install.sh), about 50 lines.
+Want to read the script first? It is [`scripts/install.sh`](scripts/install.sh).
 
 ## First start
 
@@ -96,14 +92,13 @@ All of them work from any app. Change them, or give one to the actions that have
 
 ### Rolling screen buffer
 
-The app keeps the last 1-5 minutes of the screen on disk (short H.264 segments; old ones are deleted).
+The app keeps the last 1-5 minutes of the screen on disk; older parts are deleted as it goes.
 A bug you could not reproduce is already recorded: press `⌥⇧1` and it opens in the editor.
 The buffer is optional: choose it in the first-start guide, pause it from the menu bar, or turn it off in
 Settings → Buffer.
 
-- Light on the Mac: the buffer records at 15 fps (recordings switch to 30 fps without losing what the
-  buffer holds) and captures straight in the video encoder's format. With two displays the app uses
-  about 70 MB of memory and a few percent of one CPU core; saving 30 seconds takes about 0.1 s.
+- Light on the Mac: a few percent of one CPU core and about 70 MB of memory with two displays.
+  Saving 30 seconds is instant.
 - System audio and microphone are optional.
 - Clicks and shortcut keys are recorded alongside, so the editor can show them on the video.
   Plain typing is never stored as text; it shows up as "typing…".
@@ -146,7 +141,6 @@ all displays when more than one is connected.
   Text sits on a colored label or, with Background → Transparent, is drawn as outlined letters.
 - Highlight clicks, show keystrokes, environment badge.
 - Export MP4 or GIF with a size limit (10-100 MB) for trackers that cap attachments.
-  The preview is rendered by the same pipeline as the export.
 
 ### Recording
 
@@ -251,49 +245,13 @@ On the **Record** tab:
 
 ## Updates
 
-Every update is a release with its own version, like `0.5.0`. The app checks the GitHub repository
-it was built from every 6 hours. When the branch has a higher version, an **Update to 0.6.0** badge
-appears in the menu bar panel with the list of changes. **Update now** pulls the source, rebuilds the
-app on your Mac (1-2 minutes) and restarts it. After an update "What's new" shows the notes of every
-release you skipped, each with its version. Releases are also on the
-[GitHub releases page](https://github.com/MikeKiselyov/bugbear-app/releases).
+Every update is a release with its own version. Bugbear checks for a new one every 6 hours; when there
+is one, an **Update to 0.6.0** badge appears in the menu bar panel. **Update now** rebuilds the app on
+your Mac (1-2 minutes) and restarts it, then "What's new" shows what changed.
 
 - Check by hand or turn checks off in Settings → Updates.
-- The check reads the release notes file from `raw.githubusercontent.com` and, when there is a new
-  version, asks `api.github.com` for the commits since your build; nothing about you or your captures is sent.
-- If the source folder has uncommitted changes, the update stops and tells you instead of touching them.
-- From a terminal: `~/.bugbear/scripts/update.sh` (or run the install command again).
-- A fork updates from the fork: the repository comes from the clone's `origin`.
-
-## Build from a clone
-
-```bash
-git clone https://github.com/MikeKiselyov/bugbear-app.git
-cd bugbear-app
-scripts/build-app.sh --run        # builds build/Bugbear.app and launches it
-scripts/build-app.sh --install    # or: copies it to /Applications (or ~/Applications) and launches it
-```
-
-You need Apple's Command Line Tools or Xcode 16+ (Swift 6). Updates work the same way for a clone:
-the app rebuilds from the folder it was built in.
-
-### Optional: your own bundle id and signing identity
-
-Personal settings go into `.env`, which is git-ignored and never committed:
-
-```bash
-cp .env.example .env
-```
-
-| Variable | Meaning |
-|---|---|
-| `BUGBEAR_BUNDLE_ID` | Bundle identifier of your build. Default `io.github.bugbear.app`. |
-| `BUGBEAR_SIGN_IDENTITY` | Code signing identity. Empty: the first "Apple Development" identity in your keychain. `-`: ad-hoc. |
-
-Why sign with a real identity: macOS ties the Screen Recording, Camera and Microphone permissions to
-the app's signature. With ad-hoc signing every rebuild looks like a new app and macOS asks again.
-A free Apple Development certificate (Xcode → Settings → Accounts) avoids that.
-List your identities with `security find-identity -v -p codesigning`.
+- Only the release notes are read from GitHub; nothing about you or your captures is sent.
+- All releases: [GitHub releases page](https://github.com/MikeKiselyov/bugbear-app/releases).
 
 ## Permissions
 
@@ -305,82 +263,10 @@ List your identities with `security find-identity -v -p codesigning`.
 | Camera | webcam bubble (optional) | when you turn the camera on |
 | Automation, per browser | browser URL in the environment (optional) | the first screenshot in that browser |
 
-## Uninstall
+## More
 
-Quit Bugbear from the panel (power button), then:
-
-```bash
-rm -rf "/Applications/Bugbear.app" "$HOME/Applications/Bugbear.app"   # the app
-rm -rf ~/.bugbear                                                     # the source used for updates
-rm -rf "$HOME/Library/Application Support/Bugbear"                    # captures and buffer
-rm -rf "$HOME/Library/Logs/Bugbear"                                   # logs
-```
-
-Permissions can be removed in System Settings → Privacy & Security.
-
-## Tests and checks
-
-One command runs everything and prints a summary:
-
-```bash
-scripts/test-all.sh           # all suites, about 8 minutes
-scripts/test-all.sh --quick   # unit tests and the self-test, about a minute, no permissions needed
-```
-
-| Suite | What it covers | Needs |
-|---|---|---|
-| `swift test` | `Sources/BugbearCore`: formatters, converters, JWT, time zones, cron, regex, JSON diff and path, HTTP, test data, the video timeline, size limits, reports, crash reports, scrolling-screenshot stitching, disk tree, updates | nothing |
-| `--self-test` | a generated clip with sound through the whole editor (trim, cut, slow motion, freeze, text with and without a label, arrows, blur, clicks, keys), MP4 and GIF export, size limits, annotated and cropped screenshots, OCR, QR codes, step guides, before/after comparison, display stitching | nothing |
-| `scripts/e2e.sh` | the real app: buffer, saves, recording with pause, drawing, editor export, system audio, markers, crash auto-save, update check | Screen Recording, Accessibility |
-| `scripts/e2e-features.sh` | a Chrome page: scrolling screenshot, window resize, ruler, color picker, design overlay, area recording, shortcuts, Jira and Markdown reports, step guide, comparison, editor sizes, switching between displays, the menu panel, What's New, disk space scan and clean-up | Screen Recording, Accessibility, Chrome |
-| `scripts/perf.sh` | CPU and memory idle and while recording, save time | Screen Recording |
-
-The scripts drive the real app through a local automation hook (off by default, switched on only for
-the run). They move the mouse and open a Chrome window; don't touch the Mac while they run. Logs of
-the last run are in `build/test-logs/`.
-
-The pictures in this README are rendered off screen from a made-up page, so they can be regenerated
-on any Mac without permissions: `scripts/readme-media.sh` (needs `ffmpeg`).
-
-Logs: `~/Library/Logs/Bugbear/bugbear.log` (attach it to bug reports about the app).
-
-## Releases and pull requests
-
-Changes go to `main` only through pull requests, and every pull request that changes the app is a
-new release:
-
-1. Work in a branch.
-2. Add a release on top of `Sources/BugbearCore/Support/WhatsNewCatalog.swift` with the next id and a
-   higher version: a patch (`0.5.1`) for fixes, a minor (`0.6.0`) for new features. Write the items
-   for people, the way they appear in "What's new". The app's version comes from this entry.
-3. Open a pull request. [CI](.github/workflows/ci.yml) checks that the release is there
-   (`scripts/check-release.sh origin/main`), runs the unit tests and the self-test. Changes only to
-   docs or CI need no release.
-4. After the merge CI tags the commit `v<version>` and publishes a GitHub release with the same notes.
-   Installed apps see the new version within 6 hours.
-
-The suites that need permissions (`e2e`, `features`, `perf`) can't run on GitHub's Macs; run
-`scripts/test-all.sh` before opening the pull request.
-
-## Project layout
-
-```
-Sources/BugbearCore/     pure logic, no UI: toolbox, time, timeline math, reports, stitching
-Sources/Bugbear/
-  App/                    entry point, app state, windows
-  Capture/                screen buffer, exporter, screenshots, environment, input events
-  Recording/              recording session, HUD, draw-on-screen, camera bubble, area picker, ruler
-  Annotations/            annotation model and renderer (shared by editor, export, live overlay)
-  Editors/                screenshot and video editors
-  Toolbox/                dev toolbox screens
-  MenuBar/, History/, Settings/, Onboarding/
-scripts/                  install, update, build, e2e and perf checks, README pictures
-docs/images/              the pictures in this README
-```
-
-The logo (a bear eating a bun) is one flat shape drawn in code in `Support/Logo.swift`: the menu bar
-glyph, the in-app logo and the app icon are the same picture. The build script renders the `.icns` from it.
-
-Storage: captures in `~/Library/Application Support/Bugbear/Captures/`, buffer segments in
-`…/Bugbear/Buffer/` (cleared on launch and quit), exports in the folder chosen in Settings
-(Desktop by default).
+- [Uninstall](docs/uninstall.md) and where Bugbear keeps captures and logs
+- Something went wrong? Attach `~/Library/Logs/Bugbear/bugbear.log` to an
+  [issue](https://github.com/MikeKiselyov/bugbear-app/issues).
+- For developers: [build from source](docs/development.md), [tests](docs/testing.md),
+  [contributing and releases](CONTRIBUTING.md)
