@@ -162,7 +162,14 @@ if ! with_spinner "Building Bugbear" "$LOG" "$SOURCE_DIR/scripts/build-app.sh" -
     tail -20 "$LOG" | sed 's/^/      /' >&2
     exit 1
 fi
-done_step "Built and signed ($(grep -q "ad-hoc" "$LOG" && echo "ad-hoc: macOS asks for permissions again after updates" || echo "Apple Development certificate"))"
+if grep -q "ad-hoc" "$LOG"; then
+    signed_with="ad-hoc: macOS asks for permissions again after updates"
+elif grep -q "certificate made for this Mac" "$LOG"; then
+    signed_with="a certificate made for this Mac"
+else
+    signed_with="your Apple Development certificate"
+fi
+done_step "Built and signed ($signed_with)"
 installed="$(sed -n 's/^==> installed to //p' "$LOG" | tail -1)"
 done_step "Installed to ${installed:-Applications}"
 
