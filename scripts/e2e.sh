@@ -67,9 +67,11 @@ defaults write "$BUNDLE_ID" startBufferOnLaunch -bool true
 FEED_DIR="$ROOT/build/e2e-update-feed"
 mkdir -p "$FEED_DIR"
 printf '{"status":"ahead","ahead_by":2,"commits":[{"sha":"1111111aaaa","commit":{"message":"First change"}},{"sha":"2222222bbbb","commit":{"message":"Second change"}}]}' > "$FEED_DIR/compare.json"
+printf 'WhatsNewRelease(id: 99, version: "99.0.0", title: "Future", items: [])\n' > "$FEED_DIR/catalog.swift"
 python3 -m http.server 8765 --bind 127.0.0.1 --directory "$FEED_DIR" >/dev/null 2>&1 &
 FEED_PID=$!
 defaults write "$BUNDLE_ID" updateCompareURL "http://127.0.0.1:8765/compare.json"
+defaults write "$BUNDLE_ID" updateCatalogURL "http://127.0.0.1:8765/catalog.swift"
 pkill -x Bugbear 2>/dev/null; sleep 1
 rm -f "$LOG"
 open "$ROOT/build/Bugbear.app"
@@ -218,11 +220,18 @@ rm -rf "$crash_folder"
 # 10. The system log collector ran for the saved clips.
 if grep -q "system log for .*: [0-9]* lines" "$LOG"; then pass "system log collected ($(grep "system log for" "$LOG" | tail -1 | sed 's/.*system log for //'))"; else fail "system log collected" "no 'system log for' line"; fi
 
-# 11. Update check finds new commits.
+# 11. Update check finds a newer release and lists its commits; the same version is no update.
 result=$(run update-check 30)
-if echo "$result" | grep -q "newCommitCount: 2"; then pass "update check finds 2 new commits"; else fail "update check" "$result"; fi
+if echo "$result" | grep -q 'version: "99.0.0"' && echo "$result" | grep -q "newCommitCount: 2"; then pass "update check finds version 99.0.0 with 2 commits"; else fail "update check" "$result"; fi
+current_version=$("$ROOT/build/Bugbear.app/Contents/MacOS/Bugbear" --version)
+printf 'WhatsNewRelease(id: 1, version: "%s", title: "Same", items: [])\n' "$current_version" > "$FEED_DIR/catalog.swift"
+result=$(run update-check 30)
+if echo "$result" | grep -q "upToDate"; then pass "same version $current_version is not an update"; else fail "same version is not an update" "$result"; fi
+plist_version=$(defaults read "$ROOT/build/Bugbear.app/Contents/Info" CFBundleShortVersionString)
+if [ "$plist_version" = "$current_version" ]; then pass "app version $plist_version comes from the release notes"; else fail "app version" "plist=$plist_version catalog=$current_version"; fi
 kill "$FEED_PID" 2>/dev/null
 defaults delete "$BUNDLE_ID" updateCompareURL 2>/dev/null
+defaults delete "$BUNDLE_ID" updateCatalogURL 2>/dev/null
 rm -rf "$FEED_DIR"
 
 # 12. Errors in the log.

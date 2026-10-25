@@ -26,6 +26,7 @@
 - [Permissions](#permissions)
 - [Uninstall](#uninstall)
 - [Tests and checks](#tests-and-checks)
+- [Releases and pull requests](#releases-and-pull-requests)
 - [Project layout](#project-layout)
 
 ## Install
@@ -250,14 +251,16 @@ On the **Record** tab:
 
 ## Updates
 
-The app checks the GitHub repository it was built from every 6 hours. When there are new commits,
-an **Update** badge appears in the menu bar panel with the list of changes. **Update now** pulls the
-source, rebuilds the app on your Mac (1-2 minutes) and restarts it. After an update a "What's new"
-screen shows the changes.
+Every update is a release with its own version, like `0.5.0`. The app checks the GitHub repository
+it was built from every 6 hours. When the branch has a higher version, an **Update to 0.6.0** badge
+appears in the menu bar panel with the list of changes. **Update now** pulls the source, rebuilds the
+app on your Mac (1-2 minutes) and restarts it. After an update "What's new" shows the notes of every
+release you skipped, each with its version. Releases are also on the
+[GitHub releases page](https://github.com/MikeKiselyov/bugbear-app/releases).
 
 - Check by hand or turn checks off in Settings → Updates.
-- The check is one request to `api.github.com` that compares your build's commit with the branch;
-  nothing about you or your captures is sent.
+- The check reads the release notes file from `raw.githubusercontent.com` and, when there is a new
+  version, asks `api.github.com` for the commits since your build; nothing about you or your captures is sent.
 - If the source folder has uncommitted changes, the update stops and tells you instead of touching them.
 - From a terminal: `~/.bugbear/scripts/update.sh` (or run the install command again).
 - A fork updates from the fork: the repository comes from the clone's `origin`.
@@ -340,6 +343,24 @@ The pictures in this README are rendered off screen from a made-up page, so they
 on any Mac without permissions: `scripts/readme-media.sh` (needs `ffmpeg`).
 
 Logs: `~/Library/Logs/Bugbear/bugbear.log` (attach it to bug reports about the app).
+
+## Releases and pull requests
+
+Changes go to `main` only through pull requests, and every pull request that changes the app is a
+new release:
+
+1. Work in a branch.
+2. Add a release on top of `Sources/BugbearCore/Support/WhatsNewCatalog.swift` with the next id and a
+   higher version: a patch (`0.5.1`) for fixes, a minor (`0.6.0`) for new features. Write the items
+   for people, the way they appear in "What's new". The app's version comes from this entry.
+3. Open a pull request. [CI](.github/workflows/ci.yml) checks that the release is there
+   (`scripts/check-release.sh origin/main`), runs the unit tests and the self-test. Changes only to
+   docs or CI need no release.
+4. After the merge CI tags the commit `v<version>` and publishes a GitHub release with the same notes.
+   Installed apps see the new version within 6 hours.
+
+The suites that need permissions (`e2e`, `features`, `perf`) can't run on GitHub's Macs; run
+`scripts/test-all.sh` before opening the pull request.
 
 ## Project layout
 

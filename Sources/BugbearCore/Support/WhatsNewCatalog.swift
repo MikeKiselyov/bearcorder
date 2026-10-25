@@ -1,16 +1,19 @@
-import BugbearCore
-
-/// Release notes for people. Add a release with the next id when you ship something worth showing;
-/// it appears once on every Mac that updates to a build containing it.
-enum WhatsNewCatalog {
-    static let releases: [WhatsNewRelease] = [
-        WhatsNewRelease(id: 4, title: "Text without a label, several displays, disk space", items: [
+/// Release notes for people, newest first. Every change that reaches main is a new release:
+/// add an entry on top with the next id and a higher version. The app's version comes from the
+/// top entry, the update badge compares it with GitHub, and CI refuses a pull request without one.
+public enum WhatsNewCatalog {
+    public static let releases: [WhatsNewRelease] = [
+        WhatsNewRelease(id: 5, version: "0.5.0", title: "Every update is a version", items: [
+            WhatsNewRelease.Item(symbol: "number", title: "Versions you can see", text: "Each update has its own version number. This window shows it next to every release, and Settings shows the one you have.", shortcut: "What's new"),
+            WhatsNewRelease.Item(symbol: "arrow.down.circle.fill", title: "Update to a version", text: "The menu badge says which version is waiting, and only a real release counts as an update.", shortcut: "Menu bar panel"),
+        ]),
+        WhatsNewRelease(id: 4, version: "0.4.0", title: "Text without a label, several displays, disk space", items: [
             WhatsNewRelease.Item(symbol: "character", title: "Text on a transparent background", text: "Write on screenshots and videos with outlined letters instead of a colored label. Pick it next to the text size, or under Background in the video editor.", shortcut: "Editors"),
             WhatsNewRelease.Item(symbol: "rectangle.on.rectangle", title: "Every display, your pick", text: "The buffer keeps all displays. In the editor show one display or both side by side, for clips and screenshots.", shortcut: "Editor toolbar"),
             WhatsNewRelease.Item(symbol: "internaldrive", title: "Disk space", text: "See what takes space, clean caches and build leftovers, find the biggest files and move them to the Trash.", shortcut: "Space tab"),
             WhatsNewRelease.Item(symbol: "doc.on.clipboard", title: "Screenshots go to the clipboard", text: "Every screenshot is copied right away, ready to paste into a ticket or a chat.", shortcut: "⌥⇧4"),
         ]),
-        WhatsNewRelease(id: 3, title: "Reports for Jira, checks on screen, more tools", items: [
+        WhatsNewRelease(id: 3, version: "0.3.0", title: "Reports for Jira, checks on screen, more tools", items: [
             WhatsNewRelease.Item(symbol: "list.number", title: "Bug report in Jira wiki", text: "Copy bug report now also gives Jira markup: h2 headings, # steps, {{code}}. The last format you pick becomes the default.", shortcut: "Copy bug report ▾"),
             WhatsNewRelease.Item(symbol: "tag", title: "Your fields in every capture", text: "Stand, build, test account, feature flag: set them once and they go into the environment, the badge and the report.", shortcut: "Settings → Bug reports"),
             WhatsNewRelease.Item(symbol: "list.bullet.rectangle.portrait", title: "Step-by-step guide", text: "Select screenshots in All captures and make one numbered guide with captions, as PNG or PDF.", shortcut: "All captures → Select"),
@@ -23,13 +26,13 @@ enum WhatsNewCatalog {
             WhatsNewRelease.Item(symbol: "keyboard", title: "Your own shortcuts", text: "Change any global shortcut or add new ones, for example for the ruler or the color picker.", shortcut: "Settings → Shortcuts"),
             WhatsNewRelease.Item(symbol: "externaldrive", title: "Automatic clean-up", text: "Delete captures older than 7, 30 or 90 days, or keep them under a size limit.", shortcut: "Settings → Storage"),
         ]),
-        WhatsNewRelease(id: 2, title: "Sizes in the editors, clear recording area", items: [
+        WhatsNewRelease(id: 2, version: "0.2.0", title: "Sizes in the editors, clear recording area", items: [
             WhatsNewRelease.Item(symbol: "textformat.size", title: "Bigger and bolder marks", text: "Seven line thicknesses and text from 12 to 100 pt in the screenshot editor. + and - resize the selected mark or the current tool.", shortcut: "+  -"),
             WhatsNewRelease.Item(symbol: "plus.magnifyingglass", title: "Resize marks in videos", text: "Select a text, arrow or box in the video editor and press + or - (50% to 400%). New marks keep the last size.", shortcut: "+  -"),
             WhatsNewRelease.Item(symbol: "rectangle.dashed", title: "Pick the recording size", text: "Record an area at 720p, 1080p, 1440×900, 16:9, 4:3, 1:1, phone size or full screen, or drag your own.", shortcut: "Record → Area…"),
             WhatsNewRelease.Item(symbol: "eye", title: "See what is recorded", text: "While recording, a solid frame marks what is in the video, everything else is dimmed and other displays say Not recorded. None of it is in the video.", shortcut: "While recording"),
         ]),
-        WhatsNewRelease(id: 1, title: "Catch, explain and share bugs faster", items: [
+        WhatsNewRelease(id: 1, version: "0.1.0", title: "Catch, explain and share bugs faster", items: [
             WhatsNewRelease.Item(symbol: "flag.fill", title: "Mark the moment", text: "Saw the bug? Press ⌥⇧M. The next save reaches back to that moment and the editor opens right on it.", shortcut: "⌥⇧M"),
             WhatsNewRelease.Item(symbol: "exclamationmark.triangle.fill", title: "Clips of crashes", text: "When an app you were using crashes, the minute before it is saved to Recent with the crash report. Nothing to press.", shortcut: "Automatic"),
             WhatsNewRelease.Item(symbol: "list.number", title: "Bug report in one click", text: "Copy bug report gives Markdown with steps from your clicks and keys, Expected / Actual, the environment and files.", shortcut: "In the editors"),

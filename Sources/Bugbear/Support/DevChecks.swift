@@ -599,7 +599,7 @@ enum DevChecks {
         app.coveredSeconds = 180
         app.bufferState = .running
 
-        Updater.shared.state = .available(UpdateInfo(newCommitCount: 3, changes: [
+        Updater.shared.state = .available(UpdateInfo(version: "0.6.0", newCommitCount: 3, changes: [
             UpdateInfo.Change(title: "Faster export", shortSHA: "3333333"),
             UpdateInfo.Change(title: "Fix menu height", shortSHA: "2222222"),
         ]))

@@ -1,7 +1,7 @@
 import BugbearCore
 import SwiftUI
 
-/// Top-right corner of the menu panel: appears when the GitHub repository has new commits.
+/// Top-right corner of the menu panel: appears when GitHub has a newer release.
 /// It sits in the header so the panel keeps its height.
 struct UpdateBadge: View {
     @State private var updater = Updater.shared
@@ -13,7 +13,7 @@ struct UpdateBadge: View {
             Button {
                 showsDetails = true
             } label: {
-                Label("Update · \(info.newCommitCount)", systemImage: "arrow.down.circle.fill")
+                Label("Update to \(info.version)", systemImage: "arrow.down.circle.fill")
                     .font(.system(size: 11, weight: .semibold))
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)
@@ -22,7 +22,7 @@ struct UpdateBadge: View {
                     .clipShape(Capsule())
             }
             .buttonStyle(.plain)
-            .help("A new version is available")
+            .help("Version \(info.version) is available, you have \(updater.version)")
             .popover(isPresented: $showsDetails, arrowEdge: .bottom) {
                 details(info)
             }
@@ -50,8 +50,11 @@ struct UpdateBadge: View {
 
     private func details(_ info: UpdateInfo) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text(info.newCommitCount == 1 ? "1 new change" : "\(info.newCommitCount) new changes")
+            Text("Version \(info.version)")
                 .font(.system(size: 13, weight: .bold))
+            Text(info.newCommitCount == 1 ? "You have \(updater.version). 1 change since then:" : "You have \(updater.version). \(info.newCommitCount) changes since then:")
+                .font(.system(size: 11))
+                .foregroundStyle(Theme.textSecondary)
             VStack(alignment: .leading, spacing: 5) {
                 ForEach(Array(info.changes.enumerated()), id: \.offset) { _, change in
                     HStack(alignment: .firstTextBaseline, spacing: 6) {

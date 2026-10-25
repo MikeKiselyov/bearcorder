@@ -13,14 +13,25 @@ public struct UpdateInfo: Equatable {
         }
     }
 
+    /// The newest release on GitHub, empty when only commits are known.
+    public var version: String
     /// Commits on the branch that this build does not have.
     public var newCommitCount: Int
     /// Newest first, first line of each commit message.
     public var changes: [Change]
 
-    public init(newCommitCount: Int, changes: [Change]) {
+    public init(version: String = "", newCommitCount: Int, changes: [Change]) {
+        self.version = version
         self.newCommitCount = newCommitCount
         self.changes = changes
+    }
+
+    /// Where the release catalog lives in the repository; the update check reads its top version.
+    public static let catalogPath = "Sources/BugbearCore/Support/WhatsNewCatalog.swift"
+
+    public static func catalogURL(repository: String, branch: String) -> URL? {
+        if repository.isEmpty || branch.isEmpty { return nil }
+        return URL(string: "https://raw.githubusercontent.com/\(repository)/\(branch)/\(catalogPath)")
     }
 
     public var isAvailable: Bool {
