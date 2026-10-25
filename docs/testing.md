@@ -19,6 +19,9 @@ The scripts drive the real app through a local automation hook (off by default, 
 the run). They move the mouse and open a Chrome window; don't touch the Mac while they run. Logs of
 the last run are in `build/test-logs/`.
 
+They test the copy in `build/`, so an installed Bugbear is quit for the run and started again
+afterwards, even when a run fails or is stopped with Ctrl-C.
+
 The pictures in the README are rendered off screen from a made-up page, so they can be regenerated
 on any Mac without permissions: `scripts/readme-media.sh` (needs `ffmpeg`).
 

@@ -17,6 +17,8 @@ if [ -f "$ROOT/.env" ]; then
     set +a
 fi
 BUNDLE_ID="${BUGBEAR_BUNDLE_ID:-io.github.bugbear.app}"
+# shellcheck disable=SC1091
+source "$ROOT/scripts/test-app.sh"
 LOG="$HOME/Library/Logs/Bugbear/bugbear.log"
 FAILURES=0
 PASSES=0
@@ -72,9 +74,9 @@ python3 -m http.server 8765 --bind 127.0.0.1 --directory "$FEED_DIR" >/dev/null 
 FEED_PID=$!
 defaults write "$BUNDLE_ID" updateCompareURL "http://127.0.0.1:8765/compare.json"
 defaults write "$BUNDLE_ID" updateCatalogURL "http://127.0.0.1:8765/catalog.swift"
-pkill -x Bugbear 2>/dev/null; sleep 1
+quit_running_bugbear
 rm -f "$LOG"
-open "$ROOT/build/Bugbear.app"
+open "$TEST_APP"
 echo "==> waiting 20 s with a mostly static screen"
 sleep 20
 
