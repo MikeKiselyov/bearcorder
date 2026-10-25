@@ -96,6 +96,8 @@ if [ -z "$IDENTITY" ]; then
 fi
 if [ -z "$IDENTITY" ] || [ "$IDENTITY" = "local" ]; then
     IDENTITY="$("$ROOT/scripts/local-signing.sh" identity || true)"
+    # The key is usable only while this build signs.
+    trap '"$ROOT/scripts/local-signing.sh" finish' EXIT
     if [ -n "$IDENTITY" ]; then
         echo "==> signing with the certificate made for this Mac (no Apple Development one)"
     fi

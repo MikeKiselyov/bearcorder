@@ -3,12 +3,14 @@
 # (no Xcode or Apple ID). Ad-hoc signing changes with every build, so macOS asks for Screen
 # Recording again after each update; a certificate that stays the same keeps the permissions.
 #
-#   scripts/local-signing.sh identity   # creates it once, prints its SHA-1 for codesign
+#   scripts/local-signing.sh identity   # creates it once, unlocks it, prints its SHA-1 for codesign
+#   scripts/local-signing.sh finish     # locks it again after signing
 #   scripts/local-signing.sh remove     # deletes it (part of uninstalling)
 #
 # The certificate lives in its own keychain, not in the login keychain, with a random password
-# kept next to it (readable only by you). The keychain is added to your keychain search list,
-# because codesign only looks there. It signs nothing but Bugbear builds on this Mac.
+# kept next to it (readable only by you). The key is usable only while a build signs: "identity"
+# unlocks the keychain and puts it on the keychain search list (codesign only looks there),
+# "finish" locks it and takes it off the list. It also locks itself after 5 minutes and on sleep.
 set -euo pipefail
 
 FOLDER="$HOME/Library/Application Support/Bugbear/Signing"
@@ -88,8 +90,8 @@ EOF
 
     rm -f "$KEYCHAIN"
     security create-keychain -p "$password" "$KEYCHAIN"
-    # No auto-lock: builds unlock it with the saved password anyway.
-    security set-keychain-settings "$KEYCHAIN"
+    # Locks itself after 5 minutes and on sleep, in case a build stops before "finish".
+    security set-keychain-settings -l -u -t 300 "$KEYCHAIN"
     security unlock-keychain -p "$password" "$KEYCHAIN"
     security import "$work/identity.p12" -k "$KEYCHAIN" -P "$password" -T /usr/bin/codesign >/dev/null
     # Lets codesign use the key without a password dialog.
@@ -115,13 +117,19 @@ case "${1:-}" in
         fi
         echo "$hash"
         ;;
+    finish)
+        remove_from_search_list
+        if [ -f "$KEYCHAIN" ]; then
+            security lock-keychain "$KEYCHAIN"
+        fi
+        ;;
     remove)
         remove_from_search_list
         rm -rf "$FOLDER"
         echo "Removed the local signing certificate."
         ;;
     *)
-        echo "usage: scripts/local-signing.sh identity|remove" >&2
+        echo "usage: scripts/local-signing.sh identity|finish|remove" >&2
         exit 2
         ;;
 esac
