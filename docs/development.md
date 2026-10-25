@@ -23,11 +23,18 @@ cp .env.example .env
 | Variable | Meaning |
 |---|---|
 | `BUGBEAR_BUNDLE_ID` | Bundle identifier of your build. Default `io.github.bugbear.app`. |
-| `BUGBEAR_SIGN_IDENTITY` | Code signing identity. Empty: the first "Apple Development" identity in your keychain. `-`: ad-hoc. |
+| `BUGBEAR_SIGN_IDENTITY` | Code signing identity. Empty: the first "Apple Development" identity in your keychain, otherwise a certificate made for this Mac. `local`: always that certificate. `-`: ad-hoc. |
 
-Why sign with a real identity: macOS ties the Screen Recording, Camera and Microphone permissions to
-the app's signature. With ad-hoc signing every rebuild looks like a new app and macOS asks again.
-A free Apple Development certificate (Xcode → Settings → Accounts) avoids that.
+Why the identity matters: macOS ties the Screen Recording, Camera and Microphone permissions to the
+app's signature. With ad-hoc signing every rebuild looks like a new app and macOS asks again.
+
+Without `BUGBEAR_SIGN_IDENTITY` the build uses the first Apple Development certificate (free, from
+Xcode → Settings → Accounts). A Mac without one, for example with only the Command Line Tools, gets
+a certificate made for it by `scripts/local-signing.sh`: a self-signed code signing certificate in
+its own keychain under `~/Library/Application Support/Bugbear/Signing/`, with a random password kept
+next to it. That keychain is added to the keychain search list because codesign only looks there.
+The certificate signs nothing but Bugbear builds and keeps the same signature between updates.
+`scripts/local-signing.sh remove` deletes it.
 List your identities with `security find-identity -v -p codesigning`.
 
 ## How updates work
