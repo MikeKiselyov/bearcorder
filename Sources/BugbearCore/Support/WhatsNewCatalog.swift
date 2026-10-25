@@ -3,6 +3,9 @@
 /// top entry, the update badge compares it with GitHub, and CI refuses a pull request without one.
 public enum WhatsNewCatalog {
     public static let releases: [WhatsNewRelease] = [
+        WhatsNewRelease(id: 7, version: "0.5.2", title: "Clearer installer", items: [
+            WhatsNewRelease.Item(symbol: "wrench.and.screwdriver", title: "Says what to update", text: "On macOS 14.0-14.4 the installer now asks to update macOS first, since Swift 6 needs 14.5.", shortcut: "install.sh"),
+        ]),
         WhatsNewRelease(id: 6, version: "0.5.1", title: "Permissions stay after updates without Xcode", items: [
             WhatsNewRelease.Item(symbol: "checkmark.seal", title: "A signature of this Mac's own", text: "Macs without Xcode now sign Bugbear with a certificate made just for them, so macOS no longer asks for Screen Recording again after every update.", shortcut: "Automatic"),
         ]),
