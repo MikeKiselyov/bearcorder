@@ -1,4 +1,5 @@
 import AppKit
+import BugbearCore
 import SwiftUI
 
 // `--render-iconset <folder>` writes the logo PNGs for the build script, then exits.
@@ -12,6 +13,19 @@ if let flagIndex = arguments.firstIndex(of: "--render-iconset"), flagIndex + 1 <
         FileHandle.standardError.write(Data("Failed to render icon: \(error)\n".utf8))
         exit(1)
     }
+}
+
+// `--version` prints the newest release's version (build-app.sh puts it in Info.plist);
+// `--release-notes` prints that release as Markdown (CI uses it for the GitHub release).
+if arguments.contains("--version") {
+    print(WhatsNew.latestVersion(WhatsNewCatalog.releases))
+    exit(0)
+}
+if arguments.contains("--release-notes") {
+    if let newest = WhatsNew.unseen(WhatsNewCatalog.releases, lastSeenID: 0).first {
+        print(WhatsNew.markdown(newest))
+    }
+    exit(0)
 }
 
 if arguments.contains("--perf-core") {

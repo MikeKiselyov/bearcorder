@@ -1,0 +1,60 @@
+# Pull requests: a new release in the notes, unit tests and the media self-test.
+# Merges to main: the same tests, then a GitHub release and a v<version> tag from the notes.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  release-notes:
+    name: New release in the notes
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - run: scripts/check-release.sh "origin/${{ github.base_ref }}"
+
+  test:
+    name: Build and test
+    runs-on: macos-15
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - run: swift --version
+      - name: Unit tests
+        run: swift test
+      - name: Self-test (export, edits, annotations, OCR, QR, stitching)
+        run: |
+          swift build
+          mkdir -p build/self-test
+          .build/debug/Bugbear --self-test build/self-test
+      - name: Release
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version=$(.build/debug/Bugbear --version)
+          if git rev-parse --verify --quiet "refs/tags/v$version" >/dev/null; then
+            echo "v$version is already released."
+            exit 0
+          fi
+          .build/debug/Bugbear --release-notes > build/release-notes.md
+          gh release create "v$version" --target "$GITHUB_SHA" --title "Bugbear $version" --notes-file build/release-notes.md
+      - name: Self-test pictures
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: self-test
+          path: build/self-test
