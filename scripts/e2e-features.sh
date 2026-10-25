@@ -258,6 +258,15 @@ $R whats-new 10 >/dev/null
 if $R windows-debug 10 | tr '|' '\n' | grep "visible=true" | grep -q "720x"; then pass "What's New window opens"; else fail "What's New window"; fi
 $R close-windows 10 >/dev/null
 
+echo "==> welcome guide fits the screen"
+# Opened fresh, the guide keeps its own size and stays inside the screen, so Continue is reachable.
+frame_key="NSWindow Frame Bugbear.onboarding"
+defaults delete "$BUNDLE_ID" "$frame_key" 2>/dev/null
+result=$($R open-onboarding 10)
+if python3 scripts/window-fits.py "$result"; then pass "welcome guide fits the screen ($result)"; else fail "welcome guide fits the screen" "$result"; fi
+$R close-windows 10 >/dev/null
+defaults delete "$BUNDLE_ID" "$frame_key" 2>/dev/null
+
 echo "==> disk space"
 fixture="$WORK/space"
 mkdir -p "$fixture/videos" "$fixture/notes"

@@ -216,6 +216,18 @@ enum FeatureAutomation {
             }
             return lines.joined(separator: " | ")
 
+        case "open-onboarding":
+            // Opens the welcome guide and reports its frame and the visible part of its screen.
+            WindowManager.shared.close(id: "onboarding")
+            WindowManager.shared.openOnboarding()
+            try? await Task.sleep(nanoseconds: 500_000_000)
+            guard let window = NSApp.windows.first(where: { $0.identifier?.rawValue == "onboarding" }), let screen = window.screen else {
+                return "no window"
+            }
+            let frame = window.frame
+            let visible = screen.visibleFrame
+            return "frame=\(Int(frame.minX)),\(Int(frame.minY)),\(Int(frame.width)),\(Int(frame.height)) visible=\(Int(visible.minX)),\(Int(visible.minY)),\(Int(visible.width)),\(Int(visible.height))"
+
         case "open-space":
             // open-space:<Clean up|Folders|Largest files>
             let section = SpaceView.Section(rawValue: argument) ?? .cleanUp

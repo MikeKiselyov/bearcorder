@@ -3,6 +3,9 @@
 /// top entry, the update badge compares it with GitHub, and CI refuses a pull request without one.
 public enum WhatsNewCatalog {
     public static let releases: [WhatsNewRelease] = [
+        WhatsNewRelease(id: 9, version: "0.5.4", title: "Windows fit the screen", items: [
+            WhatsNewRelease.Item(symbol: "macwindow", title: "Continue stays in reach", text: "The welcome guide and other windows keep their size and open inside the screen. On tall displays the guide used to stretch past the bottom, out of reach of its Continue button.", shortcut: "Welcome guide"),
+        ]),
         WhatsNewRelease(id: 8, version: "0.5.3", title: "Tests leave your Bugbear alone", items: [
             WhatsNewRelease.Item(symbol: "arrow.uturn.backward.circle", title: "Your Bugbear comes back", text: "The test scripts quit the test copy when they finish and start your installed Bugbear again, so a test copy no longer keeps recording in the menu bar.", shortcut: "scripts/e2e.sh"),
         ]),
