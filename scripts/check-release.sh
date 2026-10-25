@@ -25,8 +25,10 @@ if [ -z "$app_changes" ]; then
     exit 0
 fi
 
-new_version=$(cat "$CATALOG" 2>/dev/null | latest_version)
-old_version=$(git show "$merge_base:$CATALOG" 2>/dev/null | latest_version)
+new_source=$(cat "$CATALOG" 2>/dev/null || true)
+old_source=$(git show "$merge_base:$CATALOG" 2>/dev/null || true)
+new_version=$(echo "$new_source" | latest_version)
+old_version=$(echo "$old_source" | latest_version)
 echo "Version on $BASE: $old_version, in this branch: $new_version"
 
 highest=$(printf '%s\n%s\n' "$old_version" "$new_version" | sort -t. -k1,1n -k2,2n -k3,3n | tail -1)
