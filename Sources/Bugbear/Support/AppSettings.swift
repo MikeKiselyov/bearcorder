@@ -83,6 +83,10 @@ final class AppSettings {
     var keepCrashClipsDays: Int {
         didSet { defaults.set(keepCrashClipsDays, forKey: "keepCrashClipsDays") }
     }
+    /// After Bugbear crashes, offer a report about it on the next launch.
+    var offerCrashReports: Bool {
+        didSet { defaults.set(offerCrashReports, forKey: "offerCrashReports") }
+    }
     /// Keep all captures under this many GB, deleting the oldest; 0 for no limit.
     var maxCapturesGB: Int {
         didSet { defaults.set(maxCapturesGB, forKey: "maxCapturesGB") }
@@ -124,6 +128,7 @@ final class AppSettings {
             "bugReportFormat": BugReport.Format.markdown.rawValue,
             "keepCapturesDays": 0,
             "keepCrashClipsDays": 7,
+            "offerCrashReports": true,
             "maxCapturesGB": 0,
         ])
         bufferMinutes = defaults.integer(forKey: "bufferMinutes")
@@ -154,6 +159,7 @@ final class AppSettings {
             defaults.set(0, forKey: "keepCrashClipsDays")
         }
         keepCrashClipsDays = defaults.integer(forKey: "keepCrashClipsDays")
+        offerCrashReports = defaults.bool(forKey: "offerCrashReports")
         reportFields = []
         if let data = defaults.data(forKey: "reportFields"), let fields = try? JSONDecoder().decode([EnvironmentSnapshot.Field].self, from: data) {
             reportFields = fields

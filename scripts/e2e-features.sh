@@ -37,9 +37,12 @@ rm -rf "$WORK"
 mkdir -p "$WORK"
 defaults write "$BUNDLE_ID" automationEnabled -bool true
 quit_running_bugbear
+defaults delete "$BUNDLE_ID" feedbackLastCrashCheck 2>/dev/null
 open "$TEST_APP"
 sleep 6
 $R setting:readBrowserURL:false 10 >/dev/null
+# The launch looks for a crash of the last run (no window in test runs) and remembers when it looked.
+if defaults read "$BUNDLE_ID" feedbackLastCrashCheck >/dev/null 2>&1; then pass "launch checks for a crash of the last run"; else fail "launch checks for a crash of the last run" "feedbackLastCrashCheck not set"; fi
 if [ "$($R ax 10)" = "trusted=true" ]; then pass "Accessibility is allowed"; else fail "Accessibility is allowed" "grant it in System Settings"; fi
 
 # A long page with a sticky header and footer and 150 numbered rows.
@@ -336,6 +339,26 @@ result=$($R open-onboarding 10)
 if python3 scripts/window-fits.py "$result"; then pass "welcome guide fits the screen ($result)"; else fail "welcome guide fits the screen" "$result"; fi
 $R close-windows 10 >/dev/null
 defaults delete "$BUNDLE_ID" "$frame_key" 2>/dev/null
+
+echo "==> report a problem"
+for kind in problem idea; do
+    result=$($R "open-feedback:$kind" 10)
+    if [[ "$result" == "opened inside=true"* ]]; then pass "the $kind window opens on screen ($result)"; else fail "the $kind window opens on screen" "$result"; fi
+done
+result=$($R feedback-url:problem 15)
+length=$(echo "$result" | sed -n 's/.*length=\([0-9]*\).*/\1/p')
+log_count=$(echo "$result" | sed -n 's/.*logs=\([0-9]*\).*/\1/p')
+if [[ "$result" == "template=bug_report.yml version=true "*" planted=true "*" home=false user=false" ]] && (( log_count > 0 && log_count <= 80 && length <= 5500 )); then pass "a problem link fills the form with the version and the newest log lines, hides the home folder and user name ($result)"; else fail "a problem link fills the form" "$result"; fi
+result=$($R feedback-url:idea 15)
+if [[ "$result" == "template=feature_request.yml version=true logs=0 "*" home=false user=false" ]]; then pass "an idea link uses the idea form without logs ($result)"; else fail "an idea link uses the idea form" "$result"; fi
+result=$($R feedback-zip 20)
+if [[ "$result" == *"bugbear.log"* && "$result" == *"environment.txt"* && "$result" == *"planted=true home=false user=false" ]]; then pass "the log zip has the log and the environment, hides the home folder and user name ($result)"; else fail "the log zip" "$result"; fi
+result=$($R feedback-crash:on 15)
+if [[ "$result" == "offered=true open=true crash=true canSend=true moved=true title=Bugbear quit unexpectedly" ]]; then pass "a crash since the last launch opens a report with the crash filled in ($result)"; else fail "a crash opens a report" "$result"; fi
+result=$($R feedback-crash:off 15)
+if [[ "$result" == "offered=false open=false crash=false canSend=false moved=true title=" ]]; then pass "with crash reports turned off nothing opens, and the crash is not offered later ($result)"; else fail "crash reports turned off" "$result"; fi
+result=$($R feedback-switch 10)
+if [[ "$result" == "kind=idea" ]]; then pass "asking for an idea while the problem window is open shows the idea form"; else fail "switching the feedback window" "$result"; fi
 
 echo "==> disk space"
 fixture="$WORK/space"

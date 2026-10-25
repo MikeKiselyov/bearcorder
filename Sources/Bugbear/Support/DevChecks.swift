@@ -127,6 +127,105 @@ enum DevChecks {
         check(!CaptureStore.isSameFile(first, other), "an equal copy is another file")
     }
 
+    /// A fake Bugbear crash report: the header line and the body macOS writes.
+    static func fakeCrashReport(bundleId: String, date: Date = Date()) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "yyyy-MM-dd HH:mm:ss.SS Z"
+        let header = "{\"app_name\":\"Bugbear\",\"timestamp\":\"\(formatter.string(from: date))\",\"bug_type\":\"309\",\"bundleID\":\"\(bundleId)\",\"name\":\"Bugbear\"}"
+        let body = """
+        {"exception":{"type":"EXC_BREAKPOINT","signal":"SIGTRAP"},"termination":{"indicator":"Trace/BPT trap: 5"},
+         "asi":{"libswiftCore.dylib":["Fatal error: Index out of range in \(Feedback.homePath)/Code"]},
+         "faultingThread":0,"usedImages":[{"name":"libswiftCore.dylib"},{"name":"Bugbear"}],
+         "threads":[{"triggered":true,"frames":[{"imageIndex":0,"symbol":"_assertionFailure"},{"imageIndex":1,"symbol":"CaptureStore.selectScreen(_:)"}]}]}
+        """
+        return header + "\n" + body
+    }
+
+    /// A problem report hides the home folder and user name in its text and its zip, keeps the
+    /// version, packs only recent Bugbear crash reports, and a new crash is found on the next launch.
+    private static func checkFeedback(folder: URL) {
+        let model = FeedbackModel(kind: .problem)
+        model.details = "It broke"
+        let report = model.report
+        let versionLine = report.environment.first { field in field.name == "Bugbear" }
+        check(versionLine?.value.hasPrefix(Updater.shared.version) == true, "a problem report names the Bugbear version", "\(String(describing: versionLine))")
+        check(Feedback.redact("open \(Feedback.homePath)/Desktop as \(NSUserName())") == "open ~/Desktop as <user>", "a report hides the home folder and the user name")
+
+        let bundleId = "com.example.bugbear-check"
+        let crashFolder = folder.appendingPathComponent("feedback-crashes", isDirectory: true)
+        try? FileManager.default.removeItem(at: crashFolder)
+        try? FileManager.default.createDirectory(at: crashFolder, withIntermediateDirectories: true)
+        let recent = crashFolder.appendingPathComponent("Bugbear-2026-10-25-120000.ips")
+        let old = crashFolder.appendingPathComponent("Bugbear-2026-09-01-120000.ips")
+        try? Data(fakeCrashReport(bundleId: bundleId).utf8).write(to: recent)
+        try? Data("old crash".utf8).write(to: old)
+        try? FileManager.default.setAttributes([.modificationDate: Date().addingTimeInterval(-20 * 24 * 3600)], ofItemAtPath: old.path)
+        try? Data("other app".utf8).write(to: crashFolder.appendingPathComponent("Safari-2026-10-25-120000.ips"))
+
+        let zipFolder = folder.appendingPathComponent("feedback-zip", isDirectory: true)
+        try? FileManager.default.removeItem(at: zipFolder)
+        let environment = "Bugbear: test\nHome: \(Feedback.homePath)"
+        guard case .success(let archive) = Feedback.makeLogArchive(environmentText: environment, in: zipFolder, crashFolder: crashFolder) else {
+            check(false, "the log zip is made")
+            return
+        }
+        let unpacked = zipFolder.appendingPathComponent("unpacked", isDirectory: true)
+        let task = Process()
+        task.executableURL = URL(fileURLWithPath: "/usr/bin/ditto")
+        task.arguments = ["-x", "-k", archive.path, unpacked.path]
+        try? task.run()
+        task.waitUntilExit()
+        check(task.terminationStatus == 0, "the log zip unpacks")
+        let inner = unpacked.appendingPathComponent("Bugbear logs", isDirectory: true)
+        let names = (try? FileManager.default.contentsOfDirectory(atPath: inner.path)) ?? []
+        check(names.contains("environment.txt") && names.contains(recent.lastPathComponent) && !names.contains(old.lastPathComponent) && !names.contains("Safari-2026-10-25-120000.ips"), "the log zip has the environment and only recent Bugbear crash reports", "\(names)")
+        var leaks: [String] = []
+        for name in names {
+            let text = (try? String(contentsOf: inner.appendingPathComponent(name), encoding: .utf8)) ?? ""
+            if text.contains(Feedback.homePath) || text.range(of: "(?<![A-Za-z0-9])" + NSRegularExpression.escapedPattern(for: NSUserName()) + "(?![A-Za-z0-9])", options: [.regularExpression, .caseInsensitive]) != nil {
+                leaks.append(name)
+            }
+        }
+        check(leaks.isEmpty, "files in the log zip hide the home folder and the user name", "\(leaks)")
+
+        // The crash found on the next launch, and what goes into the issue about it.
+        let defaults = UserDefaults(suiteName: "bugbear-feedback-check") ?? .standard
+        defaults.removeObject(forKey: Feedback.lastCrashCheckKey)
+        check(Feedback.crashSinceLastCheck(in: crashFolder, defaults: defaults, bundleId: bundleId) == nil, "the first launch does not bring up old crashes")
+        check(defaults.object(forKey: Feedback.lastCrashCheckKey) is Date, "the first launch remembers when it looked")
+        defaults.set(Date().addingTimeInterval(-60), forKey: Feedback.lastCrashCheckKey)
+        let found = Feedback.crashSinceLastCheck(in: crashFolder, defaults: defaults, bundleId: bundleId)
+        check(found?.lastPathComponent == recent.lastPathComponent, "a Bugbear crash since the last launch is found", "\(String(describing: found))")
+        check(Feedback.crashSinceLastCheck(in: crashFolder, defaults: defaults, bundleId: bundleId) == nil, "the same crash is offered only once")
+
+        // What must not count: another Bugbear build, a hang, a kill from outside, an older crash, junk.
+        let others = folder.appendingPathComponent("feedback-not-crashes", isDirectory: true)
+        try? FileManager.default.removeItem(at: others)
+        try? FileManager.default.createDirectory(at: others, withIntermediateDirectories: true)
+        try? Data(fakeCrashReport(bundleId: "io.github.other.bugbear").utf8).write(to: others.appendingPathComponent("Bugbear-other-build.ips"))
+        let hang = fakeCrashReport(bundleId: bundleId).replacingOccurrences(of: "\"bug_type\":\"309\"", with: "\"bug_type\":\"288\"")
+        try? Data(hang.utf8).write(to: others.appendingPathComponent("Bugbear-hang.ips"))
+        let killed = fakeCrashReport(bundleId: bundleId).replacingOccurrences(of: "\"termination\":{\"indicator\":\"Trace/BPT trap: 5\"}", with: "\"termination\":{\"namespace\":\"CODESIGNING\",\"indicator\":\"Invalid Page\"}")
+        try? Data(killed.utf8).write(to: others.appendingPathComponent("Bugbear-codesigning.ips"))
+        try? Data("not a report".utf8).write(to: others.appendingPathComponent("Bugbear-junk.ips"))
+        let older = others.appendingPathComponent("Bugbear-older.ips")
+        try? Data(fakeCrashReport(bundleId: bundleId).utf8).write(to: older)
+        try? FileManager.default.setAttributes([.modificationDate: Date().addingTimeInterval(-3600)], ofItemAtPath: older.path)
+        defaults.set(Date().addingTimeInterval(-60), forKey: Feedback.lastCrashCheckKey)
+        let wrong = Feedback.crashSinceLastCheck(in: others, defaults: defaults, bundleId: bundleId)
+        check(wrong == nil, "other builds, hangs, kills from outside, older crashes and junk are not offered", "\(String(describing: wrong))")
+        check(Feedback.crashSinceLastCheck(in: crashFolder, defaults: defaults, bundleId: "") == nil, "a build without a bundle id offers nothing")
+
+        let crashText = Feedback.crashText(from: recent)
+        check(crashText.contains("EXC_BREAKPOINT (SIGTRAP)") && crashText.contains("Fatal error: Index out of range in ~/Code") && crashText.contains("Bugbear  CaptureStore.selectScreen(_:)"), "the crash text has the reason, the message and the crashed thread, without the home folder", crashText)
+        let scrubbed = Feedback.scrubIdentifiers("{\"crashReporterKey\" : \"ABC-123\",\"userID\":501,\"name\":\"Bugbear\"}")
+        check(scrubbed == "{\"crashReporterKey\":\"<hidden>\",\"userID\":\"<hidden>\",\"name\":\"Bugbear\"}", "crash reports in the zip hide the Mac's ids", scrubbed)
+        let registered = UserDefaults.standard.volatileDomain(forName: UserDefaults.registrationDomain)["offerCrashReports"] as? Bool
+        check(registered == true, "crash reports are offered by default")
+        defaults.removePersistentDomain(forName: "bugbear-feedback-check")
+    }
+
     /// A picture placed on a screenshot is drawn in its frame, on top of the screenshot.
     private static func checkPlacedImage(folder: URL) {
         guard let red = CGContext(data: nil, width: 40, height: 30, bitsPerComponent: 8, bytesPerRow: 0, space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue),
@@ -235,6 +334,7 @@ enum DevChecks {
         checkTooltipSize(folder: folder)
         checkPlacedImage(folder: folder)
         checkSameFile(folder: folder)
+        checkFeedback(folder: folder)
 
         // 1. Synthetic 6 s clip with a moving box and a 440 Hz tone.
         let video = folder.appendingPathComponent("synthetic-video.mov")
@@ -794,6 +894,24 @@ enum DevChecks {
             render(CleanupRow(model: space, category: category, compact: true).padding(.horizontal, 16).background(Theme.window).environment(app).preferredColorScheme(.dark), size: CGSize(width: 360, height: 150), to: folder.appendingPathComponent("space-confirm.png"))
             space.confirmingID = nil
         }
+
+        for kind in FeedbackReport.Kind.allCases {
+            let model = FeedbackModel(kind: kind)
+            if kind == .problem {
+                model.title = "The saved clip is black"
+                model.details = "Saved the last minute with Option + Shift + 1, the clip plays but stays black."
+            } else {
+                model.title = "Blur faces automatically"
+                model.details = "Find faces on a screenshot and blur them before I share it."
+            }
+            render(FeedbackView(model: model).environment(app).preferredColorScheme(.dark), size: CGSize(width: 560, height: 600), to: folder.appendingPathComponent("feedback-\(kind.rawValue).png"))
+        }
+
+        let crashModel = FeedbackModel(kind: .problem)
+        crashModel.title = "Bugbear quit unexpectedly"
+        crashModel.crash = "EXC_BREAKPOINT (SIGTRAP)"
+        crashModel.notice = "Bugbear quit unexpectedly last time. Sending a report with the crash details helps fix it. Add what you were doing, if you remember."
+        render(FeedbackView(model: crashModel).environment(app).preferredColorScheme(.dark), size: CGSize(width: 560, height: 640), to: folder.appendingPathComponent("feedback-crash.png"))
 
         for tab in MenuTab.allCases {
             UserDefaults.standard.set(tab.rawValue, forKey: "menuTab")
