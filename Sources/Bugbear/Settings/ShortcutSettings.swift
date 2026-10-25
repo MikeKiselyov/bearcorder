@@ -21,7 +21,7 @@ struct ShortcutSettingsSection: View {
                             .font(.system(size: 12, weight: .medium, design: .monospaced))
                             .frame(minWidth: 96)
                     }
-                    .help("Click, then press the new keys. Esc cancels, Delete removes the shortcut.")
+                    .tip("Click, then press the new keys. Esc cancels, Delete removes the shortcut.")
                 }
             }
             if let message = problem {
@@ -38,7 +38,7 @@ struct ShortcutSettingsSection: View {
                     problem = nil
                 }
                 .disabled(!hotKeys.isCustomized)
-                .help("Restore every shortcut to its default keys")
+                .tip("Restore every shortcut to its default keys")
             }
         }
         .onDisappear { stopRecording() }

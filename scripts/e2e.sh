@@ -68,7 +68,7 @@ defaults write "$BUNDLE_ID" startBufferOnLaunch -bool true
 # Update checks go to a local file server instead of GitHub.
 FEED_DIR="$ROOT/build/e2e-update-feed"
 mkdir -p "$FEED_DIR"
-printf '{"status":"ahead","ahead_by":2,"commits":[{"sha":"1111111aaaa","commit":{"message":"First change"}},{"sha":"2222222bbbb","commit":{"message":"Second change"}}]}' > "$FEED_DIR/compare.json"
+printf '{"status":"ahead","ahead_by":2,"commits":[{"sha":"1111111aaaa","commit":{"message":"Second change"}},{"sha":"2222222bbbb","commit":{"message":"Merge pull request #5 from someone/crop\\n\\nBetter crop"}}]}' > "$FEED_DIR/compare.json"
 printf 'WhatsNewRelease(id: 99, version: "99.0.0", title: "Future", items: [])\n' > "$FEED_DIR/catalog.swift"
 python3 -m http.server 8765 --bind 127.0.0.1 --directory "$FEED_DIR" >/dev/null 2>&1 &
 FEED_PID=$!
@@ -225,6 +225,7 @@ if grep -q "system log for .*: [0-9]* lines" "$LOG"; then pass "system log colle
 # 11. Update check finds a newer release and lists its commits; the same version is no update.
 result=$(run update-check 30)
 if echo "$result" | grep -q 'version: "99.0.0"' && echo "$result" | grep -q "newCommitCount: 2"; then pass "update check finds version 99.0.0 with 2 commits"; else fail "update check" "$result"; fi
+if echo "$result" | grep -q 'title: "Better crop"' && echo "$result" | grep -q "pullRequest: Optional(5)" && echo "$result" | grep -q "changeCount: 1"; then pass "update lists the merged pull request by its title"; else fail "update pull request" "$result"; fi
 current_version=$("$ROOT/build/Bugbear.app/Contents/MacOS/Bugbear" --version)
 printf 'WhatsNewRelease(id: 1, version: "%s", title: "Same", items: [])\n' "$current_version" > "$FEED_DIR/catalog.swift"
 result=$(run update-check 30)
@@ -235,6 +236,11 @@ kill "$FEED_PID" 2>/dev/null
 defaults delete "$BUNDLE_ID" updateCompareURL 2>/dev/null
 defaults delete "$BUNDLE_ID" updateCatalogURL 2>/dev/null
 rm -rf "$FEED_DIR"
+
+# 11b. Copy text from the screen (⌥⇧O, after the area is picked): the text goes to the clipboard
+# and a message says it can be pasted.
+result=$(run "copy-text-file:$ROOT/docs/images/settings.png" 60)
+if echo "$result" | grep -q "toast=true" && echo "$result" | grep -q "copied=.*[A-Za-z]"; then pass "copy text: clipboard and a 'paste with ⌘V' message"; else fail "copy text" "$result"; fi
 
 # 12. Errors in the log.
 errors=$(grep -c "ERROR" "$LOG" || true)

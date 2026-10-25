@@ -6,9 +6,19 @@ import SwiftUI
 struct UpdateBadge: View {
     @State private var updater = Updater.shared
     @State private var showsDetails = false
+    /// Draws the list of changes in place of the badge, for snapshots (the popover is not drawn there).
+    var detailsOnly = false
+
+    /// "#9 Pick screenshot and video quality" for a pull request, the title for a commit.
+    private func changeLabel(_ change: UpdateInfo.Change) -> String {
+        guard let number = change.pullRequest else { return change.title }
+        return "#\(number) \(change.title)"
+    }
 
     var body: some View {
         switch updater.state {
+        case .available(let info) where detailsOnly:
+            details(info)
         case .available(let info):
             Button {
                 showsDetails = true
@@ -22,7 +32,7 @@ struct UpdateBadge: View {
                     .clipShape(Capsule())
             }
             .buttonStyle(.plain)
-            .help("Version \(info.version) is available, you have \(updater.version)")
+            .tip("Version \(info.version) is available, you have \(updater.version)")
             .popover(isPresented: $showsDetails, arrowEdge: .bottom) {
                 details(info)
             }
@@ -31,7 +41,7 @@ struct UpdateBadge: View {
                 ProgressView().controlSize(.small)
                 Text("Updating…").font(.system(size: 11)).foregroundStyle(Theme.textSecondary)
             }
-            .help("Pulling and building the new version. The app restarts when it is ready.")
+            .tip("Pulling and building the new version. The app restarts when it is ready.")
         case .failed(let message):
             Button {
                 showsDetails = true
@@ -39,7 +49,7 @@ struct UpdateBadge: View {
                 Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(Theme.warning)
             }
             .buttonStyle(.plain)
-            .help(message)
+            .tip(message)
             .popover(isPresented: $showsDetails, arrowEdge: .bottom) {
                 failure(message)
             }
@@ -52,19 +62,27 @@ struct UpdateBadge: View {
         VStack(alignment: .leading, spacing: 10) {
             Text("Version \(info.version)")
                 .font(.system(size: 13, weight: .bold))
-            Text(info.newCommitCount == 1 ? "You have \(updater.version). 1 change since then:" : "You have \(updater.version). \(info.newCommitCount) changes since then:")
+            Text(info.changeCount == 1 ? "You have \(updater.version). 1 change since then:" : "You have \(updater.version). \(info.changeCount) changes since then:")
                 .font(.system(size: 11))
                 .foregroundStyle(Theme.textSecondary)
             VStack(alignment: .leading, spacing: 5) {
                 ForEach(Array(info.changes.enumerated()), id: \.offset) { _, change in
                     HStack(alignment: .firstTextBaseline, spacing: 6) {
                         Text("•").foregroundStyle(Theme.textSecondary)
-                        Text(change.title).fixedSize(horizontal: false, vertical: true)
+                        if let url = change.url(repository: updater.repository) {
+                            Link(destination: url) {
+                                Text(changeLabel(change)).multilineTextAlignment(.leading).fixedSize(horizontal: false, vertical: true)
+                            }
+                            .foregroundStyle(Theme.link)
+                            .tip("Open on GitHub: \(url.absoluteString)")
+                        } else {
+                            Text(changeLabel(change)).fixedSize(horizontal: false, vertical: true)
+                        }
                     }
                     .font(.system(size: 12))
                 }
-                if info.newCommitCount > info.changes.count {
-                    Text("and \(info.newCommitCount - info.changes.count) more")
+                if info.changeCount > info.changes.count {
+                    Text("and \(info.changeCount - info.changes.count) more")
                         .font(.system(size: 12))
                         .foregroundStyle(Theme.textSecondary)
                 }
@@ -77,13 +95,13 @@ struct UpdateBadge: View {
                 Spacer()
                 Button("Later") { showsDetails = false }
                     .buttonStyle(SecondaryButtonStyle())
-                    .help("Close this and update another time")
+                    .tip("Close this and update another time")
                 Button("Update now") {
                     showsDetails = false
                     updater.update()
                 }
                 .buttonStyle(AccentButtonStyle())
-                .help("Pull, build and install the new version, then restart Bugbear")
+                .tip("Pull, build and install the new version, then restart Bugbear")
             }
         }
         .padding(16)
@@ -97,14 +115,14 @@ struct UpdateBadge: View {
             HStack {
                 Button("Show log") { updater.showLog() }
                     .buttonStyle(SecondaryButtonStyle())
-                    .help("Open the update log to see what went wrong")
+                    .tip("Open the update log to see what went wrong")
                 Spacer()
                 Button("Check again") {
                     showsDetails = false
                     Task { await updater.check(userInitiated: true) }
                 }
                 .buttonStyle(AccentButtonStyle())
-                .help("Try checking GitHub for a new version again")
+                .tip("Try checking GitHub for a new version again")
             }
         }
         .padding(16)
@@ -128,17 +146,17 @@ struct UpdateSettingsSection: View {
                 Text("What's new")
                 Spacer()
                 Button("Show…") { WhatsNewTracker.openLatest() }
-                    .help("Show what changed in this version")
+                    .tip("Show what changed in this version")
             }
             if updater.canCheck {
                 Toggle("Check GitHub for new versions", isOn: $settings.checkForUpdates)
-                    .help("Check for a newer Bugbear release every 6 hours and show a badge in the menu bar panel")
+                    .tip("Check for a newer Bugbear release every 6 hours and show a badge in the menu bar panel")
                 HStack {
                     Text(statusText).font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
                     Spacer()
                     Button("Check now") { Task { await updater.check(userInitiated: true) } }
                         .disabled(updater.state == .checking || updater.state == .updating)
-                        .help("Check GitHub for a new version right now")
+                        .tip("Check GitHub for a new version right now")
                 }
             } else {
                 Text("Updates work for copies built from a git clone of a GitHub repository, as scripts/install.sh does. This copy has no repository or commit to compare.")
@@ -153,7 +171,7 @@ struct UpdateSettingsSection: View {
         switch updater.state {
         case .checking: return "Checking…"
         case .upToDate: return "Up to date"
-        case .available(let info): return "\(info.newCommitCount) new changes, see the menu bar panel"
+        case .available(let info): return "\(info.changeCount) new changes, see the menu bar panel"
         case .updating: return "Updating…"
         case .failed(let message): return message
         case .idle:

@@ -111,7 +111,7 @@ struct ToolButton: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .help(help)
+        .tip(help)
         .accessibilityLabel(help)
     }
 }

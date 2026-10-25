@@ -7,11 +7,24 @@ import SwiftUI
 final class Toast {
     static let shared = Toast()
 
-    private var panel: NSPanel?
+    fileprivate(set) var panel: NSPanel?
     private var hideTask: Task<Void, Never>?
 
     func show(_ text: String, symbol: String, seconds: Double = 1.6) {
-        let hosting = NSHostingView(rootView: ToastView(text: text, symbol: symbol))
+        present(ToastView(text: text, symbol: symbol), seconds: seconds)
+    }
+
+    /// Something went to the clipboard: what it is, and how to paste it, with a short preview.
+    func showCopied(_ title: String, preview: String = "", symbol: String = "doc.on.clipboard") {
+        var detail = "Paste with ⌘V (Command + V)"
+        if !preview.isEmpty {
+            detail += ": " + preview
+        }
+        present(CopiedToastView(title: title, detail: detail, symbol: symbol), seconds: 3)
+    }
+
+    private func present<Content: View>(_ view: Content, seconds: Double) {
+        let hosting = NSHostingView(rootView: view)
         if panel == nil {
             let newPanel = NSPanel(contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
             newPanel.isOpaque = false
@@ -44,9 +57,43 @@ final class Toast {
 }
 
 extension Toast {
+    /// For checks: whether a message is on screen.
+    var isShowing: Bool {
+        return panel?.isVisible ?? false
+    }
+
     func hide() {
         hideTask?.cancel()
         panel?.orderOut(nil)
+    }
+}
+
+/// Two lines: what was copied, and how to paste it.
+private struct CopiedToastView: View {
+    var title: String
+    var detail: String
+    var symbol: String
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: symbol)
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(Color(hex: 0x3DD68C))
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title).font(.system(size: 13, weight: .semibold))
+                Text(detail)
+                    .font(.system(size: 12))
+                    .foregroundStyle(Color.white.opacity(0.7))
+                    .lineLimit(2)
+            }
+        }
+        .foregroundStyle(Color.white)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 11)
+        .frame(maxWidth: 440, alignment: .leading)
+        .background(Color.black.opacity(0.85))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .fixedSize()
     }
 }
 

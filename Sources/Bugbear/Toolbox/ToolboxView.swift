@@ -66,7 +66,7 @@ struct ToolboxView: View {
                             selected = first
                         }
                     }
-                    .help("Find a tool by name or keyword, Return opens the first match")
+                    .tip("Find a tool by name or keyword, Return opens the first match")
             }
             .padding(.horizontal, 10)
             .frame(height: 32)
@@ -108,7 +108,7 @@ struct ToolboxView: View {
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(SecondaryButtonStyle())
-            .help("Paste the clipboard and open the tool that fits its content, like JSON, JWT or a timestamp")
+            .tip("Paste the clipboard and open the tool that fits its content, like JSON, JWT or a timestamp")
             .padding(12)
         }
         .frame(width: 230)
@@ -202,7 +202,7 @@ struct ToolboxView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .help(purpose(tool))
+        .tip(purpose(tool))
     }
 
     private func purpose(_ tool: ToolKind) -> String {
@@ -397,7 +397,7 @@ struct CopyButton: View {
         .buttonStyle(AccentButtonStyle(isEnabled: !text.isEmpty))
         .disabled(text.isEmpty)
         .keyboardShortcut(primary ? KeyboardShortcut("c", modifiers: [.command, .shift]) : nil)
-        .help(primary ? "Copy the result to the clipboard (⇧⌘C)" : "Copy to the clipboard")
+        .tip(primary ? "Copy the result to the clipboard (⇧⌘C)" : "Copy to the clipboard")
     }
 }
 
@@ -424,7 +424,7 @@ struct ValueRow: View {
             }
             .buttonStyle(.plain)
             .foregroundStyle(Theme.textSecondary)
-            .help("Copy \(label) to the clipboard")
+            .tip("Copy \(label) to the clipboard")
             .accessibilityLabel("Copy \(label)")
         }
         .padding(.horizontal, 12)

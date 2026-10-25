@@ -14,6 +14,8 @@ enum AnnotationTool: String, CaseIterable, Identifiable, Codable {
     case blur
     case magnifier
     case crop
+    /// A picture placed on the screenshot (pasted, dropped or picked). Not a drawing tool.
+    case image
 
     var id: String { rawValue }
 
@@ -31,6 +33,7 @@ enum AnnotationTool: String, CaseIterable, Identifiable, Codable {
         case .blur: return "Blur"
         case .magnifier: return "Magnifier"
         case .crop: return "Crop"
+        case .image: return "Image"
         }
     }
 
@@ -48,6 +51,7 @@ enum AnnotationTool: String, CaseIterable, Identifiable, Codable {
         case .blur: return "square.grid.3x3.fill"
         case .magnifier: return "plus.magnifyingglass"
         case .crop: return "crop"
+        case .image: return "photo"
         }
     }
 
@@ -66,6 +70,7 @@ enum AnnotationTool: String, CaseIterable, Identifiable, Codable {
         case .blur: return "hide private data"
         case .magnifier: return "show a small detail bigger"
         case .crop: return "cut the image down to the part that matters"
+        case .image: return "show another screenshot or picture on this one"
         }
     }
 
@@ -83,6 +88,7 @@ enum AnnotationTool: String, CaseIterable, Identifiable, Codable {
         case .blur: return "b"
         case .magnifier: return "m"
         case .crop: return "c"
+        case .image: return nil
         }
     }
 }
@@ -283,6 +289,9 @@ struct Annotation: Identifiable, Codable, Equatable {
     var isFilled: Bool {
         return fill ?? false
     }
+
+    /// The picture file of an image mark, saved next to the screenshot.
+    var imagePath: String?
 
     var rect: CGRect {
         return CGRect(x: min(start.x, end.x), y: min(start.y, end.y), width: abs(end.x - start.x), height: abs(end.y - start.y))

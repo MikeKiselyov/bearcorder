@@ -304,6 +304,59 @@ final class ScreenshotDocument {
         saveProject()
     }
 
+    /// Places a picture on the screenshot: saved next to it, scaled to fit, centered on `point` (the
+    /// middle of the visible area when nil), and selected so it can be moved and resized.
+    @discardableResult
+    func insertImage(_ image: CGImage, at point: CGPoint? = nil) -> Annotation? {
+        let file = capture.folder.appendingPathComponent("placed-\(UUID().uuidString).png")
+        guard let data = ImageFiles.pngData(image), (try? data.write(to: file)) != nil else {
+            message = "Could not add the image"
+            return nil
+        }
+        let area = crop ?? CGRect(origin: .zero, size: imageSize)
+        var width = CGFloat(image.width)
+        var height = CGFloat(image.height)
+        let scale = min(1, area.width * 0.45 / width, area.height * 0.6 / height)
+        width = width * scale
+        height = height * scale
+        let center = point ?? CGPoint(x: area.midX, y: area.midY)
+        let origin = CGPoint(x: center.x - width / 2, y: center.y - height / 2)
+        var annotation = Annotation(tool: .image, start: origin, end: CGPoint(x: origin.x + width, y: origin.y + height), color: color, lineWidth: lineWidth)
+        annotation.imagePath = file.path
+        add(annotation)
+        tool = .select
+        selectedId = annotation.id
+        message = "Image added: drag to move, corners to resize"
+        return annotation
+    }
+
+    /// What the size buttons change now: text size for text and steps, line width for the rest.
+    var sizeIsText: Bool {
+        var targetTool = tool
+        if let selectedMark = selected {
+            targetTool = selectedMark.tool
+        }
+        return targetTool == .text || targetTool == .step
+    }
+
+    /// The size the size buttons show: of the selected mark, or for new marks.
+    var sizeValue: Int {
+        if sizeIsText {
+            if let selectedMark = selected, selectedMark.tool == .text || selectedMark.tool == .step {
+                var points = selectedMark.fontSize / unit
+                if selectedMark.tool == .step {
+                    points = points / 1.1
+                }
+                return Int(points.rounded())
+            }
+            return Int(textPoints)
+        }
+        if let selectedMark = selected {
+            return Int(StrokeSize.nearest(toWidth: selectedMark.lineWidth / (unit * 1.2)).width)
+        }
+        return Int(stroke.width)
+    }
+
     /// + and -: text size for text and steps, line thickness for everything else.
     /// With a mark selected, it grows or shrinks that mark.
     func changeSize(by direction: Int) {

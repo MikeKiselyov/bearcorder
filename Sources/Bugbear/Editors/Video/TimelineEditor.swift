@@ -155,9 +155,10 @@ struct TimelineEditor: View {
                 HatchedRectangle(color: Theme.accent)
                     .frame(width: max(3, cut.duration * scale))
                     .overlay(Rectangle().stroke(isSelected ? Theme.text : Theme.accent, lineWidth: isSelected ? 2 : 1))
+                    // The tip goes before the offset, so it moves with the bar.
+                    .tip("Cut \(TimeFormat.clock(cut.start, tenths: true))–\(TimeFormat.clock(cut.end, tenths: true)). Delete to restore.")
                     .offset(x: cut.start * scale)
                     .onTapGesture { model.selection = .cut(index) }
-                    .help("Cut \(TimeFormat.clock(cut.start, tenths: true))–\(TimeFormat.clock(cut.end, tenths: true)). Delete to restore.")
             }
 
             RoundedRectangle(cornerRadius: 6)
@@ -177,6 +178,7 @@ struct TimelineEditor: View {
             .fill(Theme.accent)
             .frame(width: 10, height: 30)
             .overlay(Rectangle().fill(Theme.accentText.opacity(0.6)).frame(width: 2, height: 12))
+            .tip(isStart ? "Trim start (I)" : "Trim end (O)")
             .offset(x: time * scale - 5)
             .gesture(
                 DragGesture()
@@ -197,7 +199,6 @@ struct TimelineEditor: View {
                     }
                     .onEnded { _ in trimDragOriginal = nil }
             )
-            .help(isStart ? "Trim start (I)" : "Trim end (O)")
             .accessibilityLabel(isStart ? "Trim start" : "Trim end")
     }
 
@@ -217,8 +218,8 @@ struct TimelineEditor: View {
                     Image(systemName: "flag.fill")
                         .font(.system(size: 11))
                         .foregroundStyle(Theme.accentSoft)
+                        .tip("Marked moment (\(HotKeySettings.shared.readable(for: .mark)))")
                         .offset(x: event.time * scale - 2)
-                        .help("Marked moment (⌥⇧M)")
                         .onTapGesture { model.seek(toSource: event.time) }
                 }
             }
@@ -308,9 +309,9 @@ struct TimelineEditor: View {
                 .background(Theme.link)
                 .overlay(RoundedRectangle(cornerRadius: 4).stroke(Theme.text, lineWidth: isSelected ? 2 : 0))
                 .clipShape(RoundedRectangle(cornerRadius: 4))
+                .tip("Freeze frame. Select and press Delete to remove.")
                 .offset(x: freeze.at * scale - 4)
                 .onTapGesture { model.selection = .freeze(index) }
-                .help("Freeze frame. Select and press Delete to remove.")
             }
         }
     }

@@ -102,7 +102,7 @@ struct VideoSidebar: View {
                             Image(systemName: "minus").frame(width: 24, height: 22).contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
-                        .help("Smaller (-)")
+                        .tip("Smaller (-)")
                         Text("\(Int(overlay.effectiveScale * 100))%")
                             .font(.system(size: 12, design: .monospaced))
                             .frame(width: 46)
@@ -112,7 +112,7 @@ struct VideoSidebar: View {
                             Image(systemName: "plus").frame(width: 24, height: 22).contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
-                        .help("Bigger (+)")
+                        .tip("Bigger (+)")
                     }
                     .padding(.horizontal, 8)
                     .padding(.vertical, 2)
@@ -229,7 +229,7 @@ struct VideoSidebar: View {
                     .labelsHidden()
                     .pickerStyle(.menu)
                     .frame(width: 170)
-                    .help("Picture size of the MP4 and about how big the file comes out. Lower quality makes a smaller file")
+                    .tip("Picture size of the MP4 and about how big the file comes out. Lower quality makes a smaller file")
                 }
                 row("Size limit") {
                     Picker("", selection: Binding(get: { model.project.sizeLimitMB ?? 0 }, set: { value in

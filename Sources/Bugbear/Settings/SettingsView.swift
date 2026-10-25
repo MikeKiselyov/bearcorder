@@ -32,31 +32,31 @@ struct SettingsView: View {
                         Text("3 minutes").tag(3)
                         Text("5 minutes").tag(5)
                     }
-                    .help("How much of the recent screen the buffer keeps, ready to save as a clip")
+                    .tip("How much of the recent screen the buffer keeps, ready to save as a clip")
                     Picker("Buffer frame rate", selection: $settings.framesPerSecond) {
                         Text("15 fps (lightest)").tag(15)
                         Text("30 fps").tag(30)
                         Text("60 fps").tag(60)
                     }
-                    .help("Frames per second of the background buffer; lower uses less CPU and memory")
+                    .tip("Frames per second of the background buffer; lower uses less CPU and memory")
                     Picker("Recording frame rate", selection: $settings.recordingFramesPerSecond) {
                         Text("30 fps").tag(30)
                         Text("60 fps").tag(60)
                     }
-                    .help("Frames per second of regular screen recordings")
+                    .tip("Frames per second of regular screen recordings")
                     Picker("Resolution", selection: $settings.maxHeight) {
                         Text("720p").tag(720)
                         Text("1080p").tag(1080)
                         Text("1440p").tag(1440)
                         Text("Native").tag(0)
                     }
-                    .help("Maximum height of saved clips; lower makes smaller files")
+                    .tip("Maximum height of saved clips; lower makes smaller files")
                     Toggle("Keep all displays (pick one or all side by side in the editor)", isOn: $settings.captureAllDisplays)
-                        .help("Buffer every connected display instead of only the main one")
+                        .tip("Buffer every connected display instead of only the main one")
                     Toggle("Show the mouse pointer", isOn: $settings.showsCursor)
-                        .help("Include the mouse pointer in the buffer and recordings")
+                        .tip("Include the mouse pointer in the buffer and recordings")
                     Toggle("Start the buffer when the app opens", isOn: $settings.startBufferOnLaunch)
-                        .help("Start keeping the recent screen as soon as Bugbear launches")
+                        .tip("Start keeping the recent screen as soon as Bugbear launches")
                     if needsRestart {
                         HStack {
                             Text("Restart the buffer to apply. What it holds now is dropped.")
@@ -67,7 +67,7 @@ struct SettingsView: View {
                                 needsRestart = false
                                 Task { await app.restartBufferIfRunning() }
                             }
-                            .help("Restart the buffer so the new settings apply; the clip it holds now is lost")
+                            .tip("Restart the buffer so the new settings apply; the clip it holds now is lost")
                         }
                     }
                 }
@@ -80,26 +80,26 @@ struct SettingsView: View {
 
                 Section("Crashes and logs") {
                     Toggle("Save a clip when an app crashes", isOn: $settings.saveOnCrash)
-                        .help("Automatically save the minute before a crash together with the crash report")
+                        .tip("Automatically save the minute before a crash together with the crash report")
                     Text("When an app you used in the last 10 minutes crashes, the minute before the crash is saved to Recent with the crash report.")
                         .font(.system(size: 12))
                         .foregroundStyle(Theme.textSecondary)
                     Toggle("Attach the app's system log to clips", isOn: $settings.attachSystemLogs)
-                        .help("Add the front app's recent system log lines to saved clips for debugging")
+                        .tip("Add the front app's recent system log lines to saved clips for debugging")
                 }
 
                 Section("Audio") {
                     Toggle("Record system audio", isOn: $settings.recordSystemAudio)
-                        .help("Include the sound your Mac plays in the buffer and recordings")
+                        .tip("Include the sound your Mac plays in the buffer and recordings")
                     Toggle("Record microphone", isOn: $settings.recordMicrophone)
-                        .help("Include your microphone in the buffer and recordings")
+                        .tip("Include your microphone in the buffer and recordings")
                 }
 
                 Section("Clicks and keys") {
                     Toggle("Record clicks", isOn: $settings.recordClicks)
-                        .help("Remember mouse clicks so they show up as steps and highlights in clips")
+                        .tip("Remember mouse clicks so they show up as steps and highlights in clips")
                     Toggle("Record shortcut keys", isOn: $settings.recordKeys)
-                        .help("Remember shortcut keys like ⌘S so they show up as steps in clips")
+                        .tip("Remember shortcut keys like ⌘S so they show up as steps in clips")
                     if settings.recordKeys && !app.hasAccessibilityAccess {
                         HStack {
                             Text("Needs Accessibility access")
@@ -107,7 +107,7 @@ struct SettingsView: View {
                                 .foregroundStyle(Theme.warning)
                             Spacer()
                             Button("Grant") { app.requestAccessibilityAccess() }
-                                .help("Ask macOS for Accessibility access, needed to see shortcut keys")
+                                .tip("Ask macOS for Accessibility access, needed to see shortcut keys")
                         }
                     }
                     Text("Plain typing is never stored as text, only as “typing…”.")
@@ -117,7 +117,7 @@ struct SettingsView: View {
 
                 Section("Screenshots") {
                     Toggle("Copy a new screenshot to the clipboard", isOn: $settings.copyScreenshots)
-                        .help("Put every new screenshot on the clipboard so you can paste it right away")
+                        .tip("Put every new screenshot on the clipboard so you can paste it right away")
                     Text("Paste it with ⌘V right away; the editor opens too, and ⌘C there copies your marks.")
                         .font(.system(size: 11))
                         .foregroundStyle(Theme.textSecondary)
@@ -125,7 +125,7 @@ struct SettingsView: View {
 
                 Section("Environment") {
                     Toggle("Read the browser tab URL", isOn: $settings.readBrowserURL)
-                        .help("Add the current browser tab URL to the environment info of captures")
+                        .tip("Add the current browser tab URL to the environment info of captures")
                     Text("Safari, Chrome, Arc, Brave, Edge, Vivaldi and Opera. macOS asks once per browser.")
                         .font(.system(size: 11))
                         .foregroundStyle(Theme.textSecondary)
@@ -140,13 +140,13 @@ struct SettingsView: View {
                             .lineLimit(1)
                             .truncationMode(.middle)
                         Button("Choose…") { chooseFolder() }
-                            .help("Choose the folder where exported files are saved")
+                            .tip("Choose the folder where exported files are saved")
                     }
                 }
 
                 Section("General") {
                     Toggle("Open at login", isOn: $launchAtLogin)
-                        .help("Start Bugbear automatically when you log in to your Mac")
+                        .tip("Start Bugbear automatically when you log in to your Mac")
                         .onChange(of: launchAtLogin) { _, enabled in
                             setLaunchAtLogin(enabled)
                         }
@@ -154,15 +154,15 @@ struct SettingsView: View {
                         Text("Welcome guide")
                         Spacer()
                         Button("Show…") { WindowManager.shared.openOnboarding() }
-                            .help("Open the welcome guide again")
+                            .tip("Open the welcome guide again")
                     }
                     HStack {
                         Text("Permissions")
                         Spacer()
                         Button("Screen Recording…") { app.requestScreenRecordingAccess() }
-                            .help("Ask macOS for Screen Recording access, needed for screenshots and the buffer")
+                            .tip("Ask macOS for Screen Recording access, needed for screenshots and the buffer")
                         Button("Accessibility…") { app.requestAccessibilityAccess() }
-                            .help("Ask macOS for Accessibility access, needed for shortcut keys and window tools")
+                            .tip("Ask macOS for Accessibility access, needed for shortcut keys and window tools")
                     }
                 }
 

@@ -1,5 +1,6 @@
 import AVFoundation
 import AppKit
+import SwiftUI
 import BugbearCore
 
 /// Automation commands for scripts/e2e-features.sh: drive each feature the way a user would,
@@ -70,6 +71,15 @@ enum FeatureAutomation {
             var flatA = 0
             for row in a where row == nil { flatA += 1 }
             return "rows=\(a.count) flat=\(flatA) best=\(best.shift ?? -1)@err\(String(format: "%.1f", best.error)) next=\(String(format: "%.1f", best.runnerUp))/\(best.compared) diag=\(ScrollStitcher.diagnose(previous: a, next: b, shift: 488))"
+
+        case "copy-text-file":
+            // copy-text-file:<path>: what ⌥⇧O does after the area is picked, on a picture from a file.
+            guard let image = ImageFiles.load(URL(fileURLWithPath: argument)) else { return "no image" }
+            Toast.shared.hide()
+            NSPasteboard.general.clearContents()
+            await AppState.shared.copyText(from: image)
+            let copied = NSPasteboard.general.string(forType: .string) ?? ""
+            return "toast=\(Toast.shared.isShowing) copied=\(copied.replacingOccurrences(of: "\n", with: " | "))"
 
         case "ocr-file":
             // ocr-file:<path> → the recognized text, lines joined with " | "
@@ -240,7 +250,7 @@ enum FeatureAutomation {
             let space = SpaceModel.shared
             let fakeHome = AppPaths.temporary.appendingPathComponent("space-home-\(UUID().uuidString)", isDirectory: true)
             let files = FileManager.default
-            let samples = ["Library/Caches/com.example.app/blob.bin", "Library/Caches/Homebrew/tool.tar.gz", "Library/Logs/Example/run.log", "Library/Logs/Bugbear/bugbear.log"]
+            let samples = ["Library/Caches/com.example.app/blob.bin", "Library/Caches/Homebrew/tool.tar.gz", "Library/Logs/Example/run.log", "Library/Logs/Bugbear/bugbear.log", "Library/Logs/DiagnosticReports/Example-2026.ips"]
             for sample in samples {
                 let url = fakeHome.appendingPathComponent(sample)
                 try? files.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
@@ -258,7 +268,8 @@ enum FeatureAutomation {
             let otherLogGone = !files.fileExists(atPath: fakeHome.appendingPathComponent(samples[2]).path)
             let ownLogKept = files.fileExists(atPath: fakeHome.appendingPathComponent(samples[3]).path)
             let folderKept = files.fileExists(atPath: fakeHome.appendingPathComponent("Library/Caches").path)
-            let result = "before appCaches=\(SpaceModel.format(beforeCaches)) homebrew=\(SpaceModel.format(beforeHomebrew)) cacheGone=\(cacheGone) homebrewKept=\(homebrewKept) otherLogGone=\(otherLogGone) ownLogKept=\(ownLogKept) cachesFolderKept=\(folderKept)"
+            let crashReportKept = files.fileExists(atPath: fakeHome.appendingPathComponent(samples[4]).path)
+            let result = "before appCaches=\(SpaceModel.format(beforeCaches)) homebrew=\(SpaceModel.format(beforeHomebrew)) cacheGone=\(cacheGone) homebrewKept=\(homebrewKept) otherLogGone=\(otherLogGone) ownLogKept=\(ownLogKept) cachesFolderKept=\(folderKept) crashReportsKept=\(crashReportKept)"
             space.message = nil
             space.homeOverride = nil
             try? files.removeItem(at: fakeHome)
@@ -311,6 +322,134 @@ enum FeatureAutomation {
                 return "front=\(app.lastExternalApp?.localizedName ?? "?")"
             }
             return "no window of \(argument)"
+
+        case "editor-checks":
+            // In the open screenshot editor: the size buttons follow the tool, the fill buttons change
+            // the text being typed right away, and Delete removes the selected mark from anywhere.
+            guard let window = NSApp.windows.first(where: { item in (item.identifier?.rawValue ?? "").hasPrefix("screenshot:") && item.isVisible }) else { return "no editor" }
+            guard let canvas = FeatureAutomation.findCanvas(in: window.contentView) else { return "no canvas" }
+            let document = canvas.document
+            window.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
+            var results: [String] = []
+
+            document.tool = .text
+            let textSize = document.sizeIsText && document.sizeValue == Int(document.textPoints)
+            document.tool = .rectangle
+            let lineSize = !document.sizeIsText && document.sizeValue == Int(document.stroke.width)
+            // With a mark selected the control shows and changes that mark, not the setting for new ones.
+            let savedStroke = document.stroke
+            document.stroke = .heavy
+            let thick = Annotation(tool: .rectangle, start: CGPoint(x: 30, y: 30), end: CGPoint(x: 90, y: 90), color: .coral, lineWidth: document.lineWidth)
+            document.add(thick)
+            document.stroke = .thin
+            document.tool = .select
+            document.selectedId = thick.id
+            let showsSelected = document.sizeValue == Int(StrokeSize.heavy.width)
+            document.changeSize(by: 1)
+            let grewSelected = (document.annotations.first(where: { item in item.id == thick.id })?.lineWidth ?? 0) > thick.lineWidth
+            document.delete(thick.id)
+            document.stroke = savedStroke
+            results.append("sizeFollowsTool=\(textSize && lineSize)")
+            results.append("sizeFollowsSelection=\(showsSelected && grewSelected)")
+
+            let savedClear = document.clearTextBackground
+            document.tool = .text
+            document.clearTextBackground = false
+            canvas.startTypingForChecks(at: CGPoint(x: 80, y: 80))
+            try? await Task.sleep(nanoseconds: 300_000_000)
+            let typedID = document.editingTextId
+            let labelAtStart = document.annotations.first(where: { item in item.id == typedID })?.hasClearBackground == false
+            document.setFilled(false)
+            try? await Task.sleep(nanoseconds: 400_000_000)
+            let clearAfterNoFill = document.annotations.first(where: { item in item.id == typedID })?.hasClearBackground == true
+            // The field shows only the caret, so the text is never drawn twice.
+            let fieldIsClear = canvas.typingFieldDrawsText == false
+            results.append("typingNoFillAtOnce=\(labelAtStart && clearAfterNoFill)")
+            results.append("textDrawnOnce=\(fieldIsClear)")
+            window.makeFirstResponder(nil)
+            document.clearTextBackground = savedClear
+
+            // ⌘V with a picture on the clipboard places it on the screenshot, selected.
+            if let shot = ImageFiles.load(document.capture.mediaURL), let png = ImageFiles.pngData(shot) {
+                let pasteboard = NSPasteboard.general
+                pasteboard.clearContents()
+                pasteboard.setData(png, forType: .png)
+                let pasted = canvas.pasteImage()
+                let placed = document.annotations.last
+                let fileSaved = placed?.imagePath.map { path in FileManager.default.fileExists(atPath: path) } ?? false
+                results.append("pasteImage=\(pasted && placed?.tool == .image && fileSaved && document.selectedId == placed?.id)")
+                if let id = placed?.id, placed?.tool == .image {
+                    document.delete(id)
+                }
+            }
+
+            // Delete with the focus away from the canvas.
+            let box = Annotation(tool: .rectangle, start: CGPoint(x: 20, y: 20), end: CGPoint(x: 60, y: 60), color: .coral, lineWidth: 4)
+            document.add(box)
+            document.tool = .select
+            document.selectedId = box.id
+            window.makeFirstResponder(nil)
+            // Let the typing field from the step above give up the focus first; while a field types,
+            // Delete belongs to it.
+            try? await Task.sleep(nanoseconds: 400_000_000)
+            // The key goes to the app in front; without Bugbear there, it would land elsewhere.
+            guard NSApp.isActive && window.isKeyWindow else {
+                results.append("deleteFromAnywhere=notInFront")
+                return results.joined(separator: " ")
+            }
+            let source = CGEventSource(stateID: .hidSystemState)
+            CGEvent(keyboardEventSource: source, virtualKey: 51, keyDown: true)?.post(tap: .cghidEventTap)
+            CGEvent(keyboardEventSource: source, virtualKey: 51, keyDown: false)?.post(tap: .cghidEventTap)
+            var deleted = false
+            for _ in 0..<15 {
+                try? await Task.sleep(nanoseconds: 100_000_000)
+                if !document.annotations.contains(where: { item in item.id == box.id }) {
+                    deleted = true
+                    break
+                }
+            }
+            results.append("deleteFromAnywhere=\(deleted)")
+            return results.joined(separator: " ")
+
+        case "tooltip-probe":
+            // tooltip-probe:<window id prefix|menubar>,<x>,<y>: points at x,y (from the window's
+            // top-left), waits, and reports how many Bugbear tooltips are on screen.
+            let parts = argument.split(separator: ",")
+            guard parts.count == 3, let offsetX = Double(parts[1]), let offsetY = Double(parts[2]) else { return "bad argument" }
+            // "menubar" is the panel under the bear; it is checked without making the app active.
+            let isMenuPanel = parts[0] == "menubar"
+            var found: NSWindow?
+            for item in NSApp.windows where item.isVisible {
+                if isMenuPanel && item.className.contains("MenuBarExtra") {
+                    found = item
+                }
+                if !isMenuPanel && (item.identifier?.rawValue ?? "").hasPrefix(String(parts[0])) {
+                    found = item
+                }
+            }
+            guard let window = found else { return "no window" }
+            if isMenuPanel {
+                // The way it is used: another app in front, Bugbear not active.
+                NSApp.deactivate()
+                try? await Task.sleep(nanoseconds: 300_000_000)
+            } else {
+                window.makeKeyAndOrderFront(nil)
+                NSApp.activate(ignoringOtherApps: true)
+            }
+            HoverTip.shared.hide()
+            let primaryHeight = NSScreen.screens.first?.frame.height ?? 0
+            let point = CGPoint(x: window.frame.minX + offsetX, y: primaryHeight - window.frame.maxY + offsetY)
+            let source = CGEventSource(stateID: .hidSystemState)
+            CGEvent(mouseEventSource: source, mouseType: .mouseMoved, mouseCursorPosition: CGPoint(x: point.x - 30, y: point.y), mouseButton: .left)?.post(tap: .cghidEventTap)
+            try? await Task.sleep(nanoseconds: 300_000_000)
+            CGEvent(mouseEventSource: source, mouseType: .mouseMoved, mouseCursorPosition: point, mouseButton: .left)?.post(tap: .cghidEventTap)
+            try? await Task.sleep(nanoseconds: 2_500_000_000)
+            var tooltips = 0
+            for item in NSApp.windows where item.isVisible && item is HoverTipPanel {
+                tooltips += 1
+            }
+            return "key=\(window.isKeyWindow) active=\(NSApp.isActive) tooltips=\(tooltips)"
 
         case "move-pointer":
             // move-pointer:x,y (top-left screen points), e.g. onto the second display.
@@ -676,5 +815,21 @@ enum FeatureAutomation {
         document.annotations.removeAll { item in item.id == arrow.id || item.id == text.id }
         document.saveProject()
         return results.joined(separator: " ")
+    }
+}
+
+extension FeatureAutomation {
+    /// The drawing canvas inside an editor window.
+    static func findCanvas(in view: NSView?) -> CanvasView? {
+        guard let current = view else { return nil }
+        if let canvas = current as? CanvasView {
+            return canvas
+        }
+        for child in current.subviews {
+            if let found = findCanvas(in: child) {
+                return found
+            }
+        }
+        return nil
     }
 }

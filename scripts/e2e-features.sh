@@ -253,6 +253,27 @@ $R close-windows 10 >/dev/null
 if [ "$($R press-status-item 10)" = "open=true" ]; then pass "panel still opens after a screenshot"; else fail "panel after screenshot"; fi
 $R close-panel 10 >/dev/null
 
+echo "==> tooltips"
+# Hover a toolbar button in the screenshot editor, and a tab in the menu panel with the app not
+# active (how the panel is used): a tooltip appears in both.
+$R screenshot-full 40 >/dev/null
+sleep 3
+result=$($R "tooltip-probe:screenshot,120,82" 15)
+if echo "$result" | grep -q "tooltips=1"; then pass "tooltip on an editor tool"; else fail "tooltip on an editor tool" "$result"; fi
+result=$($R editor-checks 30)
+if echo "$result" | grep -q "sizeFollowsTool=true"; then pass "one size control: text size for text, line width for shapes"; else fail "size control" "$result"; fi
+if echo "$result" | grep -q "sizeFollowsSelection=true"; then pass "the size control shows and changes the selected mark"; else fail "size control with a selection" "$result"; fi
+if echo "$result" | grep -q "typingNoFillAtOnce=true"; then pass "No fill takes the label off text while typing"; else fail "No fill while typing" "$result"; fi
+if echo "$result" | grep -q "textDrawnOnce=true"; then pass "text being typed is drawn once, not twice"; else fail "text drawn twice while typing" "$result"; fi
+if echo "$result" | grep -q "pasteImage=true"; then pass "⌘V places a picture on the screenshot"; else fail "paste a picture" "$result"; fi
+if echo "$result" | grep -q "deleteFromAnywhere=true"; then pass "Delete removes the selected mark with the focus away from the canvas"; else fail "Delete key" "$result"; fi
+$R close-windows 10 >/dev/null
+$R press-status-item 10 >/dev/null
+sleep 1
+result=$($R "tooltip-probe:menubar,40,175" 15)
+if echo "$result" | grep -q "active=false tooltips=1"; then pass "tooltip in the menu panel while the app is not active"; else fail "tooltip in the menu panel" "$result"; fi
+$R close-panel 10 >/dev/null
+
 echo "==> what's new"
 $R whats-new 10 >/dev/null
 if $R windows-debug 10 | tr '|' '\n' | grep "visible=true" | grep -q "720x"; then pass "What's New window opens"; else fail "What's New window"; fi
@@ -283,7 +304,7 @@ top=$($R space-top:1 10)
 if echo "$top" | grep -q "big.mov"; then pass "largest file first"; else fail "largest file" "$top"; fi
 rm -rf "$fixture"
 result=$($R space-clean-test 60)
-if echo "$result" | grep -q "cacheGone=true homebrewKept=true otherLogGone=true ownLogKept=true cachesFolderKept=true"; then pass "clean-up deletes caches and keeps what it must"; else fail "clean-up" "$result"; fi
+if echo "$result" | grep -q "cacheGone=true homebrewKept=true otherLogGone=true ownLogKept=true cachesFolderKept=true crashReportsKept=true"; then pass "clean-up deletes caches and keeps what it must"; else fail "clean-up" "$result"; fi
 result=$($R space-stop-test 120)
 if echo "$result" | grep -q "afterStop=idle final=done"; then pass "stopped scan leaves no stale result"; else fail "stop scan" "$result"; fi
 result=$($R space-measure 120)

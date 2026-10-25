@@ -64,6 +64,110 @@ enum DevChecks {
 
     // MARK: Self test
 
+    /// The five color slots: they start as the usual colors, dragging in the color panel changes the
+    /// first slot, a new opening adds one on the left, and there are always five.
+    private static func checkRecentColors() async {
+        let saved = UserDefaults.standard.stringArray(forKey: "recentAnnotationColors")
+        RecentColors.clear()
+        check(RecentColors.load() == RecentColors.defaults, "five usual colors to start with")
+        var applied: [AnnotationColor] = []
+        let picker = ColorPanelPicker.shared
+        picker.beginForChecks { color in
+            applied.append(color)
+        }
+        picker.pick(AnnotationColor(hex: 0x111111), wait: 0)
+        try? await Task.sleep(nanoseconds: 60_000_000)
+        picker.pick(AnnotationColor(hex: 0x222222), wait: 0)
+        try? await Task.sleep(nanoseconds: 60_000_000)
+        let afterDrag = RecentColors.load()
+        check(afterDrag.first == AnnotationColor(hex: 0x222222) && afterDrag.count == RecentColors.limit && afterDrag[1] == RecentColors.defaults[0], "dragging in the color panel updates one slot", "\(afterDrag)")
+        for hex in [UInt32(0x333333), 0x444444, 0x555555, 0x666666] {
+            picker.endPick()
+            picker.pick(AnnotationColor(hex: hex), wait: 0)
+            try? await Task.sleep(nanoseconds: 60_000_000)
+        }
+        // A drag that passes over a color already in a slot keeps that slot.
+        picker.endPick()
+        let kept = RecentColors.load()[1]
+        picker.pick(AnnotationColor(hex: 0x777777), wait: 0)
+        try? await Task.sleep(nanoseconds: 60_000_000)
+        picker.pick(kept, wait: 0)
+        try? await Task.sleep(nanoseconds: 60_000_000)
+        picker.pick(AnnotationColor(hex: 0x888888), wait: 0)
+        try? await Task.sleep(nanoseconds: 60_000_000)
+        let afterPass = RecentColors.load()
+        check(afterPass.first == AnnotationColor(hex: 0x888888) && afterPass.contains(kept), "a drag over a color in the slots does not lose it", "\(afterPass)")
+        picker.endPick()
+        picker.pick(AnnotationColor(hex: 0x666666), wait: 0)
+        try? await Task.sleep(nanoseconds: 60_000_000)
+        let recent = RecentColors.load()
+        check(recent.count == RecentColors.limit && recent.first == AnnotationColor(hex: 0x666666), "a new pick takes the left slot, always five", "\(recent)")
+        check(applied.last == AnnotationColor(hex: 0x666666), "the picked color is applied")
+        if let previous = saved {
+            UserDefaults.standard.set(previous, forKey: "recentAnnotationColors")
+        } else {
+            UserDefaults.standard.removeObject(forKey: "recentAnnotationColors")
+        }
+    }
+
+    /// A picture placed on a screenshot is drawn in its frame, on top of the screenshot.
+    private static func checkPlacedImage(folder: URL) {
+        guard let red = CGContext(data: nil, width: 40, height: 30, bitsPerComponent: 8, bytesPerRow: 0, space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue),
+              let white = CGContext(data: nil, width: 200, height: 200, bitsPerComponent: 8, bytesPerRow: 0, space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return }
+        red.setFillColor(NSColor.red.cgColor)
+        red.fill(CGRect(x: 0, y: 0, width: 40, height: 30))
+        white.setFillColor(NSColor.white.cgColor)
+        white.fill(CGRect(x: 0, y: 0, width: 200, height: 200))
+        guard let picture = red.makeImage(), let base = white.makeImage(), let data = ImageFiles.pngData(picture) else { return }
+        let file = folder.appendingPathComponent("placed-check.png")
+        try? data.write(to: file)
+        var placed = Annotation(tool: .image, start: CGPoint(x: 50, y: 60), end: CGPoint(x: 130, y: 120), color: .coral, lineWidth: 4)
+        placed.imagePath = file.path
+        guard let rendered = AnnotationRenderer.renderImage(base: base, annotations: [placed], crop: nil, badgeLines: nil, badgeCorner: .topRight, badgeScale: 1),
+              let inside = pixel(rendered, at: CGPoint(x: 90, y: 90)), let outside = pixel(rendered, at: CGPoint(x: 180, y: 180)) else {
+            check(false, "placed image renders")
+            return
+        }
+        check(inside.red > 200 && inside.green < 60, "a placed picture is drawn in its frame", "\(inside)")
+        check(outside.red > 245 && outside.green > 245, "the screenshot around it stays as it was", "\(outside)")
+    }
+
+    /// A long tooltip wraps and its panel is tall enough for every line.
+    private static func checkTooltipSize(folder: URL) {
+        let text = "No fill: text without a label behind it, shapes as outlines only. Pick Text, Rectangle or Ellipse to use it"
+        let layout = HoverTip.layout(for: text)
+        let view = HoverTipView(text: text, textWidth: layout.textWidth)
+        let needed = NSHostingView(rootView: Text(text).font(.system(size: HoverTip.fontSize)).frame(width: layout.textWidth, alignment: .leading).fixedSize(horizontal: false, vertical: true)).fittingSize
+        check(layout.size.width <= HoverTip.maxTextWidth + 40, "a long tooltip wraps instead of growing wide", "\(layout.size)")
+        check(needed.height + HoverTip.verticalPadding * 2 <= layout.size.height + 1, "a long tooltip has room for every line", "needs \(needed.height), panel \(layout.size.height)")
+        render(view, size: layout.size, to: folder.appendingPathComponent("tooltip-long.png"))
+    }
+
+    /// Instructions say the keys in words, not only as symbols.
+    private static func checkShortcutWords() {
+        let shortcut = Shortcut.optionShift(18, "1")
+        check(shortcut.spoken == "Option + Shift + 1", "shortcut in words", shortcut.spoken)
+    }
+
+    /// A filled rectangle tints what is inside it; an outline one leaves it as it was.
+    private static func checkShapeFill() {
+        guard let context = CGContext(data: nil, width: 200, height: 200, bitsPerComponent: 8, bytesPerRow: 0, space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return }
+        context.setFillColor(NSColor.white.cgColor)
+        context.fill(CGRect(x: 0, y: 0, width: 200, height: 200))
+        guard let white = context.makeImage() else { return }
+        var box = Annotation(tool: .rectangle, start: CGPoint(x: 40, y: 40), end: CGPoint(x: 160, y: 160), color: .blue, lineWidth: 4)
+        let outline = AnnotationRenderer.renderImage(base: white, annotations: [box], crop: nil, badgeLines: nil, badgeCorner: .topRight, badgeScale: 1)
+        box.fill = true
+        let filled = AnnotationRenderer.renderImage(base: white, annotations: [box], crop: nil, badgeLines: nil, badgeCorner: .topRight, badgeScale: 1)
+        guard let outlineImage = outline, let filledImage = filled, let inside = pixel(filledImage, at: CGPoint(x: 100, y: 100)), let plain = pixel(outlineImage, at: CGPoint(x: 100, y: 100)) else {
+            check(false, "shape fill renders")
+            return
+        }
+        check(plain.red > 245 && plain.blue > 245, "outline rectangle leaves the inside as it was", "\(plain)")
+        check(inside.red < 230 && inside.blue > inside.red, "filled rectangle tints the inside", "\(inside)")
+        check(box.hitTest(CGPoint(x: 100, y: 100), tolerance: 4), "a filled rectangle is selected by clicking inside")
+    }
+
     /// Each screenshot format comes out smaller as the quality goes down, and half size halves the width.
     private static func checkScreenshotFormats() {
         guard let image = renderTallImage(["Total €-49.00", "Payment failed: undefined", "Discount −€98.00", "Card 4242 4242 4242 4242"]) else {
@@ -108,6 +212,11 @@ enum DevChecks {
         failures = []
         checkAnnotationColors()
         checkScreenshotFormats()
+        await checkRecentColors()
+        checkShortcutWords()
+        checkShapeFill()
+        checkTooltipSize(folder: folder)
+        checkPlacedImage(folder: folder)
 
         // 1. Synthetic 6 s clip with a moving box and a 440 Hz tone.
         let video = folder.appendingPathComponent("synthetic-video.mov")
@@ -654,10 +763,19 @@ enum DevChecks {
         app.coveredSeconds = 180
         app.bufferState = .running
 
-        Updater.shared.state = .available(UpdateInfo(version: "0.6.0", newCommitCount: 3, changes: [
-            UpdateInfo.Change(title: "Faster export", shortSHA: "3333333"),
-            UpdateInfo.Change(title: "Fix menu height", shortSHA: "2222222"),
+        Updater.shared.state = .available(UpdateInfo(version: "0.6.0", newCommitCount: 9, changes: [
+            UpdateInfo.Change(title: "Pick screenshot and video quality with the file size (0.8.0)", shortSHA: "3333333", pullRequest: 9),
+            UpdateInfo.Change(title: "Space: clear delete confirmation in the menu panel (0.8.1)", shortSHA: "2222222", pullRequest: 11),
         ]))
+        render(UpdateBadge(detailsOnly: true).padding(16).background(Theme.window).environment(app).preferredColorScheme(.dark), size: CGSize(width: 360, height: 260), to: folder.appendingPathComponent("update-badge.png"))
+
+        // Clean asks on its own line, with full button names, in the narrow menu panel.
+        if let category = CleanupCategory.all.first(where: { item in item.action == .deleteContents }) {
+            let space = SpaceModel.shared
+            space.confirmingID = category.id
+            render(CleanupRow(model: space, category: category, compact: true).padding(.horizontal, 16).background(Theme.window).environment(app).preferredColorScheme(.dark), size: CGSize(width: 360, height: 150), to: folder.appendingPathComponent("space-confirm.png"))
+            space.confirmingID = nil
+        }
 
         for tab in MenuTab.allCases {
             UserDefaults.standard.set(tab.rawValue, forKey: "menuTab")

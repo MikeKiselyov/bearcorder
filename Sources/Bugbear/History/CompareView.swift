@@ -123,7 +123,7 @@ struct ScreenshotCompareView: View {
             HStack(spacing: 12) {
                 PillPicker(options: CompareMode.allCases, selection: $mode) { value in value.rawValue }
                     .frame(width: 360)
-                    .help("How to compare: side by side, a before/after slider, or only the changed areas highlighted")
+                    .tip("How to compare: side by side, a before/after slider, or only the changed areas highlighted")
                 if let current = output {
                     Text(summary(current.result)).font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
                 }
@@ -134,7 +134,7 @@ struct ScreenshotCompareView: View {
                 Button("Copy image") { copy() }
                     .buttonStyle(AccentButtonStyle(isEnabled: output != nil))
                     .disabled(output == nil)
-                    .help("Copy the comparison as an image to paste into a bug report")
+                    .tip("Copy the comparison as an image to paste into a bug report")
             }
             .padding(.horizontal, 16)
             .padding(.top, 36)
@@ -273,9 +273,9 @@ struct VideoCompareView: View {
                 }
                 .buttonStyle(.plain)
                 .keyboardShortcut(.space, modifiers: [])
-                .help("Play or pause both clips together (Space)")
+                .tip("Play or pause both clips together (Space)")
                 Slider(value: Binding(get: { position }, set: { value in seek(value) }), in: 0...longest)
-                    .help("Scrub both clips to the same moment")
+                    .tip("Scrub both clips to the same moment")
                 Text("\(TimeFormat.clock(position)) / \(TimeFormat.clock(longest))")
                     .font(.system(size: 12, design: .monospaced))
                     .foregroundStyle(Theme.textSecondary)

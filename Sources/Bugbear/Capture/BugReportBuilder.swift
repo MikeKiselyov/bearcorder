@@ -66,6 +66,6 @@ struct CopyReportButton: View {
             copy(BugReportBuilder.preferredFormat)
         }
         .menuStyle(.button)
-        .help(help)
+        .tip(help)
     }
 }

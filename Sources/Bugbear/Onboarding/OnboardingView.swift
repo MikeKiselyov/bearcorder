@@ -151,7 +151,7 @@ struct OnboardingView: View {
                 .foregroundStyle(Theme.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
             BufferTimeline()
-            Text("With the screen buffer on, Bugbear quietly keeps the last few minutes. Press ⌥⇧1 and the moment you missed opens in the editor: trim it, add an arrow, paste it into the ticket. It also saves the minute before an app crashes, by itself.")
+            Text("With the screen buffer on, Bugbear quietly keeps the last few minutes. Press \(HotKeySettings.shared.readable(for: .saveShort)) and the moment you missed opens in the editor: trim it, add an arrow, paste it into the ticket. It also saves the minute before an app crashes, by itself.")
                 .font(.system(size: 13))
                 .fixedSize(horizontal: false, vertical: true)
             HStack(spacing: 12) {
@@ -206,8 +206,8 @@ struct OnboardingView: View {
             Text("How it works").font(.system(size: 24, weight: .bold))
             VStack(alignment: .leading, spacing: 12) {
                 howStep(1, "A ring next to the bear means the buffer is on", "It keeps the last minutes of the screen. Turn it on or off in the menu that opens from the bear.")
-                howStep(2, "Saw a bug? Press \(keys.text(for: .saveShort))", "The last 30 seconds open in the editor. \(keys.text(for: .saveMinute)) saves a minute, \(keys.text(for: .saveBuffer)) the whole buffer. The same buttons are in the menu.")
-                howStep(3, "Something about to happen? Press \(keys.text(for: .mark))", "It marks the moment; the next save reaches back to it.")
+                howStep(2, "Saw a bug? Press \(keys.readable(for: .saveShort))", "The last 30 seconds open in the editor. \(keys.readable(for: .saveMinute)) saves a minute, \(keys.readable(for: .saveBuffer)) the whole buffer. The same buttons are in the menu.")
+                howStep(3, "Something about to happen? Press \(keys.readable(for: .mark))", "It marks the moment; the next save reaches back to it.")
                 howStep(4, "Trim, point, share", "In the editor cut the clip, add arrows and text, then copy it or drag it into the ticket.")
                 howStep(5, "Stopped it from the macOS menu?", "Stop in the purple screen recording icon saves what the buffer holds and offers to open it.")
             }
@@ -223,7 +223,7 @@ struct OnboardingView: View {
                     Spacer()
                     Button("Choose…") { chooseOutputFolder() }
                         .buttonStyle(SecondaryButtonStyle())
-                        .help("Pick the folder where saved screenshots and clips go")
+                        .tip("Pick the folder where saved screenshots and clips go")
                 }
                 .padding(.horizontal, 12)
                 .frame(height: 40)
@@ -232,6 +232,35 @@ struct OnboardingView: View {
                 Text("Change it any time in Settings.")
                     .font(.system(size: 12))
                     .foregroundStyle(Theme.textSecondary)
+            }
+            crashClips
+        }
+    }
+
+    /// The minute before an app crashed is saved by itself; how long those clips stay.
+    private var crashClips: some View {
+        @Bindable var settings = app.settings
+        return VStack(alignment: .leading, spacing: 8) {
+            Toggle(isOn: $settings.saveOnCrash) {
+                Text("Save the minute before an app crashes").font(.system(size: 14, weight: .semibold))
+            }
+            .toggleStyle(.checkbox)
+            .tip("When an app you worked with crashes, Bugbear saves the last minute of the screen with the crash report")
+            if settings.saveOnCrash {
+                HStack(spacing: 10) {
+                    Text("Keep crash clips for").font(.system(size: 13))
+                    Picker(selection: $settings.keepCrashClipsDays) {
+                        Text("3 days").tag(3)
+                        Text("7 days").tag(7)
+                        Text("30 days").tag(30)
+                        Text("Always").tag(0)
+                    } label: {
+                        EmptyView()
+                    }
+                    .pickerStyle(.segmented)
+                    .fixedSize()
+                    .tip("After this they are deleted. Clips you open in the editor stay while open")
+                }
             }
         }
     }
@@ -377,26 +406,29 @@ struct OnboardingView: View {
     }
 
     private var shortcuts: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        let keys = HotKeySettings.shared
+        return VStack(alignment: .leading, spacing: 14) {
             Text("Shortcuts").font(.system(size: 24, weight: .bold))
             Text("They work from any app. Everything is also in the menu bar.")
                 .font(.system(size: 13))
                 .foregroundStyle(Theme.textSecondary)
             Grid(alignment: .leading, horizontalSpacing: 18, verticalSpacing: 10) {
-                shortcut("⌥⇧2", "Save the last minute of the screen", "⌥⇧1 for 30 s, ⌥⇧3 for the whole buffer")
-                shortcut("⌥⇧M", "Mark the moment", "The next save reaches back to it and opens there")
-                shortcut("⌥⇧4", "Screenshot an area", "⌥⇧5 for a window, ⌥⇧O copies the text in an area")
-                shortcut("⌥⇧6", "Start or stop a recording", "⌥⇧7 pauses and resumes")
-                shortcut("⌥⇧A", "Draw on the screen", "Arrows and boxes appear in the video")
-                shortcut("⌥⇧C", "Camera bubble", "Drag it, scroll to resize")
-                shortcut("⌥⇧D", "Dev toolbox", "Opens with what is on your clipboard")
+                shortcut(.saveMinute, "Save the last minute of the screen", "\(keys.readable(for: .saveShort)) for 30 s, \(keys.readable(for: .saveBuffer)) for the whole buffer")
+                shortcut(.mark, "Mark the moment", "The next save reaches back to it and opens there")
+                shortcut(.screenshotArea, "Screenshot an area", "\(keys.readable(for: .screenshotWindow)) for a window, \(keys.readable(for: .copyText)) copies the text in an area")
+                shortcut(.recordToggle, "Start or stop a recording", "\(keys.readable(for: .recordPause)) pauses and resumes")
+                shortcut(.draw, "Draw on the screen", "Arrows and boxes appear in the video")
+                shortcut(.camera, "Camera bubble", "Drag it, scroll to resize")
+                shortcut(.toolbox, "Dev toolbox", "Opens with what is on your clipboard")
             }
         }
     }
 
-    private func shortcut(_ keys: String, _ title: String, _ hint: String) -> some View {
-        GridRow {
-            Text(keys)
+    /// The keys as symbols in a key cap, and in words next to the title.
+    private func shortcut(_ action: HotKeyAction, _ title: String, _ hint: String) -> some View {
+        let keys = HotKeySettings.shared
+        return GridRow {
+            Text(keys.text(for: action))
                 .font(.system(size: 14, weight: .semibold, design: .monospaced))
                 .padding(.horizontal, 10)
                 .frame(height: 30)
@@ -404,7 +436,7 @@ struct OnboardingView: View {
                 .overlay(RoundedRectangle(cornerRadius: 6).stroke(Theme.borderStrong, lineWidth: 1))
                 .clipShape(RoundedRectangle(cornerRadius: 6))
             VStack(alignment: .leading, spacing: 1) {
-                Text(title).font(.system(size: 13, weight: .semibold))
+                Text("\(title) (\(keys.spoken(for: action)))").font(.system(size: 13, weight: .semibold))
                 Text(hint).font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
             }
         }
@@ -428,12 +460,12 @@ struct OnboardingView: View {
                 SectionLabel("Try it now")
                 if app.settings.startBufferOnLaunch {
                     tryStep("1", "Click around in any app for a few seconds.")
-                    tryStep("2", "Press ⌥⇧1: the last 30 seconds open in the video editor.")
+                    tryStep("2", "Press \(HotKeySettings.shared.readable(for: .saveShort)): the last 30 seconds open in the video editor.")
                     tryStep("3", "Add an arrow, then Copy and paste it into a ticket.")
                 } else {
-                    tryStep("1", "Press ⌥⇧4 and drag over any part of the screen.")
+                    tryStep("1", "Press \(HotKeySettings.shared.readable(for: .screenshotArea)) and drag over any part of the screen.")
                     tryStep("2", "The screenshot opens in the editor: add an arrow or a box.")
-                    tryStep("3", "Press ⌘C and paste it into a ticket.")
+                    tryStep("3", "Press ⌘C (Command + C) and paste it into a ticket.")
                 }
             }
             if !screenAccess && app.settings.startBufferOnLaunch {
@@ -501,7 +533,7 @@ private struct BufferTimeline: View {
             HStack {
                 Text("−3:00").font(.system(size: 11, design: .monospaced)).foregroundStyle(Theme.textSecondary)
                 Spacer()
-                Text("⌥⇧1 saves this part")
+                Text("\(HotKeySettings.shared.readable(for: .saveShort)) saves this part")
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(Theme.accentSoft)
                 Text("now").font(.system(size: 11, design: .monospaced)).foregroundStyle(Theme.accentSoft)

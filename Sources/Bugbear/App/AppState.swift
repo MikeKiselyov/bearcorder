@@ -590,7 +590,7 @@ final class AppState {
 
     @discardableResult
     func cleanUpStorage() async -> Int {
-        return await store.cleanUp(maxAgeDays: settings.keepCapturesDays, maxGB: settings.maxCapturesGB)
+        return await store.cleanUp(maxAgeDays: settings.keepCapturesDays, maxGB: settings.maxCapturesGB, crashClipDays: settings.keepCrashClipsDays)
     }
 
     // MARK: Crashes
@@ -914,7 +914,7 @@ final class AppState {
         item.setString(capture.mediaURL.absoluteString, forType: .fileURL)
         pasteboard.writeObjects([item])
         justCopiedScreenshot = capture.id
-        Toast.shared.show("Copied. Paste with ⌘V, it is also in Recent.", symbol: "doc.on.clipboard", seconds: 2.5)
+        Toast.shared.showCopied("Screenshot copied", preview: "also saved in Recent", symbol: "photo")
     }
 
     /// Several displays: every display as its own picture, like clips. The side-by-side picture is built
@@ -1003,6 +1003,12 @@ final class AppState {
         guard let file = await ScreenshotCapture.capture(.area) else { return }
         defer { try? FileManager.default.removeItem(at: file) }
         guard let image = ImageFiles.load(file) else { return }
+        await copyText(from: image)
+    }
+
+    /// The text in a picture (or the link of a QR code in it) to the clipboard, with a message saying
+    /// it can be pasted.
+    func copyText(from image: CGImage) async {
         // A QR code in the area: its link is more useful than the text around it.
         let codes = await QRCode.read(image)
         if !codes.isEmpty {
@@ -1014,7 +1020,7 @@ final class AppState {
             if preview.count > 40 {
                 preview = String(preview.prefix(40)) + "…"
             }
-            Toast.shared.show("Copied QR: \(preview)", symbol: "qrcode")
+            Toast.shared.showCopied("QR code copied", preview: preview, symbol: "qrcode")
             return
         }
         do {
@@ -1032,7 +1038,7 @@ final class AppState {
                 preview = String(preview.prefix(40)) + "…"
             }
             Log.info("copied \(text.count) characters of recognized text")
-            Toast.shared.show("Copied: \(preview)", symbol: "doc.on.clipboard")
+            Toast.shared.showCopied("Text copied", preview: preview, symbol: "text.viewfinder")
         } catch {
             showError("Text recognition failed: \(error.localizedDescription)")
         }

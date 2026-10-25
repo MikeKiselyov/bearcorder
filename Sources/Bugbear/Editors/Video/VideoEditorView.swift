@@ -198,7 +198,7 @@ private struct VideoEditorContent: View {
                 .fixedSize()
                 .disabled(switchingScreen)
             }
-            .help("Which screen is in the clip. Edits stay when you switch.")
+            .tip("Which screen is in the clip. Edits stay when you switch.")
             .padding(.trailing, 8)
         }
     }
@@ -276,7 +276,7 @@ private struct ToolbarTextButton: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .help(help)
+        .tip(help)
     }
 }
 
@@ -294,7 +294,7 @@ private struct VideoDragOut: View {
         .frame(height: 32)
         .overlay(RoundedRectangle(cornerRadius: 7).stroke(Theme.borderStrong, style: StrokeStyle(lineWidth: 1, dash: [4, 3])))
         .contentShape(Rectangle())
-        .help("Drag the original clip into another app. Use Copy or Save for the edited version.")
+        .tip("Drag the original clip into another app. Use Copy or Save for the edited version.")
         .onDrag {
             return NSItemProvider(contentsOf: model.capture.mediaURL) ?? NSItemProvider()
         }
