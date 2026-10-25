@@ -23,6 +23,9 @@ enum BadgeCorner: String, CaseIterable, Codable, Identifiable {
 enum AnnotationRenderer {
     /// `context` must already be y-down in document units. `baseImage` is in the same units
     /// (needed only for blur and magnifier).
+    /// How much of the color a filled rectangle or ellipse shows; what is under it stays visible.
+    static let fillAlpha: CGFloat = 0.28
+
     static func draw(_ annotations: [Annotation], baseImage: CGImage?, in context: CGContext) {
         let graphics = NSGraphicsContext(cgContext: context, flipped: true)
         NSGraphicsContext.saveGraphicsState()
@@ -52,6 +55,10 @@ enum AnnotationRenderer {
             withShadow(width: annotation.lineWidth) {
                 let radius = annotation.lineWidth * 1.5
                 let path = NSBezierPath(roundedRect: annotation.rect, xRadius: radius, yRadius: radius)
+                if annotation.isFilled {
+                    color.withAlphaComponent(fillAlpha).setFill()
+                    path.fill()
+                }
                 path.lineWidth = annotation.lineWidth
                 color.setStroke()
                 path.stroke()
@@ -59,6 +66,10 @@ enum AnnotationRenderer {
         case .ellipse:
             withShadow(width: annotation.lineWidth) {
                 let path = NSBezierPath(ovalIn: annotation.rect)
+                if annotation.isFilled {
+                    color.withAlphaComponent(fillAlpha).setFill()
+                    path.fill()
+                }
                 path.lineWidth = annotation.lineWidth
                 color.setStroke()
                 path.stroke()

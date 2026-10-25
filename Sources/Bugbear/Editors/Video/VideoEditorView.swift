@@ -77,6 +77,22 @@ private struct VideoEditorContent: View {
             model.togglePlay()
             return .handled
         }
+        .background(DeleteKeyMonitor {
+            if model.selection == nil {
+                return false
+            }
+            model.deleteSelection()
+            return true
+        })
+        .onKeyPress(keys: ["z"]) { press in
+            if isTypingText || !press.modifiers.contains(.command) { return .ignored }
+            if press.modifiers.contains(.shift) {
+                model.redo()
+            } else {
+                model.undo()
+            }
+            return .handled
+        }
         .onKeyPress(.delete) {
             if isTypingText { return .ignored }
             model.deleteSelection()
@@ -121,6 +137,10 @@ private struct VideoEditorContent: View {
 
     private var toolbar: some View {
         HStack(spacing: 4) {
+            ToolButton(systemImage: "arrow.uturn.backward", help: "Undo the last change (⌘Z)") { model.undo() }
+                .disabled(!model.canUndo)
+            ToolButton(systemImage: "arrow.uturn.forward", help: "Redo what was undone (⇧⌘Z)") { model.redo() }
+            Rectangle().fill(Theme.borderStrong).frame(width: 1, height: 22).padding(.horizontal, 6)
             ToolbarTextButton(systemImage: "scissors", title: "Cut", help: "Cut the selected range (drag on the ruler first)") {
                 model.cutSelection()
             }
@@ -155,9 +175,6 @@ private struct VideoEditorContent: View {
             if model.isBuilding || switchingScreen {
                 ProgressView().controlSize(.small)
             }
-            ToolButton(systemImage: "arrow.uturn.backward", help: "Undo") { model.undo() }
-                .disabled(!model.canUndo)
-            ToolButton(systemImage: "arrow.uturn.forward", help: "Redo") { model.redo() }
         }
         .padding(.horizontal, 12)
         .frame(height: 48)

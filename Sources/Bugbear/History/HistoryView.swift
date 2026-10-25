@@ -58,6 +58,7 @@ struct HistoryView: View {
                 HStack(spacing: 8) {
                     Image(systemName: "magnifyingglass").foregroundStyle(Theme.textSecondary)
                     TextField("Search by app, URL…", text: $search).textFieldStyle(.plain)
+                        .help("Filter captures by app name, URL, title or other environment details")
                 }
                 .font(.system(size: 13))
                 .padding(.horizontal, 10)
@@ -66,6 +67,7 @@ struct HistoryView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 7))
                 PillPicker(options: Filter.allCases, selection: $filter) { value in value.rawValue }
                     .frame(width: 300)
+                    .help("Show all captures, only screenshots or only videos")
                 Spacer()
                 if selecting {
                     Text("\(selected.count) selected").font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
@@ -85,6 +87,7 @@ struct HistoryView: View {
                         selected = []
                     }
                     .buttonStyle(AccentButtonStyle())
+                    .help("Finish selecting and clear the selection")
                 } else {
                     Text("\(filtered.count) captures").font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
                     Button("Select") { selecting = true }
@@ -97,6 +100,7 @@ struct HistoryView: View {
                     Label("Open folder", systemImage: "folder")
                 }
                 .buttonStyle(SecondaryButtonStyle())
+                .help("Open the folder with all captures in Finder")
             }
             .padding(.horizontal, 16)
             .padding(.top, 36)
@@ -182,6 +186,7 @@ struct HistoryView: View {
                 .menuStyle(.borderlessButton)
                 .fixedSize()
                 .accessibilityLabel("More actions")
+                .help("More actions: open, show in Finder, copy a bug report or the environment, delete")
             }
             if !capture.environment.url.isEmpty {
                 Text(capture.environment.url)
@@ -199,6 +204,7 @@ struct HistoryView: View {
         .clipShape(RoundedRectangle(cornerRadius: 10))
         .contentShape(Rectangle())
         .overlay(RoundedRectangle(cornerRadius: 10).stroke(Theme.accent, lineWidth: selecting && selected.contains(capture.id) ? 2 : 0))
+        .help("Double-click to open in the editor, drag to drop the file into another app")
         .onTapGesture(count: 2) {
             WindowManager.shared.openEditor(for: capture)
         }

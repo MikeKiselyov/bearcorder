@@ -23,7 +23,7 @@ struct RecordingHUDView: View {
                     .frame(minWidth: 110, alignment: .leading)
                 }
 
-                HUDButton(systemImage: session.isPaused ? "play.fill" : "pause.fill", help: session.isPaused ? "Resume (⌥⇧7)" : "Pause (⌥⇧7)") {
+                HUDButton(systemImage: session.isPaused ? "play.fill" : "pause.fill", help: session.isPaused ? "Resume the recording (\(HotKeySettings.shared.text(for: .recordPause)))" : "Pause the recording without ending it (\(HotKeySettings.shared.text(for: .recordPause)))") {
                     session.togglePause()
                 }
             } else {
@@ -34,7 +34,7 @@ struct RecordingHUDView: View {
 
             divider
 
-            HUDButton(systemImage: "pencil.and.scribble", help: overlay.isDrawing ? "Stop drawing (Esc)" : "Draw on screen (⌥⇧A)", isSelected: overlay.isDrawing) {
+            HUDButton(systemImage: "pencil.and.scribble", help: overlay.isDrawing ? "Stop drawing and use the screen normally again (Esc)" : "Draw arrows and boxes on screen to point things out (\(HotKeySettings.shared.text(for: .draw)))", isSelected: overlay.isDrawing) {
                 app.toggleDrawing()
             }
 
@@ -58,15 +58,16 @@ struct RecordingHUDView: View {
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel(color.rawValue)
+                    .help("Draw in \(color.rawValue)")
                 }
                 divider
                 HUDButton(systemImage: overlay.autoFade ? "timer" : "pin.fill", help: overlay.autoFade ? "Marks fade after 3 s (click to keep)" : "Marks stay (click to fade)") {
                     overlay.autoFade.toggle()
                 }
-                HUDButton(systemImage: "arrow.uturn.backward", help: "Undo (⌘Z)") {
+                HUDButton(systemImage: "arrow.uturn.backward", help: "Undo the last mark (⌘Z)") {
                     overlay.undo()
                 }
-                HUDButton(systemImage: "trash", help: "Clear (Delete)") {
+                HUDButton(systemImage: "trash", help: "Clear all marks from the screen (Delete)") {
                     overlay.clear()
                 }
             }
@@ -74,7 +75,7 @@ struct RecordingHUDView: View {
             divider
 
             if app.recording != nil {
-                HUDButton(systemImage: "xmark", help: "Discard recording") {
+                HUDButton(systemImage: "xmark", help: "Stop and throw the recording away without saving") {
                     app.discardRecording()
                 }
                 Button {
@@ -91,9 +92,9 @@ struct RecordingHUDView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 7))
                 }
                 .buttonStyle(.plain)
-                .help("Stop and open editor (⌥⇧6)")
+                .help("Stop recording and open it in the editor (\(HotKeySettings.shared.text(for: .recordToggle)))")
             } else {
-                HUDButton(systemImage: "xmark", help: "Close") {
+                HUDButton(systemImage: "xmark", help: "Close the drawing bar") {
                     app.hideOverlay()
                 }
             }
