@@ -5,7 +5,12 @@ import SwiftUI
 /// Picks a color anywhere on screen with the system loupe.
 @MainActor
 enum ColorPick {
+    /// The system loupe is open.
+    private(set) static var isPicking = false
+
     static func pick() async -> RGBAColor? {
+        isPicking = true
+        defer { isPicking = false }
         return await withCheckedContinuation { continuation in
             NSColorSampler().show { picked in
                 guard let color = picked?.usingColorSpace(.sRGB) else {
@@ -47,6 +52,7 @@ struct ColorContrastTool: View {
                     }
                     .buttonStyle(.plain)
                     .padding(.top, 34)
+                    .accessibilityLabel("Swap colors")
                     .tip("Swap the text and background colors")
                     colorInput("Background", value: $background, parsed: back)
                 }
@@ -73,6 +79,7 @@ struct ColorContrastTool: View {
                 TextField("#RRGGBB", text: value)
                     .textFieldStyle(.roundedBorder)
                     .font(.system(size: 13, design: .monospaced))
+                    .accessibilityLabel("\(title) color")
                     .tip("\(title) color as #RRGGBB, rgb(…) or hsl(…)")
                 Button {
                     Task {
@@ -83,6 +90,7 @@ struct ColorContrastTool: View {
                 } label: {
                     Image(systemName: "eyedropper")
                 }
+                .accessibilityLabel("Pick the \(title.lowercased()) color")
                 .tip("Pick the \(title.lowercased()) color from anywhere on the screen")
             }
         }

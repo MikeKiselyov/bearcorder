@@ -1,0 +1,225 @@
+# Every control a person can press, and the check that presses it and looks at what it did.
+# area <TAB> label pattern (regular expression, whole label) <TAB> words of the check's PASS line
+# {app} in a pattern stands for the app's name (AppInfo.name).
+# Areas: menubar/<tab>, menubar/* (on every tab). Add a row with its check for every new control:
+# scripts/control-coverage.py fails on a control without one, and on a row whose check is gone.
+
+menubar/*	Capture|Record|Tools|Recent|Space	menu panel buttons
+menubar/*	Pause buffer	menu "Pause buffer" pauses it
+menubar/*	Start buffer	menu "Pause buffer" pauses it
+menubar/*	Report a problem with {app} or suggest a feature on GitHub	opens the $window window
+menubar/*	Open settings: buffer, shortcuts, storage and more	opens the $window window
+menubar/*	Quit {app}	quitting stops the screen capture
+
+menubar/Capture	30 s, .+	saves a capture and opens its editor
+menubar/Capture	1 min, .+	saves a capture and opens its editor
+menubar/Capture	3 min, .+	saves a capture and opens its editor
+menubar/Capture	Screenshot full screen	saves a capture and opens its editor
+menubar/Capture	Screenshot all displays	saves a capture and opens its editor
+menubar/Capture	Screenshot area(, .+)?	starts picking, cancelling saves nothing
+menubar/Capture	Screenshot window(, .+)?	starts picking, cancelling saves nothing
+menubar/Capture	Copy text from screen(, .+)?	starts picking, cancelling saves nothing
+menubar/Capture	Scrolling screenshot(, .+)?	opens the area picker, Esc closes it
+menubar/Capture	Edit|Choose fields	menu environment \"Edit\" opens Settings on Bug reports
+
+menubar/Record	Full screen|All displays	records a picked area, Esc cancels
+menubar/Record	Area…	records a picked area, Esc cancels
+menubar/Record	Start recording	records the full screen
+menubar/Record	Pause|Resume	pause and resume the recording
+menubar/Record	Stop	saves the recording
+menubar/Record	Mic	turns $setting on and off
+menubar/Record	System audio	turns $setting on and off
+menubar/Record	Camera	shows the camera bubble
+menubar/Record	Draw	starts drawing on the screen
+menubar/Record	Resize the window you test	resize $BROWSER to 1280×720
+menubar/Record	Measure on screen	opens the ruler
+menubar/Record	Pick a color, copies hex	opens the color loupe
+menubar/Record	Overlay a design	overlay click-through
+
+menubar/Tools	\{ \} JSON|XML|YAML|HTML|SQL|GraphQL|JWT|Base64|URL|&; Entities|Time|Time zones|⇄ Convert|0x · Color · Case|UUID · Hash|Test data|Regex|QR	opens the toolbox on $tool
+menubar/Tools	All tools	opens the toolbox
+menubar/Tools	Compare…	opens the time zone comparison
+
+menubar/Recent	All captures	opens the history
+menubar/Recent	(.+, )?(.+ ago|just now)	a recent capture opens in its editor
+
+menubar/Space	Open	Space tab \"$label\" opens
+menubar/Space	All categories	Space tab \"$label\" opens
+menubar/Space	What takes space…	Space tab \"$label\" opens
+menubar/Space	Clean .+|Cancel|Delete .+	Space tab \"Clean\" asks first
+
+history	All|Screenshots|Videos	history filter
+history	App: .+	history sidebar app
+history	Search by app, URL…	history search hides what does not match
+history	(Screenshot|Clip): .+	history card opens the capture in its editor
+history	Select|Step guide	"Step guide" opens the guide
+history	Compare	history "Compare" opens the comparison
+history	Done	history "Done" stops selecting
+history	Open folder	history "Open folder" opens the captures folder
+history	More actions	history cards have a "More actions" menu
+history-menu	Open	history menu "Open" opens the editor
+history-menu	Show original in Finder	history menu "Show original in Finder" shows the file
+history-menu	Copy bug report \(Markdown\)|Copy bug report \(Jira wiki\)	copies the report
+history-menu	Copy environment	history menu "Copy environment" copies the environment
+history-menu	Open system log|Open crash report	only for captures that have them
+history-menu	Delete…	asks, then deletes only that capture
+
+space	Clean up|Folders|Largest files	Space folder rows open
+space	Clean .+	Space \"Clean\" asks first
+space	Delete .+	Space \"Delete …\" cleans the category
+space	Cancel	Space \"Clean\" asks first and \"Cancel\" keeps the files
+space	Measure again	Space \"Measure again\" measures fresh sizes
+space	Open	Space \"Open\" on the captures row opens the history
+space	Include other apps' private data \(Docker, Slack, Telegram…\)\. macOS asks once\.	Space switch \"Include other apps' private data\"
+space	Scan home folder and Applications	finishes a scan
+space	Stop	Space \"Stop\" stops the scan
+space	Folder .+|Back to .+|This Mac	Space folder rows open and
+space	Show in Finder	Space \"Show in Finder\" shows the open folder
+space	Scan again	Space \"Scan again\" scans again
+space	Show .+ in Finder	Space \"Show\" shows the file in Finder
+space	Move .+ to Trash|Keep .+	Space \"Move to Trash\" asks first
+space	Move .+ to the Trash now	Space \"Move\" moves the file to the Trash
+
+toolbox	JSON|XML|YAML|HTML|SQL|GraphQL|JWT|Base64|URL encode|HTML entities|Time & dates|Time zones|JSON ↔ YAML ↔ XML ↔ CSV|Numbers, colors, case|UUID · hash|Test data|QR code|Regex|JSON diff|JSONPath|HTTP message|Cron|String length|Color & contrast	toolbox sidebar row opens its tool
+toolbox	Search tools	toolbox \"Search tools\" narrows the list
+toolbox	Paste & detect	toolbox \"Paste & detect\" opens the tool
+toolbox	Copy.*	every Copy button copies
+toolbox	Format|Minify	\"Format\" and \"Minify\"
+toolbox	Indent	toolbox JSON \"Indent\" picks
+toolbox	Sort keys	\"Sort keys\" sorts
+toolbox	Unescape nested JSON strings	expands nested JSON
+toolbox	Clear	toolbox formatter \"Clear\" empties the input
+toolbox	CSV|Swap formats	toolbox converter
+toolbox	Decode|Encode|Swap	toolbox Base64 \"Encode\"
+toolbox	URL-safe alphabet \(encode\)	toolbox Base64 \"Encode\", URL-safe
+toolbox	Encode as a query component \(also / \? & =\)|Query parameters \(\d+\)	toolbox URL \"Encode\", query component
+toolbox	Encode non-ASCII as &#…;	the non-ASCII switch
+toolbox	Now	toolbox Time \"Now\" puts in the current time
+toolbox	1792839492, 2026-10-24T10:58:12Z, in 3 days…	toolbox Time \"Now\" puts in the current time
+toolbox	Add zone	toolbox Time \"Add zone\" adds
+toolbox	Remove .+	\"Remove\" work
+toolbox	Compare at	toolbox Time zones slider
+toolbox	Search a city, country, abbreviation \(PST\) or offset \(\+5:30\)|Add .+/.+|.+/.+, added|Clear search	toolbox Time zones search adds a zone
+toolbox	255, 0xFF, 0b1010|#FF6B4A, rgb\(…\), hsl\(…\)|any identifier or phrase|5242880, 5 MB, 1\.5 GiB|93784, PT26H3M4S, 1d 2h	toolbox quick converters convert
+toolbox	v4|v7|Uppercase|Count: \d+|Generate	toolbox UUID \"Generate\"
+toolbox	US|UK|DE|BY|PL|Visa|Mastercard|Amex|Mir|GB|NL	countries and card brands
+toolbox	Generate people|Generate card|Generate IBAN	toolbox test data
+toolbox	Length: \d+|0-9|Generate passwords	toolbox test data passwords
+toolbox	A-Z|!@#	switch letters and symbols
+toolbox	Paste a card number or IBAN	toolbox test data checker
+toolbox	Paste|Pattern|i|Template, e\.g\. \[\$1\] or \$\{id\}	toolbox Regex \"Paste\", pattern
+toolbox	m|s	toolbox Regex \"m\" and \"s\"
+toolbox	Read from clipboard image	\"Read from clipboard image\" round trip
+toolbox	Save PNG…	toolbox QR \"Save PNG…\" writes the code
+toolbox	Read from screen…	toolbox QR \"Read from screen…\" starts picking
+toolbox	Paste before|Paste after	toolbox JSON diff \"Paste
+toolbox	\$\.items\[\*\]\.price|\$\.\.id|\$\.items\[\*\]|\$\.items\[0\]|\$\.\.\*	toolbox JSONPath examples
+toolbox	minute hour day month weekday|\*/5 \* \* \* \*|0 9 \* \* 1-5|30 2 \* \* 0|0 0 1 \* \*|@hourly|0 \*/6 \* \* \*	toolbox Cron example buttons
+toolbox	Length|Change length|\d+|Counterstring|a a a|Cyrillic|Emoji	toolbox String length presets
+toolbox	Text color|Background color|Swap colors	toolbox contrast \"Swap colors\"
+toolbox	Pick the text color|Pick the background color	toolbox contrast eyedroppers
+
+menubar/*	Update to .+|The update failed, show why	update badge opens the changes
+update	#\d+ .+|Later	a change links to its pull request, \"Later\" closes
+update	Another fake change	a change without a pull request links to its commit
+update	Update now	update badge \"Update now\" starts the update
+update	Show log|Check again	failed update \"Show log\" and \"Check again\"
+settings	Check now|Check GitHub for new versions	settings \"Check now\" and \"Check GitHub for new versions\"
+
+onboarding	Continue|Back	guide \"Continue\" and \"Back\" move between pages
+onboarding	Off for now|Keep the last minutes|\d min	guide buffer choices
+onboarding	Keep all .+	guide \"Keep all screens\" switch
+onboarding	Choose…	guide \"Choose…\" asks for the save folder
+onboarding	Save the minute before an app crashes|\d+ days|Always	guide crash clips switch
+onboarding	Allow .+	guide \"Allow …\" asks macOS
+onboarding	Relaunch	guide \"Relaunch\" restarts the app
+onboarding	Show what I type in steps	guide \"Show what I type in steps\" switch
+onboarding	Start using {app}	guide \"Start using $APP_NAME\" finishes the guide
+onboarding	Skip	guide \"Skip\" closes the guide
+
+feedback	Report a problem|Suggest a feature	feedback \"Report a problem\" and \"Suggest a feature\" switch the form
+feedback	Attach logs	feedback \"Attach logs\" switch
+feedback	What will be sent	feedback \"What will be sent\" opens the preview
+feedback	Title|Open on GitHub	\"Open on GitHub\" opens the filled form
+feedback	Cancel	feedback \"Cancel\" closes the window
+
+whats-new	Got it	What's New \"Got it\" closes it
+
+step-guide	Title|Copy image|Save PDF…|Save PNG…	step guide \"Copy image\", \"Save PDF…\" and \"Save PNG…\"
+step-guide	Caption of step \d+|Move step \d+ up|Move step \d+ down	step guide \"Move step up\" and \"Move step down\"
+step-guide	Remove step \d+	step guide \"Remove step\" takes it out
+compare	Side by side|Slider|Changes|Copy image	comparison modes and \"Copy image\" in each
+compare	Play both|Pause both|Position	clip comparison \"Play both\"
+
+design-overlay	Opacity|@1x|@2x|@3x	design overlay opacity slider and export scale
+design-overlay	Click through to the app	design overlay \"Click through to the app\" switch
+design-overlay	Close the overlay	design overlay \"Close the overlay\"
+
+recording-bar	(Arrow|Rectangle|Ellipse|Pen|Highlighter|Numbered step|Step).*|coral|yellow|blue|green|purple|white|Marks .+	drawing bar tool, color and fade buttons
+recording-bar	Undo the last mark \(⌘Z\)|Clear all marks from the screen \(Delete\)|Stop drawing.+|Draw arrows.+|Close the drawing bar	drawing bar undo, clear, stop drawing and close
+recording-bar	Pause the recording.+|Resume the recording.+|Stop and throw the recording away without saving	recording bar pause, resume and \"throw away\" saves nothing
+recording-bar	Stop	recording bar \"Stop\" saves the recording
+
+settings	Keep all displays \(pick one or all side by side in the editor\)|Show the mouse pointer|Start the buffer when the app opens|Offer a report after {app} crashes|Save a clip when an app crashes|Attach the app's system log to clips|Record system audio|Record microphone|Record clicks|Record shortcut keys|Show what I type in steps|Copy a new screenshot to the clipboard|Read the browser tab URL	settings switch
+settings	Open at login|Choose…|Show in Finder	asks macOS for the right thing
+settings	Allow .+|Open .+ in System Settings	settings permissions page asks macOS or opens System Settings for each permission
+settings	Relaunch	settings \"Relaunch\" restarts the app after Screen Recording is allowed
+settings	Grant	asks macOS for the right thing
+settings	Restart buffer	restarts the buffer with the new settings
+settings	Report a problem…|Suggest a feature…|Show the welcome guide|Show what's new	opens the $window window
+settings	New field|Remove field	adds a report field and
+settings	Page: .+	settings sidebar
+settings	Include .+	settings switch "Include Locale" turns the field off and on
+settings	Name for .+	settings "Name for Device" renames the field
+settings	Stand|Build|Test account|Browser profile|Feature flag|Severity	adds a field with that name
+settings	Name|Value	report fields saved with the capture
+settings	.+: .*	restores the shortcuts, a shortcut button keeps its keys
+settings	Reset to defaults	restores the shortcuts
+settings	Clean up now	applies the rules
+settings	Keep the last|Buffer frame rate|Recording frame rate|Resolution|Copy bug report as|Delete captures older than|Delete crash clips older than|Keep captures under	settings picker \"$label\" sets $key
+
+screenshot:	(Select|Arrow|Arrow with text|Rectangle|Ellipse|Line|Highlighter|Pen|Text|Numbered step|Blur|Magnifier|Crop) \(.\): .+	editor tool button
+screenshot:	coral|yellow|blue|green|purple|white|black|#[0-9A-F]{6}	editor color
+screenshot:	Pick any color	opens the color panel
+screenshot:	Bigger (line width|text size)|Smaller (line width|text size)	change the line width
+screenshot:	Fill|No fill	switch the fill
+screenshot:	Undo the last change \(⌘Z\)|Redo what was undone \(⇧⌘Z\)	take it away and back
+screenshot:	Insert an image on top of this one: .+	places a picture
+screenshot:	Combine with another screenshot: .+	places another screenshot to the right
+screenshot:	Delete .+	removes that mark
+screenshot:	Zoom in|Zoom out|Fit|100%	change the zoom
+screenshot:	Copy	puts the environment on the clipboard
+screenshot:	Edit	editor \"Edit\" next to Environment opens Settings on Bug reports
+screenshot:	Overlay on image	shows and hides the environment badge
+screenshot:	Corner	shows and hides the environment badge
+screenshot:	Reset crop	brings the whole picture back
+screenshot:	File type	shows the format to save in
+screenshot:	Save to folder	writes the picture to the chosen folder
+screenshot:	Copy  ⌘C	puts the picture on the clipboard
+screenshot:	Screen: .+	screenshot \"Screen\" segments show side by side and one display
+screenshot:	Copy bug report · .+|Copy bug report as	editor \"Copy bug report\" copies the report, its arrow picks Markdown or Jira wiki
+
+video:	Play|Pause	play and stop the clip
+video:	Forward 5 seconds|Back 5 seconds	move the playhead
+video:	In|Out	trim at the playhead
+video:	Cut	cuts the range
+video:	Undo the last change \(⌘Z\)|Redo what was undone \(⇧⌘Z\)	take it back and again
+video:	Slow-mo|Freeze	add slow motion and a still frame
+video:	Text|Arrow|Box|Blur	picks the tool, pressing again puts it down
+video:	Highlight clicks|Show keystrokes|Show steps|Environment badge	video switch
+video:	Corner|Quality|Size limit|GIF frame rate	video picker
+video:	Label|Transparent	video text \"Transparent\" and \"Label\"
+video:	Bigger mark|Smaller mark	resize the selected mark
+video:	Copy	video environment
+video:	Bar: .+	video a mark bar's right edge dragged makes the mark longer
+video:	Text on the video	video a click with Text places text and it is typed right on the video
+video:	Edit	video \"Edit\" next to Environment opens Settings on Bug reports
+video:	System log|Crash report	\"Crash report\" and \"System log\" buttons open them
+video:	MP4|GIF	switch the format
+video:	Save to folder	exports the edited clip
+video:	Copy (MP4|GIF)	puts the exported file on the clipboard
+video:	Screen: .+	video \"Screen\" segments show side by side and one display
+video:	Copy bug report · .+|Copy bug report as	video \"Copy bug report\" copies the report, its arrow picks the format
+region-picker	Size .+	area picker \"Size\" chips and \"Record\" pressed by name
+region-picker	Record	area picker \"Size\" chips and \"Record\" pressed by name
+region-picker	Capture|Cancel	area picker \"Cancel\" closes it

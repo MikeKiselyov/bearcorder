@@ -1,4 +1,5 @@
 import AppKit
+import BugbearCore
 
 /// Saves the app's unified log (`log show`) for the time span of a clip, next to the clip.
 enum SystemLogCollector {
@@ -61,7 +62,7 @@ enum SystemLogCollector {
             let tail = Data(text.utf8).suffix(maxBytes)
             text = "… (older lines cut)\n" + String(decoding: tail, as: UTF8.self)
         }
-        let header = "# \(source.name) log, \(from) - \(to). Collected by Bugbear with `log show --info`.\n"
+        let header = "# \(source.name) log, \(from) - \(to). Collected by \(AppInfo.name) with `log show --info`.\n"
         do {
             try (header + text + "\n").write(to: file, atomically: true, encoding: .utf8)
         } catch {

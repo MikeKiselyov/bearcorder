@@ -183,6 +183,7 @@ struct DataConvertTool: View {
                     Image(systemName: "arrow.left.arrow.right")
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("Swap formats")
                 .tip("Swap the formats and use the output as the new input")
                 PillPicker(options: DataFormat.allCases, selection: $target) { value in value.rawValue }
                     .frame(width: 240)

@@ -21,7 +21,7 @@ struct DiskBar: View {
                 ZStack(alignment: .leading) {
                     RoundedRectangle(cornerRadius: 4).fill(Theme.control)
                     RoundedRectangle(cornerRadius: 4)
-                        .fill(fraction > 0.9 ? Theme.accent : Theme.textSecondary)
+                        .fill(fraction > 0.9 ? AnyShapeStyle(Theme.accentGradient) : AnyShapeStyle(LinearGradient(colors: [Color(hex: 0xDDB2F5), Color(hex: 0x9B5FC9)], startPoint: .leading, endPoint: .trailing)))
                         .frame(width: geometry.size.width * fraction)
                 }
             }
@@ -30,11 +30,65 @@ struct DiskBar: View {
     }
 }
 
+/// The disk as a ring: the biggest clean-up categories in their colors, the rest of what is
+/// used, and the free part, with the free space in the middle.
+struct DiskRing: View {
+    struct Part {
+        var bytes: Int64
+        var tint: TileTint
+    }
+
+    var total: Int64
+    var free: Int64
+    var parts: [Part]
+
+    var body: some View {
+        ZStack {
+            Circle().stroke(Color.white.opacity(0.05), lineWidth: 14)
+            ForEach(Array(segments.enumerated()), id: \.offset) { _, segment in
+                Circle()
+                    .trim(from: segment.start, to: segment.end)
+                    .stroke(segment.style, style: StrokeStyle(lineWidth: 14, lineCap: .butt))
+                    .rotationEffect(.degrees(-90))
+            }
+            VStack(spacing: 1) {
+                Text(SpaceModel.format(free)).font(.system(size: 20, weight: .bold))
+                Text("free of \(SpaceModel.format(total))").font(.system(size: 11)).foregroundStyle(Theme.textSecondary)
+            }
+        }
+        .frame(width: 140, height: 140)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(SpaceModel.format(free)) free of \(SpaceModel.format(total))")
+    }
+
+    private var segments: [(start: CGFloat, end: CGFloat, style: AnyShapeStyle)] {
+        var result: [(start: CGFloat, end: CGFloat, style: AnyShapeStyle)] = []
+        if total <= 0 { return result }
+        var position: CGFloat = 0
+        var partsBytes: Int64 = 0
+        let used = CGFloat(max(0, total - free)) / CGFloat(total)
+        for part in parts where part.bytes > 0 {
+            // Categories can overlap or sit on another disk: never draw past what is used.
+            let length = min(CGFloat(part.bytes) / CGFloat(total), max(0, used - position))
+            if length <= 0 { break }
+            // A thin gap between parts so neighbours stay apart.
+            result.append((start: position, end: position + max(0.004, length - 0.004), style: AnyShapeStyle(part.tint.color)))
+            position += length
+            partsBytes += part.bytes
+        }
+        let otherUsed = max(0, total - free - partsBytes)
+        let otherLength = CGFloat(otherUsed) / CGFloat(total)
+        result.append((start: position, end: position + otherLength, style: AnyShapeStyle(Color.white.opacity(0.18))))
+        return result
+    }
+}
+
 /// One cleanable thing with its size and a two-step Delete (click, then confirm).
 struct CleanupRow: View {
     @Bindable var model: SpaceModel
     let category: CleanupCategory
     var compact = false
+    var tint: TileTint = .coral
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -48,11 +102,8 @@ struct CleanupRow: View {
 
     private var row: some View {
         let bytes = model.sizes[category.id] ?? 0
-        return HStack(alignment: .top, spacing: 12) {
-            Image(systemName: category.symbol)
-                .font(.system(size: 15))
-                .foregroundStyle(Theme.accentSoft)
-                .frame(width: 22)
+        return HStack(alignment: compact ? .center : .top, spacing: 12) {
+            IconTile(systemImage: category.symbol, tint: tint, size: compact ? 26 : 30)
             VStack(alignment: .leading, spacing: 2) {
                 Text(category.title).font(.system(size: 13, weight: .semibold))
                 if !compact {
@@ -93,7 +144,7 @@ struct CleanupRow: View {
         }
         .padding(10)
         .background(Theme.control)
-        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .clipShape(RoundedRectangle(cornerRadius: 10))
     }
 
     @ViewBuilder
@@ -111,6 +162,7 @@ struct CleanupRow: View {
             } else {
                 Button("Clean") { model.confirmingID = category.id }
                     .buttonStyle(SecondaryButtonStyle())
+                    .accessibilityLabel("Clean \(category.title)")
                     .disabled((model.sizes[category.id] ?? 0) == 0 || model.cleaningID != nil || model.confirmingID == category.id)
                     .tip("Delete the contents of \(category.title) to free space; asks to confirm first")
             }
@@ -172,7 +224,7 @@ struct SpaceView: View {
         .padding(.bottom, 20)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .foregroundStyle(Theme.text)
-        .background(Theme.window)
+        .auroraBackground()
         .task {
             await model.measure()
         }
@@ -227,7 +279,7 @@ struct SpaceView: View {
     private var scanPrompt: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("See what takes space on this Mac").font(.system(size: 15, weight: .semibold))
-            Text("Bugbear adds up every folder and finds the biggest files. It takes a minute or two. macOS may ask once for Desktop, Documents and Downloads; other apps' private data, Apple's own folders and the Photos and Music libraries are skipped.")
+            Text("\(AppInfo.name) adds up every folder and finds the biggest files. It takes a minute or two. macOS may ask once for Desktop, Documents and Downloads; other apps' private data, Apple's own folders and the Photos and Music libraries are skipped.")
                 .font(.system(size: 12))
                 .foregroundStyle(Theme.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -351,6 +403,7 @@ struct SpaceView: View {
                             model.folderPath = Array(model.folderPath.prefix(item.offset + 1))
                         }
                         .buttonStyle(.plain)
+                        .accessibilityLabel("Back to \(item.element)")
                         .foregroundStyle(item.offset == model.folderPath.count - 1 ? Theme.text : Theme.link)
                         .tip("Go back to \(item.element)")
                     }
@@ -398,7 +451,7 @@ struct SpaceView: View {
                     }
                 }
                 if !model.deniedFolders.isEmpty {
-                    Text("Not counted, access not allowed: \(model.deniedFolders.joined(separator: ", ")). Allow it in System Settings → Privacy & Security → Files and Folders → Bugbear, then scan again.")
+                    Text("Not counted, access not allowed: \(model.deniedFolders.joined(separator: ", ")). Allow it in System Settings → Privacy & Security → Files and Folders → \(AppInfo.name), then scan again.")
                         .font(.system(size: 11))
                         .foregroundStyle(Theme.warning)
                         .fixedSize(horizontal: false, vertical: true)
@@ -448,6 +501,7 @@ struct SpaceView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .accessibilityLabel("Folder \(child.name), \(SpaceModel.format(child.bytes))")
         .tip(canOpen ? "Open this folder to see what is inside" : "\(child.name) has no subfolders")
     }
 
@@ -502,17 +556,21 @@ struct SpaceView: View {
                 .frame(width: 90, alignment: .trailing)
             Button("Show") { model.reveal(url) }
                 .buttonStyle(SecondaryButtonStyle())
+                .accessibilityLabel("Show \(url.lastPathComponent) in Finder")
                 .tip("Show this file in Finder")
             if model.confirmingFile == file.path {
                 Button("Cancel") { model.confirmingFile = nil }
                     .buttonStyle(SecondaryButtonStyle())
+                    .accessibilityLabel("Keep \(url.lastPathComponent)")
                     .tip("Keep this file")
                 Button("Move") { model.moveToTrash(file.path) }
                     .buttonStyle(AccentButtonStyle())
+                    .accessibilityLabel("Move \(url.lastPathComponent) to the Trash now")
                     .tip("Confirm: move the file to the Trash")
             } else {
                 Button("Move to Trash") { model.confirmingFile = file.path }
                     .buttonStyle(SecondaryButtonStyle())
+                    .accessibilityLabel("Move \(url.lastPathComponent) to Trash")
                     .tip("Move this file to the Trash; asks to confirm first and you can still restore it from the Trash")
             }
         }
@@ -524,9 +582,15 @@ struct SpaceView: View {
 struct SpaceTabSection: View {
     @State private var model = SpaceModel.shared
 
+    /// Colors for the biggest categories, in the ring and on their rows.
+    static let tints: [TileTint] = [.coral, .purple, .blue, .green, .yellow]
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            DiskBar(total: model.volumeTotal, free: model.volumeFree)
+        let shown = Array(model.visibleCategories.prefix(5))
+        VStack(alignment: .leading, spacing: 10) {
+            DiskRing(total: model.volumeTotal, free: model.volumeFree, parts: ringParts(shown))
+                .frame(maxWidth: .infinity)
+                .padding(.top, 2)
             HStack {
                 SectionLabel("Can be cleaned")
                 Spacer()
@@ -534,13 +598,15 @@ struct SpaceTabSection: View {
                     ProgressView().controlSize(.mini)
                 } else {
                     Text(SpaceModel.format(model.cleanableBytes))
-                        .font(.system(size: 12, design: .monospaced))
-                        .foregroundStyle(Theme.textSecondary)
+                        .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                        .foregroundStyle(Theme.accentSoft)
                 }
             }
-            VStack(spacing: 0) {
-                ForEach(Array(model.visibleCategories.prefix(5))) { category in
-                    CleanupRow(model: model, category: category, compact: true)
+            VStack(spacing: 6) {
+                ForEach(Array(shown.enumerated()), id: \.element.id) { index, category in
+                    CleanupRow(model: model, category: category, compact: true, tint: SpaceTabSection.tints[index % SpaceTabSection.tints.count])
+                        .padding(.horizontal, 10)
+                        .glassCard(cornerRadius: 12)
                 }
             }
             if let message = model.message {
@@ -550,8 +616,9 @@ struct SpaceTabSection: View {
                 Button("All categories") { WindowManager.shared.openSpace(section: .cleanUp) }
                     .buttonStyle(SecondaryButtonStyle())
                     .tip("Open the Disk Space window with every clean-up category")
+                Spacer()
                 Button("What takes space…") { WindowManager.shared.openSpace(section: .folders) }
-                    .buttonStyle(SecondaryButtonStyle())
+                    .buttonStyle(AccentButtonStyle())
                     .tip("Scan folders to see what takes the most space on this Mac")
             }
         }
@@ -559,5 +626,13 @@ struct SpaceTabSection: View {
         .task {
             await model.measure()
         }
+    }
+
+    private func ringParts(_ categories: [CleanupCategory]) -> [DiskRing.Part] {
+        var parts: [DiskRing.Part] = []
+        for (index, category) in categories.enumerated() {
+            parts.append(DiskRing.Part(bytes: model.sizes[category.id] ?? 0, tint: SpaceTabSection.tints[index % SpaceTabSection.tints.count]))
+        }
+        return parts
     }
 }

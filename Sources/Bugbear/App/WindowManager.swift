@@ -31,7 +31,7 @@ final class WindowManager: NSObject, NSWindowDelegate {
         window.title = title
         window.styleMask = [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView]
         window.titlebarAppearsTransparent = true
-        window.backgroundColor = NSColor(hex: 0x1B1C1F)
+        window.backgroundColor = NSColor(hex: 0x16131B)
         window.appearance = NSAppearance(named: .darkAqua)
         window.setContentSize(size)
         window.contentMinSize = minSize
@@ -74,7 +74,9 @@ final class WindowManager: NSObject, NSWindowDelegate {
     }
 
     private func activate() {
-        NSApp.setActivationPolicy(.regular)
+        if !NSApp.setActivationPolicy(.regular) {
+            Log.info("dock icon: macOS did not switch to a regular app")
+        }
         NSApp.activate(ignoringOtherApps: true)
     }
 
@@ -85,8 +87,81 @@ final class WindowManager: NSObject, NSWindowDelegate {
             feedbackModel = nil
         }
         if windows.isEmpty {
-            NSApp.setActivationPolicy(.accessory)
+            // After the window is really gone: while it is still closing macOS refuses the switch
+            // and the Dock icon stays.
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    if self.windows.isEmpty {
+                        self.leaveDock()
+                    }
+                }
+            }
         }
+    }
+
+    /// A click on the Dock icon: the open windows come forward, or with none the menu opens.
+    func reopenFromDock() {
+        switch DockReopen.action(openWindowCount: windows.count) {
+        case .showWindows:
+            activate()
+            for window in windows.values {
+                if window.isMiniaturized {
+                    window.deminiaturize(nil)
+                }
+                window.makeKeyAndOrderFront(nil)
+            }
+        case .openMenu:
+            Log.info("dock icon with no window: opening the menu")
+            // The menu needs Bugbear in front a moment: handing the focus away would close it.
+            leaveDock(handingFocusBack: false)
+            if !AppState.shared.isMenuPanelOpen {
+                AppState.shared.toggleMenuPanel()
+            }
+        }
+    }
+
+    var openWindowCount: Int {
+        return windows.count
+    }
+
+    /// Back to the menu bar only. macOS refuses the switch while the app is active, so Bugbear
+    /// hands the focus back to the app the person was in and switches once it is no longer active.
+    private func leaveDock(handingFocusBack: Bool = true) {
+        if !NSApp.isActive || !handingFocusBack {
+            switchToMenuBarOnly()
+            return
+        }
+        if resignObserver == nil {
+            resignObserver = NotificationCenter.default.addObserver(forName: NSApplication.didResignActiveNotification, object: nil, queue: .main) { _ in
+                MainActor.assumeIsolated {
+                    WindowManager.shared.finishLeavingDock()
+                }
+            }
+        }
+        if let previous = AppState.shared.lastExternalApp, !previous.isTerminated {
+            NSApp.yieldActivation(to: previous)
+            previous.activate(from: NSRunningApplication.current, options: [])
+        } else {
+            NSApp.deactivate()
+        }
+    }
+
+    private var resignObserver: NSObjectProtocol?
+
+    private func finishLeavingDock() {
+        if let observer = resignObserver {
+            NotificationCenter.default.removeObserver(observer)
+            resignObserver = nil
+        }
+        // A window opened in the meantime keeps the icon.
+        if windows.isEmpty {
+            switchToMenuBarOnly()
+        }
+    }
+
+    private func switchToMenuBarOnly() {
+        let switched = NSApp.setActivationPolicy(.accessory)
+        Log.info("dock icon: back to the menu bar only, switched=\(switched)")
     }
 
     func isOpen(id: String) -> Bool {
@@ -152,7 +227,7 @@ final class WindowManager: NSObject, NSWindowDelegate {
     }
 
     func openOnboarding() {
-        show(id: "onboarding", title: "Welcome to Bugbear", size: CGSize(width: 680, height: 600), minSize: CGSize(width: 620, height: 560)) {
+        show(id: "onboarding", title: "Welcome to \(AppInfo.name)", size: CGSize(width: 680, height: 600), minSize: CGSize(width: 620, height: 560)) {
             OnboardingView()
         }
     }
@@ -193,8 +268,11 @@ final class WindowManager: NSObject, NSWindowDelegate {
         }
     }
 
-    func openSettings() {
-        show(id: "settings", title: "Bugbear Settings", size: CGSize(width: 560, height: 640), minSize: CGSize(width: 480, height: 480)) {
+    func openSettings(page: SettingsPage? = nil) {
+        if let shown = page {
+            SettingsNavigation.shared.page = shown
+        }
+        show(id: "settings", title: "\(AppInfo.name) Settings", size: CGSize(width: 780, height: 620), minSize: CGSize(width: 700, height: 480)) {
             SettingsView()
         }
     }

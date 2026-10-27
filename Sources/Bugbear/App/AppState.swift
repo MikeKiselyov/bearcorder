@@ -88,6 +88,7 @@ final class AppState {
         if launched { return }
         launched = true
         ScreenBuffer.clearBufferFolder()
+        Task { await keepMenuBarItemVisible(reason: "launch") }
 
         let workspace = NSWorkspace.shared
         if let front = workspace.frontmostApplication, AppState.isTestedApp(front) {
@@ -141,8 +142,11 @@ final class AppState {
         } else if !Automation.isEnabled {
             WhatsNewTracker.checkOnLaunch()
         }
-        if isFirstLaunch && !Automation.isEnabled {
+        // e2e tests open the guide like a new person would only when they ask for it.
+        let showsGuideInTests = Automation.isEnabled && UserDefaults.standard.bool(forKey: "automationFirstLaunch")
+        if isFirstLaunch && (!Automation.isEnabled || showsGuideInTests) {
             // First launch: the guide asks for permissions before the buffer starts.
+            Log.info("first launch: opening the welcome guide")
             bufferState = ScreenBuffer.hasScreenRecordingAccess ? .paused : .needsPermission
             WindowManager.shared.openOnboarding()
         } else if settings.startBufferOnLaunch {
@@ -222,6 +226,7 @@ final class AppState {
         if signature == screenSignature { return }
         Log.info("displays changed: \(signature)")
         screenSignature = signature
+        Task { await keepMenuBarItemVisible(reason: "displays changed") }
         if bufferState == .running && recording == nil {
             Task { await restartBufferIfRunning() }
         } else if recording != nil {
@@ -329,7 +334,7 @@ final class AppState {
             } else {
                 microphone.stop()
             }
-            inputRecorder.start(clicks: settings.recordClicks, keys: settings.recordKeys && InputEventRecorder.hasAccessibilityAccess, retentionSeconds: settings.bufferSeconds)
+            inputRecorder.start(clicks: settings.recordClicks, keys: settings.recordKeys && InputEventRecorder.hasAccessibilityAccess, typedText: settings.recordTypedText, pages: settings.readBrowserURL, retentionSeconds: settings.bufferSeconds)
             bufferState = .running
             updateCrashWatcher()
             // New buffers start without quiet zones; a restart during a recording needs them again.
@@ -402,7 +407,7 @@ final class AppState {
         NSApp.activate(ignoringOtherApps: true)
         let alert = NSAlert()
         alert.messageText = "The screen buffer stopped"
-        alert.informativeText = "Bugbear saved the last \(TimeFormat.clock(capture.duration)) as a clip in All captures. The buffer is off now; turn it on again from the bear in the menu bar."
+        alert.informativeText = "\(AppInfo.name) saved the last \(TimeFormat.clock(capture.duration)) as a clip in All captures. The buffer is off now; turn it on again from the bear in the menu bar."
         alert.addButton(withTitle: "Open in editor")
         alert.addButton(withTitle: "Later")
         if alert.runModal() == .alertFirstButtonReturn {
@@ -426,6 +431,90 @@ final class AppState {
         coveredSeconds = 0
     }
 
+    /// "Show what I type in steps" and "Read the browser tab URL" apply at once, also to the
+    /// clicks and keys recorded so far.
+    func applyStepPrivacy() {
+        inputRecorder.setPrivacy(typedText: settings.recordTypedText, pages: settings.readBrowserURL)
+    }
+
+    // MARK: Menu bar item
+
+    /// Inserted in the menu bar; taken out and put back to move it.
+    var showsMenuBarItem = true
+    /// The hint about a full menu bar is shown once per launch.
+    @ObservationIgnored private var toldAboutHiddenItem = false
+
+    /// Whether the bear cannot be seen in the menu bar, nil when there is no item to look at.
+    func menuBarItemIsHidden() -> Bool? {
+        guard let button = statusItemButton(), let window = button.window else { return nil }
+        let screen = window.screen ?? NSScreen.main
+        return MenuBarPlacement.isHidden(itemFrame: window.frame, rightArea: screen?.auxiliaryTopRightArea, occlusionVisible: window.occlusionState.contains(.visible))
+    }
+
+    /// When the bear ended up behind the notch (a display was unplugged, more apps added icons),
+    /// moves it next to the system icons. If even there is no room, says how to open Bugbear.
+    func keepMenuBarItemVisible(reason: String) async {
+        try? await Task.sleep(nanoseconds: 800_000_000)
+        guard menuBarItemIsHidden() == true else { return }
+        Log.info("menu bar item hidden (\(reason)), moving it next to the system icons")
+        await reinsertMenuBarItem(at: MenuBarPlacement.visiblePosition)
+        try? await Task.sleep(nanoseconds: 800_000_000)
+        guard menuBarItemIsHidden() == true else {
+            Log.info("menu bar item visible again")
+            return
+        }
+        Log.info("menu bar item still hidden: the menu bar is full")
+        if toldAboutHiddenItem || Automation.isEnabled { return }
+        toldAboutHiddenItem = true
+        let shortcut = HotKeySettings.shared.shortcut(for: .openMenu)?.display ?? ""
+        var message = "The menu bar is full, so macOS hides the bear behind the notch."
+        if !shortcut.isEmpty {
+            message += " Press \(shortcut) to open \(AppInfo.name)."
+        }
+        Toast.shared.show(message, symbol: "menubar.rectangle", seconds: 8)
+    }
+
+    /// Takes the bear out of the menu bar and puts it back at `position` points from the right.
+    /// macOS forgets an item's place when it is taken out, so the place is written in between.
+    /// Nil puts it where macOS puts a new item: leftmost, the first to be hidden.
+    func reinsertMenuBarItem(at position: Double?) async {
+        showsMenuBarItem = false
+        try? await Task.sleep(nanoseconds: 300_000_000)
+        if let place = position {
+            UserDefaults.standard.set(place, forKey: MenuBarPlacement.positionKey)
+        } else {
+            UserDefaults.standard.removeObject(forKey: MenuBarPlacement.positionKey)
+        }
+        showsMenuBarItem = true
+    }
+
+    /// The menu from a shortcut, also when the bear is hidden.
+    func toggleMenuPanel() {
+        if isMenuPanelOpen {
+            closeMenuPanel()
+            return
+        }
+        statusItemButton()?.performClick(nil)
+    }
+
+    /// Before quitting: stops every screen capture, so macOS takes its "Currently Sharing" indicator
+    /// down at once instead of keeping it for a process that is gone.
+    func stopCaptureForQuit() async {
+        // All displays at once: the quit waits only so long.
+        var stops: [Task<Void, Never>] = []
+        for buffer in buffers {
+            stops.append(Task { await buffer.stopCaptureForQuit() })
+        }
+        for stop in stops {
+            await stop.value
+        }
+        buffers = []
+        micSink = nil
+        microphone.stop()
+        inputRecorder.stop()
+        crashWatcher.stop()
+    }
+
     func toggleBuffer() async {
         if bufferState == .running {
             await pauseBuffer()
@@ -442,16 +531,16 @@ final class AppState {
     }
 
     func requestScreenRecordingAccess() {
-        ScreenBuffer.requestScreenRecordingAccess()
+        SystemActions.askPermission("Screen Recording") { ScreenBuffer.requestScreenRecordingAccess() }
         if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture") {
-            NSWorkspace.shared.open(url)
+            SystemActions.open(url)
         }
     }
 
     func requestAccessibilityAccess() {
-        InputEventRecorder.requestAccessibilityAccess()
+        SystemActions.askPermission("Accessibility") { InputEventRecorder.requestAccessibilityAccess() }
         if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
-            NSWorkspace.shared.open(url)
+            SystemActions.open(url)
         }
     }
 
@@ -570,18 +659,29 @@ final class AppState {
     // MARK: Storage
 
     @ObservationIgnored private var cleanUpTimer: Timer?
+    /// Tests pick storage limits in Settings and put them back; the timed clean-up waits meanwhile,
+    /// so a limit that is on for a moment never deletes the person's captures.
+    @ObservationIgnored var scheduledCleanUpPaused = false
 
     /// Settings → Storage limits, applied shortly after launch and then once a day.
     private func startStorageCleanUp() {
         Task {
             try? await Task.sleep(nanoseconds: 30_000_000_000)
-            await cleanUpStorage()
+            await scheduledCleanUp()
         }
         cleanUpTimer = Timer.scheduledTimer(withTimeInterval: 24 * 3600, repeats: true) { _ in
             Task { @MainActor in
-                await AppState.shared.cleanUpStorage()
+                await AppState.shared.scheduledCleanUp()
             }
         }
+    }
+
+    private func scheduledCleanUp() async {
+        if scheduledCleanUpPaused {
+            Log.info("timed clean up skipped: paused by a test")
+            return
+        }
+        await cleanUpStorage()
     }
 
     @discardableResult
@@ -645,6 +745,7 @@ final class AppState {
         Task {
             let lines = await SystemLogCollector.collect(source, from: span.start, to: span.end, into: file)
             Log.info("system log for \(source.name): \(lines) lines")
+            store.systemLogSaved(for: capture.id)
         }
     }
 
@@ -850,10 +951,16 @@ final class AppState {
     // MARK: Drawing on screen and camera
 
     func toggleDrawing() {
+        // Drawing goes on the display the pointer is on. During a recording the window was placed
+        // once on the recorded display, and with two displays a drag on the other one reached the
+        // apps under it: nothing was drawn.
+        let screen = NSScreen.screens.first { screen in screen.frame.contains(NSEvent.mouseLocation) } ?? NSScreen.main
+        let frame = screen?.frame ?? .zero
         if !overlay.isVisible {
-            let screen = NSScreen.screens.first { screen in screen.frame.contains(NSEvent.mouseLocation) } ?? NSScreen.main
-            overlay.show(on: screen?.frame ?? .zero)
+            overlay.show(on: frame)
             hud.show(app: self)
+        } else if !overlay.isDrawing && overlay.frame != frame {
+            overlay.show(on: frame)
         }
         overlay.isDrawing.toggle()
         DispatchQueue.main.async {
@@ -876,7 +983,7 @@ final class AppState {
             let shown = await camera.show(on: screen)
             cameraOn = shown
             if !shown {
-                showError("Camera is not available. Allow camera access for Bugbear in System Settings › Privacy & Security › Camera.")
+                showError("Camera is not available. Allow camera access for \(AppInfo.name) in System Settings › Privacy & Security › Camera.")
             }
         } else {
             camera.hide()
@@ -1073,7 +1180,7 @@ final class AppState {
         closeMenuPanel()
         if !InputEventRecorder.hasAccessibilityAccess {
             requestAccessibilityAccess()
-            Toast.shared.show("Allow Accessibility for Bugbear so it can scroll, then try again", symbol: "lock.fill", seconds: 4)
+            Toast.shared.show("Allow Accessibility for \(AppInfo.name) so it can scroll, then try again", symbol: "lock.fill", seconds: 4)
             return
         }
         let mouse = NSEvent.mouseLocation
@@ -1119,7 +1226,7 @@ final class AppState {
             Toast.shared.show(text, symbol: "macwindow", seconds: wider ? 5 : 2)
         case .failure(.noAccess):
             requestAccessibilityAccess()
-            Toast.shared.show("Allow Accessibility for Bugbear, then try again", symbol: "lock.fill", seconds: 3)
+            Toast.shared.show("Allow Accessibility for \(AppInfo.name), then try again", symbol: "lock.fill", seconds: 3)
         case .failure(.noApp), .failure(.noWindow):
             Toast.shared.show("No window to resize: click the app first", symbol: "macwindow", seconds: 3)
         case .failure(.refused):
@@ -1170,7 +1277,7 @@ final class AppState {
         if Automation.isEnabled { return }
         NSApp.activate(ignoringOtherApps: true)
         let alert = NSAlert()
-        alert.messageText = "Bugbear"
+        alert.messageText = AppInfo.name
         alert.informativeText = message
         alert.alertStyle = .warning
         alert.runModal()

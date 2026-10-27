@@ -58,11 +58,11 @@ struct JWTTool: View {
             .padding(.horizontal, 16)
             .frame(height: 40)
             SplitPanes {
-                PaneHeader(title: "Header") { CopyButton(text: token.header, title: "Copy", primary: false) }
-                CodeTextView(text: .constant(token.header), isEditable: false, highlight: SyntaxHighlighter.json)
+                PaneHeader(title: "Header") { CopyButton(text: token.header, title: "Copy", primary: false, name: "Copy header") }
+                CodeTextView(text: .constant(token.header), isEditable: false, highlight: SyntaxHighlighter.json, label: "Header")
             } right: {
-                PaneHeader(title: "Payload") { CopyButton(text: token.payload, title: "Copy", primary: false) }
-                CodeTextView(text: .constant(token.payload), isEditable: false, highlight: SyntaxHighlighter.json)
+                PaneHeader(title: "Payload") { CopyButton(text: token.payload, title: "Copy", primary: false, name: "Copy payload") }
+                CodeTextView(text: .constant(token.payload), isEditable: false, highlight: SyntaxHighlighter.json, label: "Payload")
             }
             ToolFooter {
                 Text("The signature is not verified; decoding only.").foregroundStyle(Theme.textSecondary)

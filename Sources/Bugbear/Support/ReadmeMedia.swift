@@ -38,6 +38,16 @@ enum ReadmeMedia {
         if let frame = clipPreviewFrame() {
             fillPlayer(in: videoEditor, with: frame)
         }
+        // A clip from two displays in the narrowest editor window: the screen picker must not push
+        // the side panel out of the window (it did, "Copy" and the switches were cut off).
+        var twoDisplays = clip
+        twoDisplays.screens = [
+            ScreenVariant(id: "display-1", name: "Built-in", file: "original.mp4", events: [], isMain: true),
+            ScreenVariant(id: "display-3", name: "LG ULTRAFINE", file: "original.mp4", events: [], isMain: false),
+            ScreenVariant(id: ScreenVariant.allID, name: "Side by side", file: "original.mp4", events: [], isMain: false),
+        ]
+        twoDisplays.selectedScreen = "display-1"
+        render(VideoEditorView(capture: twoDisplays).environment(AppState.shared), size: CGSize(width: 980, height: 640), wait: 3, to: screens.appendingPathComponent("video-editor-narrow.png"))
         writeMarkupFrames(for: shot, to: folder.appendingPathComponent("markup-frames", isDirectory: true))
         writeInstallFrames(to: folder.appendingPathComponent("install-frames", isDirectory: true))
         print("README media written to \(folder.path)")
@@ -306,19 +316,19 @@ enum ReadmeMedia {
         let spinner = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
         let tips = [
             "The first build takes a couple of minutes. Good moment for a cup of tea ☕",
-            "Bugbear keeps the last minutes of your screen, so a bug cannot hide.",
+            "\(AppInfo.name) keeps the last minutes of your screen, so a bug cannot hide.",
             "Everything stays on your Mac. Nothing is uploaded anywhere.",
         ]
         for index in 0..<15 {
             var building = lines
             let seconds = index * 7
-            building.append(Terminal.text("   ") + Terminal.text(spinner[index % spinner.count], Terminal.bug) + Terminal.text("  Building Bugbear ") + Terminal.text(String(format: "%d:%02d", seconds / 60, seconds % 60), Terminal.dim))
+            building.append(Terminal.text("   ") + Terminal.text(spinner[index % spinner.count], Terminal.bug) + Terminal.text("  Building \(AppInfo.name) ") + Terminal.text(String(format: "%d:%02d", seconds / 60, seconds % 60), Terminal.dim))
             building.append(Terminal.text("      " + tips[index / 5], Terminal.dim))
             frame(command, building)
         }
         lines.append(Terminal.done("Built and signed (your Apple Development certificate)"))
         frame(command, lines, repeats: 2)
-        lines.append(Terminal.done("Installed to /Applications/Bugbear.app"))
+        lines.append(Terminal.done("Installed to /Applications/\(AppInfo.name).app"))
         frame(command, lines, repeats: 2)
         lines.append(AttributedString(""))
         lines.append(Terminal.text("   ✨ All set!", Terminal.bear, bold: true) + Terminal.text(" Look for the bear in the menu bar, top right."))
@@ -371,7 +381,7 @@ enum ReadmeMedia {
 
     /// Renders like DevChecks.render but waits longer, for views that load media first.
     private static func render<Content: View>(_ view: Content, size: CGSize, wait: Double, to url: URL) {
-        let hosting = NSHostingView(rootView: view.frame(width: size.width, height: size.height).background(Theme.window).preferredColorScheme(.dark))
+        let hosting = NSHostingView(rootView: view.frame(width: size.width, height: size.height).auroraBackground().preferredColorScheme(.dark))
         hosting.frame = CGRect(origin: .zero, size: size)
         hosting.appearance = NSAppearance(named: .darkAqua)
         let window = NSWindow(contentRect: hosting.frame, styleMask: [.borderless], backing: .buffered, defer: false)

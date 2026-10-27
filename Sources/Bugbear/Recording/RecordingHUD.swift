@@ -311,6 +311,7 @@ final class RecordingHUDController {
             newPanel.becomesKeyOnlyIfNeeded = true
             newPanel.contentView = hosting
             newPanel.isReleasedWhenClosed = false
+            newPanel.identifier = NSUserInterfaceItemIdentifier("recording-bar")
             panel = newPanel
             moveObserver = NotificationCenter.default.addObserver(forName: NSWindow.didMoveNotification, object: newPanel, queue: .main) { [weak self] _ in
                 MainActor.assumeIsolated {

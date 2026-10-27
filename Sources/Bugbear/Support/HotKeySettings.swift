@@ -1,4 +1,5 @@
 import AppKit
+import BugbearCore
 import Carbon.HIToolbox
 import Observation
 
@@ -61,22 +62,7 @@ struct Shortcut: Codable, Equatable {
         return Shortcut(keyCode: UInt32(event.keyCode), modifiers: modifiers, key: key)
     }
 
-    static let plainKeys: [UInt16: String] = [
-        UInt16(kVK_ANSI_A): "A", UInt16(kVK_ANSI_B): "B", UInt16(kVK_ANSI_C): "C", UInt16(kVK_ANSI_D): "D",
-        UInt16(kVK_ANSI_E): "E", UInt16(kVK_ANSI_F): "F", UInt16(kVK_ANSI_G): "G", UInt16(kVK_ANSI_H): "H",
-        UInt16(kVK_ANSI_I): "I", UInt16(kVK_ANSI_J): "J", UInt16(kVK_ANSI_K): "K", UInt16(kVK_ANSI_L): "L",
-        UInt16(kVK_ANSI_M): "M", UInt16(kVK_ANSI_N): "N", UInt16(kVK_ANSI_O): "O", UInt16(kVK_ANSI_P): "P",
-        UInt16(kVK_ANSI_Q): "Q", UInt16(kVK_ANSI_R): "R", UInt16(kVK_ANSI_S): "S", UInt16(kVK_ANSI_T): "T",
-        UInt16(kVK_ANSI_U): "U", UInt16(kVK_ANSI_V): "V", UInt16(kVK_ANSI_W): "W", UInt16(kVK_ANSI_X): "X",
-        UInt16(kVK_ANSI_Y): "Y", UInt16(kVK_ANSI_Z): "Z",
-        UInt16(kVK_ANSI_0): "0", UInt16(kVK_ANSI_1): "1", UInt16(kVK_ANSI_2): "2", UInt16(kVK_ANSI_3): "3",
-        UInt16(kVK_ANSI_4): "4", UInt16(kVK_ANSI_5): "5", UInt16(kVK_ANSI_6): "6", UInt16(kVK_ANSI_7): "7",
-        UInt16(kVK_ANSI_8): "8", UInt16(kVK_ANSI_9): "9",
-        UInt16(kVK_ANSI_Minus): "-", UInt16(kVK_ANSI_Equal): "=", UInt16(kVK_ANSI_Comma): ",", UInt16(kVK_ANSI_Period): ".",
-        UInt16(kVK_ANSI_Slash): "/", UInt16(kVK_ANSI_Semicolon): ";", UInt16(kVK_ANSI_Quote): "'",
-        UInt16(kVK_ANSI_LeftBracket): "[", UInt16(kVK_ANSI_RightBracket): "]", UInt16(kVK_ANSI_Backslash): "\\",
-        UInt16(kVK_ANSI_Grave): "`",
-    ]
+    static let plainKeys: [UInt16: String] = LatinKeys.names
 }
 
 /// Everything a global shortcut can do. The order is the order in Settings.
@@ -96,6 +82,7 @@ enum HotKeyAction: String, CaseIterable, Identifiable, Codable {
     case toolbox
     case ruler
     case pickColor
+    case openMenu
 
     var id: String { rawValue }
 
@@ -116,6 +103,7 @@ enum HotKeyAction: String, CaseIterable, Identifiable, Codable {
         case .toolbox: return "Dev toolbox"
         case .ruler: return "Measure on screen"
         case .pickColor: return "Pick a color"
+        case .openMenu: return "Open the \(AppInfo.name) menu"
         }
     }
 
@@ -136,6 +124,7 @@ enum HotKeyAction: String, CaseIterable, Identifiable, Codable {
         case .toolbox: return .optionShift(kVK_ANSI_D, "D")
         case .ruler: return nil
         case .pickColor: return nil
+        case .openMenu: return .optionShift(kVK_ANSI_B, "B")
         }
     }
 
@@ -158,6 +147,7 @@ enum HotKeyAction: String, CaseIterable, Identifiable, Codable {
         case .toolbox: app.openToolbox(tool: nil)
         case .ruler: app.startRuler()
         case .pickColor: app.pickColor()
+        case .openMenu: app.toggleMenuPanel()
         }
     }
 }
@@ -174,9 +164,19 @@ final class HotKeySettings {
     private(set) var overrides: [String: Shortcut?] = [:]
 
     private init() {
-        if let data = UserDefaults.standard.data(forKey: HotKeySettings.storageKey), let saved = try? JSONDecoder().decode([String: Shortcut?].self, from: data) {
-            overrides = saved
+        if let data = UserDefaults.standard.data(forKey: HotKeySettings.storageKey) {
+            overrides = HotKeySettings.decode(data)
         }
+    }
+
+    /// Changed shortcuts by action; a nil value is a shortcut turned off, which is not the same as
+    /// no entry (the default shortcut).
+    static func encode(_ overrides: [String: Shortcut?]) -> Data? {
+        return try? JSONEncoder().encode(overrides)
+    }
+
+    static func decode(_ data: Data) -> [String: Shortcut?] {
+        return (try? JSONDecoder().decode([String: Shortcut?].self, from: data)) ?? [:]
     }
 
     func shortcut(for action: HotKeyAction) -> Shortcut? {
@@ -230,7 +230,7 @@ final class HotKeySettings {
     }
 
     private func save() {
-        if let data = try? JSONEncoder().encode(overrides) {
+        if let data = HotKeySettings.encode(overrides) {
             UserDefaults.standard.set(data, forKey: HotKeySettings.storageKey)
         }
         AppState.shared.registerHotKeys()

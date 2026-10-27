@@ -1,5 +1,6 @@
 import Foundation
 import os
+import BugbearCore
 
 /// Logs to the unified log and to ~/Library/Logs/Bugbear/bugbear.log,
 /// so capture problems can be diagnosed from a bug report.
@@ -9,7 +10,7 @@ enum Log {
 
     static var fileURL: URL {
         let folder = FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent("Library/Logs/Bugbear", isDirectory: true)
+            .appendingPathComponent("Library/Logs/\(AppInfo.storageName)", isDirectory: true)
         try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         return folder.appendingPathComponent("bugbear.log")
     }

@@ -1,4 +1,5 @@
 import AppKit
+import BugbearCore
 import SwiftUI
 
 /// SwiftUI wrapper: a zoomable scroll view hosting the AppKit drawing canvas.
@@ -380,7 +381,7 @@ final class CanvasView: NSView, NSTextFieldDelegate {
 
     private func hasHandles(_ annotation: Annotation) -> Bool {
         switch annotation.tool {
-        case .arrow, .line, .rectangle, .ellipse, .blur, .magnifier, .image:
+        case .arrow, .callout, .line, .rectangle, .ellipse, .blur, .magnifier, .image:
             return true
         default:
             return false
@@ -419,7 +420,7 @@ final class CanvasView: NSView, NSTextFieldDelegate {
             // Topmost mark under the pointer.
             for annotation in document.annotations.reversed() where annotation.hitTest(point, tolerance: tolerance) {
                 document.selectedId = annotation.id
-                if event.clickCount == 2 && annotation.tool == .text {
+                if event.clickCount == 2 && annotation.tool.hasLabel {
                     beginTextEditing(annotation)
                     return
                 }
@@ -458,6 +459,10 @@ final class CanvasView: NSView, NSTextFieldDelegate {
             annotation.fontSize = document.fontSize
             if document.tool == .rectangle || document.tool == .ellipse {
                 annotation.fill = document.shapeFill
+            }
+            if document.tool == .callout {
+                annotation.clearBackground = document.clearTextBackground
+                annotation.labelArea = CGRect(origin: .zero, size: document.imageSize)
             }
             if document.tool == .pen || document.tool == .highlighter {
                 annotation.points = [point]
@@ -602,7 +607,7 @@ final class CanvasView: NSView, NSTextFieldDelegate {
                 let length = hypot(annotation.end.x - annotation.start.x, annotation.end.y - annotation.start.y)
                 let isTiny = length < 4 && annotation.points.count < 3
                 if !isTiny {
-                    document.add(annotation)
+                    finishDrawing(annotation)
                 }
             }
             draft = nil
@@ -674,7 +679,8 @@ final class CanvasView: NSView, NSTextFieldDelegate {
     @MainActor
     private func handleKey(_ event: NSEvent) -> Bool {
         let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
-        let key = (event.charactersIgnoringModifiers ?? "").lowercased()
+        // By key, not by character: with a Russian layout V types "м" and ⌘V still pastes.
+        let key = LatinKeys.key(forKeyCode: event.keyCode, typed: event.charactersIgnoringModifiers ?? "")
         if flags.contains(.command) {
             if key == "z" && flags.contains(.shift) {
                 document.redo()
@@ -704,7 +710,7 @@ final class CanvasView: NSView, NSTextFieldDelegate {
                 document.tool = .select
                 return true
             }
-            if let selected = document.selected, selected.tool == .text {
+            if let selected = document.selected, selected.tool.hasLabel {
                 beginTextEditing(selected)
                 return true
             }
@@ -758,7 +764,6 @@ final class CanvasView: NSView, NSTextFieldDelegate {
         let field = NSTextField(string: annotation.text)
         field.isBordered = false
         field.focusRingType = .none
-        field.placeholderString = "Type…"
         field.delegate = self
         field.lineBreakMode = .byClipping
         style(field, as: annotation)
@@ -782,7 +787,11 @@ final class CanvasView: NSView, NSTextFieldDelegate {
         }
         let padding = annotation.fontSize * 0.45
         let width = max(AnnotationRenderer.textSize(annotation).width, annotation.fontSize * 8)
-        field.frame = CGRect(x: annotation.start.x + padding * 0.6, y: annotation.start.y + padding * 0.3, width: width, height: annotation.fontSize * 1.5)
+        var origin = annotation.start
+        if annotation.tool == .callout {
+            origin = AnnotationRenderer.calloutLabelBox(annotation).origin
+        }
+        field.frame = CGRect(x: origin.x + padding * 0.6, y: origin.y + padding * 0.3, width: width, height: annotation.fontSize * 1.5)
     }
 
     /// Background, color or size changed while typing: the field shows it right away.
@@ -791,6 +800,33 @@ final class CanvasView: NSView, NSTextFieldDelegate {
         guard let field = textField, let id = document.editingTextId else { return }
         guard let annotation = document.annotations.first(where: { item in item.id == id }) else { return }
         style(field, as: annotation)
+    }
+
+    /// A drawn mark goes on the picture; an arrow with text opens its note for typing right away.
+    @MainActor
+    private func finishDrawing(_ annotation: Annotation) {
+        document.add(annotation)
+        if annotation.tool == .callout {
+            beginTextEditing(annotation)
+        }
+    }
+
+    /// For checks: what a drag with the current tool from `start` to `end` leaves.
+    @MainActor
+    func drawForChecks(from start: CGPoint, to end: CGPoint) {
+        var annotation = Annotation(tool: document.tool, start: start, end: end, color: document.color, lineWidth: document.lineWidth)
+        annotation.fontSize = document.fontSize
+        annotation.clearBackground = document.clearTextBackground
+        annotation.labelArea = CGRect(origin: .zero, size: document.imageSize)
+        finishDrawing(annotation)
+    }
+
+    /// For checks: types `text` into the open note and finishes it, as Return does.
+    @MainActor
+    func finishTypingForChecks(_ text: String) {
+        guard let field = textField else { return }
+        field.stringValue = text
+        commitTextEditing()
     }
 
     /// For checks: what a click with the Text tool does at `point`.
@@ -814,8 +850,8 @@ final class CanvasView: NSView, NSTextFieldDelegate {
             guard let field = textField, let id = document.editingTextId else { return }
             document.setText(field.stringValue, for: id)
             if let annotation = document.annotations.first(where: { item in item.id == id }) {
-                let width = max(AnnotationRenderer.textSize(annotation).width, annotation.fontSize * 8)
-                field.frame.size.width = width
+                // A note left of or above its arrow grows away from it, so the field moves too.
+                style(field, as: annotation)
             }
         }
     }
@@ -836,7 +872,11 @@ final class CanvasView: NSView, NSTextFieldDelegate {
         field.removeFromSuperview()
         document.editingTextId = nil
         if let annotationId = id {
-            if text.isEmpty {
+            let isCallout = document.annotations.first(where: { item in item.id == annotationId })?.tool == .callout
+            if text.isEmpty && isCallout {
+                // No note typed: the arrow stays, as a plain arrow.
+                document.makePlainArrow(annotationId)
+            } else if text.isEmpty {
                 document.delete(annotationId)
             } else {
                 document.setText(text, for: annotationId)

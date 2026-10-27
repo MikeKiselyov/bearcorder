@@ -65,4 +65,34 @@ final class ReleaseVersionTests: XCTestCase {
         XCTAssertEqual(UpdateInfo.catalogURL(repository: "a/b", branch: "main")?.absoluteString, "https://raw.githubusercontent.com/a/b/main/Sources/BugbearCore/Support/WhatsNewCatalog.swift")
         XCTAssertNil(UpdateInfo.catalogURL(repository: "", branch: "main"))
     }
+
+    // A copy built from a pull request branch looked for updates on that branch, and GitHub
+    // answered 404 once the branch was deleted after the merge.
+    func testUpdatesAlwaysComeFromMain() {
+        let catalog = UpdateInfo.updateCatalogURL(repository: FeedbackReport.defaultRepository)
+        XCTAssertEqual(catalog?.absoluteString, "https://raw.githubusercontent.com/MikeKiselyov/bugbear-app/main/Sources/BugbearCore/Support/WhatsNewCatalog.swift")
+        let compare = UpdateInfo.updateCompareURL(repository: FeedbackReport.defaultRepository, builtCommit: "abc1234")
+        XCTAssertEqual(compare?.absoluteString, "https://api.github.com/repos/MikeKiselyov/bugbear-app/compare/abc1234...main")
+        XCTAssertNil(UpdateInfo.updateCompareURL(repository: FeedbackReport.defaultRepository, builtCommit: ""))
+    }
+
+    // Every picture a release note names is in the repository, so the app can show it.
+    func testWhatsNewPicturesExist() {
+        var root = URL(fileURLWithPath: #filePath)
+        for _ in 0..<3 {
+            root.deleteLastPathComponent()
+        }
+        var named = 0
+        for release in WhatsNewCatalog.releases {
+            for item in release.items where !item.image.isEmpty {
+                named += 1
+                let folder = root.appendingPathComponent(WhatsNew.imageFolder)
+                let png = folder.appendingPathComponent("\(item.image).png").path
+                let gif = folder.appendingPathComponent("\(item.image).gif").path
+                let jpeg = folder.appendingPathComponent("\(item.image).jpg").path
+                XCTAssertTrue(FileManager.default.fileExists(atPath: png) || FileManager.default.fileExists(atPath: gif) || FileManager.default.fileExists(atPath: jpeg), "missing \(item.image) in \(folder.path)")
+            }
+        }
+        XCTAssertGreaterThan(named, 0)
+    }
 }

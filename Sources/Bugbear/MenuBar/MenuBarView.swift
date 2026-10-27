@@ -21,6 +21,17 @@ enum MenuTab: String, CaseIterable, Identifiable {
         }
     }
 
+    /// The color of the tab's icon tile.
+    var tint: TileTint {
+        switch self {
+        case .capture: return .coral
+        case .record: return .pink
+        case .tools: return .purple
+        case .recent: return .blue
+        case .space: return .green
+        }
+    }
+
     var help: String {
         switch self {
         case .capture: return "Save clips from the buffer, take screenshots and see the environment info"
@@ -39,10 +50,8 @@ struct MenuBarView: View {
     var body: some View {
         VStack(spacing: 0) {
             header
-            Divider().overlay(Theme.border)
             bufferSection
             tabBar
-            Divider().overlay(Theme.border)
             // One fixed height for every tab: the menu bar panel does not resize when the tab
             // changes, so taller content was cut off at the bottom.
             ScrollView {
@@ -53,7 +62,7 @@ struct MenuBarView: View {
             footer
         }
         .frame(width: 360)
-        .background(Theme.panel)
+        .auroraBackground()
         .foregroundStyle(Theme.text)
         .task {
             await app.refreshEnvironmentPreview()
@@ -73,9 +82,7 @@ struct MenuBarView: View {
                 case .capture:
                     VStack(spacing: 0) {
                         saveSection
-                        Divider().overlay(Theme.border)
                         captureSection
-                        Divider().overlay(Theme.border)
                         environmentSection
                     }
                 case .record:
@@ -102,15 +109,16 @@ struct MenuBarView: View {
                 Button {
                     tab = item
                 } label: {
-                    VStack(spacing: 3) {
-                        Image(systemName: item.symbol).font(.system(size: 13))
+                    VStack(spacing: 4) {
+                        IconTile(systemImage: item.symbol, tint: item.tint, size: 28)
+                            .saturation(isSelected ? 1 : 0.55)
                         Text(item.rawValue).font(.system(size: 11, weight: isSelected ? .semibold : .regular))
                     }
                     .foregroundStyle(isSelected ? Theme.text : Theme.textSecondary)
                     .frame(maxWidth: .infinity)
-                    .frame(height: 44)
+                    .frame(height: 58)
                     .background(isSelected ? Theme.controlSelected : Color.clear)
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .clipShape(RoundedRectangle(cornerRadius: 11))
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
@@ -119,7 +127,7 @@ struct MenuBarView: View {
             }
         }
         .padding(.horizontal, 10)
-        .padding(.bottom, 8)
+        .padding(.vertical, 8)
     }
 
     // MARK: Header and buffer
@@ -134,7 +142,7 @@ struct MenuBarView: View {
                 .frame(width: 30, height: 27)
                 .foregroundStyle(Theme.text)
             VStack(alignment: .leading, spacing: 1) {
-                Text("Bugbear").font(.system(size: 14, weight: .bold))
+                Text(AppInfo.name).font(.system(size: 14, weight: .bold))
                 // The update badge needs the room; the tagline comes back once updated.
                 if !Updater.shared.hasUpdate {
                     Text("Catch the bug that already happened")
@@ -173,6 +181,7 @@ struct MenuBarView: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Circle().fill(statusColor).frame(width: 8, height: 8)
+                    .shadow(color: statusColor.opacity(0.8), radius: 4)
                 Text(statusText)
                     .font(.system(size: 13, weight: .semibold))
                     .lineLimit(2)
@@ -183,7 +192,7 @@ struct MenuBarView: View {
             }
             if app.bufferState == .needsPermission {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Allow Bugbear in System Settings › Privacy & Security › Screen & System Audio Recording, then reopen the app.")
+                    Text("Allow \(AppInfo.name) in System Settings › Privacy & Security › Screen & System Audio Recording, then reopen the app.")
                         .font(.system(size: 12))
                         .foregroundStyle(Theme.textSecondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -193,7 +202,7 @@ struct MenuBarView: View {
                             .tip("Ask macOS for Screen Recording access so the buffer can run")
                         Button("Relaunch") { relaunch() }
                             .buttonStyle(SecondaryButtonStyle())
-                            .tip("Restart Bugbear so a newly granted permission takes effect")
+                            .tip("Restart \(AppInfo.name) so a newly granted permission takes effect")
                     }
                 }
             } else if case .failed(let message) = app.bufferState {
@@ -215,8 +224,10 @@ struct MenuBarView: View {
                 .foregroundStyle(Theme.textSecondary)
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
+        .padding(12)
+        .glassCard()
+        .padding(.horizontal, 12)
+        .padding(.bottom, 2)
     }
 
     private var bufferDetail: String {
@@ -235,13 +246,25 @@ struct MenuBarView: View {
                 let isCovered = Double(count - index) / Double(count) <= filledFraction + 0.001
                 let level = app.activity[index]
                 let isRecent = index >= count - 4
-                RoundedRectangle(cornerRadius: 2)
-                    .fill(isCovered ? (isRecent ? Theme.accent : Color(hex: 0x4A4D54)) : Color(hex: 0x2E3034))
+                RoundedRectangle(cornerRadius: 3)
+                    .fill(barStyle(isCovered: isCovered, isRecent: isRecent))
                     .frame(height: max(4, 34 * (isCovered ? max(0.18, level) : 0.15)))
+                    .shadow(color: Theme.accent.opacity(isCovered && isRecent ? 0.5 : 0), radius: 5)
             }
         }
         .frame(height: 34, alignment: .bottom)
         .accessibilityLabel("Buffer holds \(Int(app.coveredSeconds)) seconds")
+    }
+
+    /// The last seconds glow coral, the rest of what the buffer holds is glass, the empty part faint.
+    private func barStyle(isCovered: Bool, isRecent: Bool) -> AnyShapeStyle {
+        if isCovered && isRecent {
+            return AnyShapeStyle(LinearGradient(colors: [Color(hex: 0xFFB199), Theme.accent], startPoint: .top, endPoint: .bottom))
+        }
+        if isCovered {
+            return AnyShapeStyle(Color.white.opacity(0.16))
+        }
+        return AnyShapeStyle(Color.white.opacity(0.05))
     }
 
     // MARK: Save from buffer
@@ -283,10 +306,11 @@ struct MenuBarView: View {
                         }
                         .foregroundStyle(isPrimary ? Theme.accentText : Theme.text)
                         .frame(maxWidth: .infinity)
-                        .frame(height: 54)
-                        .background(isPrimary ? Theme.accent : Theme.control)
-                        .overlay(RoundedRectangle(cornerRadius: 8).stroke(isPrimary ? Color.clear : Theme.borderStrong, lineWidth: 1))
-                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                        .frame(height: 56)
+                        .background(isPrimary ? AnyShapeStyle(Theme.accentGradient) : AnyShapeStyle(Theme.panel))
+                        .overlay(RoundedRectangle(cornerRadius: 12).stroke(isPrimary ? Color.clear : Theme.border, lineWidth: 1))
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                        .shadow(color: Theme.accent.opacity(isPrimary && available ? 0.4 : 0), radius: 12, y: 5)
                         .opacity(available ? 1 : 0.45)
                         .contentShape(Rectangle())
                     }
@@ -303,35 +327,37 @@ struct MenuBarView: View {
 
     private var captureSection: some View {
         VStack(spacing: 0) {
-            MenuRow(systemImage: "viewfinder", title: "Screenshot area", shortcut: HotKeySettings.shared.text(for: .screenshotArea)) {
+            MenuRow(systemImage: "viewfinder", tint: .coral, title: "Screenshot area", shortcut: HotKeySettings.shared.text(for: .screenshotArea)) {
                 Task { await app.takeScreenshot(.area) }
             }
             .tip("Select an area of the screen and capture it (\(HotKeySettings.shared.text(for: .screenshotArea)))")
-            MenuRow(systemImage: "macwindow", title: "Screenshot window", shortcut: HotKeySettings.shared.text(for: .screenshotWindow)) {
+            MenuRow(systemImage: "macwindow", tint: .blue, title: "Screenshot window", shortcut: HotKeySettings.shared.text(for: .screenshotWindow)) {
                 Task { await app.takeScreenshot(.window) }
             }
             .tip("Click a window to capture just that window (\(HotKeySettings.shared.text(for: .screenshotWindow)))")
             if app.displayCount > 1 {
-                MenuRow(systemImage: "rectangle.split.2x1", title: "Screenshot all displays", shortcut: "") {
+                MenuRow(systemImage: "rectangle.split.2x1", tint: .green, title: "Screenshot all displays", shortcut: "") {
                     Task { await app.takeScreenshot(.allDisplays) }
                 }
                 .tip("Capture every connected display in one image")
             } else {
-                MenuRow(systemImage: "display", title: "Screenshot full screen", shortcut: "") {
+                MenuRow(systemImage: "display", tint: .green, title: "Screenshot full screen", shortcut: "") {
                     Task { await app.takeScreenshot(.fullScreen) }
                 }
                 .tip("Capture the whole screen")
             }
-            MenuRow(systemImage: "arrow.down.to.line.compact", title: "Scrolling screenshot", shortcut: HotKeySettings.shared.text(for: .scrollingScreenshot)) {
+            MenuRow(systemImage: "arrow.down.to.line.compact", tint: .teal, title: "Scrolling screenshot", shortcut: HotKeySettings.shared.text(for: .scrollingScreenshot)) {
                 Task { await app.takeScrollingScreenshot() }
             }
             .tip("Capture a long page by scrolling it into one tall image (\(HotKeySettings.shared.text(for: .scrollingScreenshot)))")
-            MenuRow(systemImage: "text.viewfinder", title: "Copy text from screen", shortcut: HotKeySettings.shared.text(for: .copyText)) {
+            MenuRow(systemImage: "text.viewfinder", tint: .purple, title: "Copy text from screen", shortcut: HotKeySettings.shared.text(for: .copyText)) {
                 Task { await app.copyTextFromScreen() }
             }
             .tip("Select an area and copy the text in it to the clipboard (\(HotKeySettings.shared.text(for: .copyText)))")
         }
-        .padding(8)
+        .padding(4)
+        .glassCard()
+        .padding(.horizontal, 12)
     }
 
     // MARK: Record
@@ -414,7 +440,6 @@ struct MenuBarView: View {
                     .tip("Draw arrows and boxes on screen (\(HotKeySettings.shared.text(for: .draw)))")
                 }
             }
-            Divider().overlay(Theme.border).padding(.vertical, 2)
             screenChecks
         }
         .padding(.horizontal, 16)
@@ -425,6 +450,8 @@ struct MenuBarView: View {
     private var screenChecks: some View {
         VStack(alignment: .leading, spacing: 2) {
             SectionLabel("Check the screen")
+                .padding(.horizontal, 10)
+                .padding(.top, 8)
             Menu {
                 Section("Desktop") {
                     ForEach(WindowResizer.desktopPresets) { preset in
@@ -442,6 +469,7 @@ struct MenuBarView: View {
             .menuStyle(.button)
             .buttonStyle(.plain)
             .menuIndicator(.hidden)
+            .accessibilityLabel("Resize the window you test")
             .tip("Resize the last app window to a desktop or mobile preset to test responsive layouts")
             Button { app.startRuler() } label: {
                 checkRowLabel("ruler", "Measure on screen", detail: "")
@@ -462,19 +490,33 @@ struct MenuBarView: View {
             .menuStyle(.button)
             .buttonStyle(.plain)
             .menuIndicator(.hidden)
+            .accessibilityLabel("Overlay a design")
             .tip("Lay a design mockup over the screen to compare it with the real UI")
         }
+        .padding(.vertical, 4)
+        .glassCard()
+        .padding(.top, 4)
     }
 
     private func checkRowLabel(_ symbol: String, _ title: String, detail: String) -> some View {
         HStack(spacing: 10) {
-            Image(systemName: symbol).frame(width: 18).foregroundStyle(Theme.textSecondary)
+            IconTile(systemImage: symbol, tint: checkTint(symbol), size: 24)
             Text(title).font(.system(size: 13))
             Spacer()
             Text(detail).font(.system(size: 11)).foregroundStyle(Theme.textSecondary).lineLimit(1)
         }
-        .frame(height: 30)
+        .padding(.horizontal, 8)
+        .frame(height: 36)
         .contentShape(Rectangle())
+    }
+
+    private func checkTint(_ symbol: String) -> TileTint {
+        switch symbol {
+        case "macwindow": return .blue
+        case "ruler": return .yellow
+        case "eyedropper": return .pink
+        default: return .teal
+        }
     }
 
     // MARK: Toolbox
@@ -509,24 +551,56 @@ struct MenuBarView: View {
 
     private var environmentSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            SectionLabel("Environment · auto")
-            if let environment = app.environmentPreview {
-                Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 6) {
-                    ForEach(Array(environment.rows().prefix(5).enumerated()), id: \.offset) { _, row in
-                        GridRow {
-                            Text(row.label).foregroundStyle(Theme.textSecondary)
-                            Text(row.value).lineLimit(1).truncationMode(.middle)
-                        }
+            HStack {
+                SectionLabel("Environment · auto")
+                Spacer()
+                Button("Edit") { editReportFields() }
+                    .buttonStyle(.plain)
+                    .font(.system(size: 12))
+                    .foregroundStyle(Theme.link)
+                    .tip("Choose the fields, their names and your own fields in Settings → Bug reports")
+            }
+            if let environment = app.environmentPreview, environment.rows().isEmpty {
+                // Every field turned off or empty: say so, instead of an empty card.
+                HStack(spacing: 8) {
+                    Text("No fields to show")
                         .font(.system(size: 12))
+                        .foregroundStyle(Theme.textSecondary)
+                    Button("Choose fields") { editReportFields() }
+                        .buttonStyle(.plain)
+                        .font(.system(size: 12))
+                        .foregroundStyle(Theme.link)
+                }
+            } else if let environment = app.environmentPreview {
+                FlowLayout(spacing: 5) {
+                    ForEach(Array(environment.rows().prefix(5).enumerated()), id: \.offset) { _, row in
+                        Text(row.label == "macOS" ? "macOS \(row.value)" : row.value)
+                            .font(.system(size: 11))
+                            .foregroundStyle(Theme.textSecondary)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                            .frame(maxWidth: 300)
+                            .padding(.horizontal, 7)
+                            .frame(height: 20)
+                            .background(Theme.control)
+                            .clipShape(RoundedRectangle(cornerRadius: 6))
+                            .accessibilityLabel("\(row.label): \(row.value)")
+                            .tip(row.label)
                     }
                 }
             } else {
                 Text("Collecting…").font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
+        .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
+        .glassCard()
+        .padding(12)
+    }
+
+    private func editReportFields() {
+        app.closeMenuPanel()
+        WindowManager.shared.openSettings(page: .reports)
     }
 
     // MARK: Recent
@@ -588,32 +662,30 @@ struct MenuBarView: View {
             .buttonStyle(.plain)
             .tip("The buffer keeps the last minutes of the screen so you can save a bug after it happened")
             Spacer()
-            ToolButton(systemImage: "exclamationmark.bubble", help: "Report a problem with Bugbear or suggest a feature on GitHub") {
+            ToolButton(systemImage: "exclamationmark.bubble", help: "Report a problem with \(AppInfo.name) or suggest a feature on GitHub") {
                 WindowManager.shared.openFeedback(kind: .problem)
             }
             ToolButton(systemImage: "gearshape", help: "Open settings: buffer, shortcuts, storage and more") {
                 app.closeMenuPanel()
                 WindowManager.shared.openSettings()
             }
-            ToolButton(systemImage: "power", help: "Quit Bugbear") {
+            ToolButton(systemImage: "power", help: "Quit \(AppInfo.name)") {
                 NSApp.terminate(nil)
             }
         }
         .padding(8)
+        .background(Theme.sidebar)
+        .overlay(alignment: .top) { Rectangle().fill(Theme.border).frame(height: 1) }
     }
 
     private func relaunch() {
-        let path = Bundle.main.bundlePath
-        let task = Process()
-        task.executableURL = URL(fileURLWithPath: "/bin/sh")
-        task.arguments = ["-c", "sleep 1; open \"\(path)\""]
-        try? task.run()
-        NSApp.terminate(nil)
+        Relaunch.now()
     }
 }
 
 struct MenuRow: View {
     let systemImage: String
+    var tint: TileTint = .gray
     let title: String
     let shortcut: String
     let action: () -> Void
@@ -622,17 +694,15 @@ struct MenuRow: View {
     var body: some View {
         Button(action: action) {
             HStack(spacing: 10) {
-                Image(systemName: systemImage)
-                    .font(.system(size: 14))
-                    .frame(width: 18)
+                IconTile(systemImage: systemImage, tint: tint, size: 24)
                 Text(title).font(.system(size: 13))
                 Spacer()
                 Text(shortcut).font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
             }
             .padding(.horizontal, 8)
-            .frame(height: 36)
-            .background(hovering ? Theme.control : Color.clear)
-            .clipShape(RoundedRectangle(cornerRadius: 6))
+            .frame(height: 38)
+            .background(hovering ? Theme.controlSelected : Color.clear)
+            .clipShape(RoundedRectangle(cornerRadius: 9))
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -655,9 +725,9 @@ struct ToggleChip: View {
             .foregroundStyle(isOn ? Theme.accentText : Theme.text)
             .padding(.horizontal, 10)
             .frame(height: 28)
-            .background(isOn ? Theme.accentSoft : Theme.control)
-            .overlay(RoundedRectangle(cornerRadius: 6).stroke(isOn ? Color.clear : Theme.borderStrong, lineWidth: 1))
-            .clipShape(RoundedRectangle(cornerRadius: 6))
+            .background(isOn ? AnyShapeStyle(Theme.accentGradient) : AnyShapeStyle(Theme.control))
+            .overlay(RoundedRectangle(cornerRadius: 8).stroke(isOn ? Color.clear : Theme.border, lineWidth: 1))
+            .clipShape(RoundedRectangle(cornerRadius: 8))
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -683,8 +753,8 @@ struct FlowChips<Trailing: View>: View {
                         .padding(.horizontal, 10)
                         .frame(height: 28)
                         .background(Theme.control)
-                        .overlay(RoundedRectangle(cornerRadius: 6).stroke(Theme.borderStrong, lineWidth: 1))
-                        .clipShape(RoundedRectangle(cornerRadius: 6))
+                        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Theme.border, lineWidth: 1))
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)

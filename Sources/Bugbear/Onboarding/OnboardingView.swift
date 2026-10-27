@@ -1,6 +1,7 @@
 import AVFoundation
 import AppKit
 import SwiftUI
+import BugbearCore
 
 /// First-launch guide: what the app does, whether to keep a screen buffer, permissions, shortcuts,
 /// where to find it.
@@ -8,9 +9,6 @@ struct OnboardingView: View {
     @Environment(AppState.self) private var app
     @State private var page = 0
     @State private var screenAccess = ScreenBuffer.hasScreenRecordingAccess
-    @State private var accessibilityAccess = InputEventRecorder.hasAccessibilityAccess
-    @State private var microphoneStatus = AVCaptureDevice.authorizationStatus(for: .audio)
-    @State private var cameraStatus = AVCaptureDevice.authorizationStatus(for: .video)
 
     private let pageCount = 6
     private let ticker = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
@@ -65,7 +63,7 @@ struct OnboardingView: View {
                         .foregroundStyle(Theme.textSecondary)
                         .padding(.trailing, 8)
                 }
-                Button(page == pageCount - 1 ? "Start using Bugbear" : "Continue") {
+                Button(page == pageCount - 1 ? "Start using \(AppInfo.name)" : "Continue") {
                     if page == pageCount - 1 {
                         complete()
                     } else {
@@ -80,7 +78,7 @@ struct OnboardingView: View {
             .background(Theme.sidebar)
         }
         .foregroundStyle(Theme.text)
-        .background(Theme.window)
+        .auroraBackground()
         .onReceive(ticker) { _ in refreshPermissions() }
         .onChange(of: page) { _, newPage in
             UserDefaults.standard.set(newPage, forKey: OnboardingView.pageKey)
@@ -89,14 +87,13 @@ struct OnboardingView: View {
 
     private func refreshPermissions() {
         screenAccess = ScreenBuffer.hasScreenRecordingAccess
-        accessibilityAccess = InputEventRecorder.hasAccessibilityAccess
-        microphoneStatus = AVCaptureDevice.authorizationStatus(for: .audio)
-        cameraStatus = AVCaptureDevice.authorizationStatus(for: .video)
     }
 
     private func complete() {
         UserDefaults.standard.set(true, forKey: OnboardingView.completedKey)
         UserDefaults.standard.removeObject(forKey: OnboardingView.pageKey)
+        // Saved even when left at the default, so it is the person's choice from now on.
+        UserDefaults.standard.set(app.settings.keepCrashClipsDays, forKey: "keepCrashClipsDays")
         WindowManager.shared.close(id: "onboarding")
         if app.settings.startBufferOnLaunch {
             if app.bufferState != .running && ScreenBuffer.hasScreenRecordingAccess {
@@ -114,7 +111,7 @@ struct OnboardingView: View {
             HStack(spacing: 16) {
                 LogoView(size: 64)
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Welcome to Bugbear").font(.system(size: 26, weight: .bold))
+                    Text("Welcome to \(AppInfo.name)").font(.system(size: 26, weight: .bold))
                     Text("Catch the bug that already happened.").font(.system(size: 15)).foregroundStyle(Theme.textSecondary)
                 }
             }
@@ -151,7 +148,7 @@ struct OnboardingView: View {
                 .foregroundStyle(Theme.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
             BufferTimeline()
-            Text("With the screen buffer on, Bugbear quietly keeps the last few minutes. Press \(HotKeySettings.shared.readable(for: .saveShort)) and the moment you missed opens in the editor: trim it, add an arrow, paste it into the ticket. It also saves the minute before an app crashes, by itself.")
+            Text("With the screen buffer on, \(AppInfo.name) quietly keeps the last few minutes. Press \(HotKeySettings.shared.readable(for: .saveShort)) and the moment you missed opens in the editor: trim it, add an arrow, paste it into the ticket. It also saves the minute before an app crashes, by itself.")
                 .font(.system(size: 13))
                 .fixedSize(horizontal: false, vertical: true)
             HStack(spacing: 12) {
@@ -246,7 +243,7 @@ struct OnboardingView: View {
                 Text("Save the minute before an app crashes").font(.system(size: 14, weight: .semibold))
             }
             .toggleStyle(.checkbox)
-            .tip("When an app you worked with crashes, Bugbear saves the last minute of the screen with the crash report")
+            .tip("When an app you worked with crashes, \(AppInfo.name) saves the last minute of the screen with the crash report")
             if settings.saveOnCrash {
                 HStack(spacing: 10) {
                     Text("Keep crash clips for").font(.system(size: 13))
@@ -290,13 +287,7 @@ struct OnboardingView: View {
     }
 
     private func chooseOutputFolder() {
-        let panel = NSOpenPanel()
-        panel.canChooseFiles = false
-        panel.canChooseDirectories = true
-        panel.canCreateDirectories = true
-        panel.directoryURL = app.settings.outputFolder
-        panel.prompt = "Save here"
-        if panel.runModal() == .OK, let url = panel.url {
+        if let url = SystemActions.chooseFolder(startingAt: app.settings.outputFolder, prompt: "Save here") {
             app.settings.outputFolderPath = url.path
         }
     }
@@ -328,82 +319,22 @@ struct OnboardingView: View {
             .contentShape(RoundedRectangle(cornerRadius: 10))
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(title)
         .accessibilityAddTraits(selected ? .isSelected : [])
     }
 
     private var permissions: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        @Bindable var settings = app.settings
+        return VStack(alignment: .leading, spacing: 10) {
             Text("Permissions").font(.system(size: 24, weight: .bold))
             Text("Only Screen Recording is required. The rest turn on extras and can be granted later in Settings.")
                 .font(.system(size: 13))
                 .foregroundStyle(Theme.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
-            permissionRow(
-                title: "Screen & System Audio Recording",
-                detail: "Required for screenshots, recordings and the buffer. After allowing it, relaunch the app.",
-                granted: screenAccess,
-                required: true,
-                action: { app.requestScreenRecordingAccess() },
-                extra: screenAccess && app.bufferState == .needsPermission ? AnyView(Button("Relaunch") { relaunch() }.buttonStyle(SecondaryButtonStyle())) : nil
-            )
-            permissionRow(
-                title: "Accessibility",
-                detail: "Shows the shortcut keys you press in videos. Plain typing is never recorded as text.",
-                granted: accessibilityAccess,
-                required: false,
-                action: { app.requestAccessibilityAccess() },
-                extra: nil
-            )
-            permissionRow(
-                title: "Microphone",
-                detail: "Your voice in recordings, when you turn the mic on.",
-                granted: microphoneStatus == .authorized,
-                required: false,
-                action: { Task { _ = await AVCaptureDevice.requestAccess(for: .audio); refreshPermissions() } },
-                extra: nil
-            )
-            permissionRow(
-                title: "Camera",
-                detail: "The round camera bubble you can show while recording.",
-                granted: cameraStatus == .authorized,
-                required: false,
-                action: { Task { _ = await AVCaptureDevice.requestAccess(for: .video); refreshPermissions() } },
-                extra: nil
-            )
+            PermissionsList(relaunch: { relaunch() })
+            TypedTextChoice(isOn: $settings.recordTypedText)
+                .onChange(of: settings.recordTypedText) { app.applyStepPrivacy() }
         }
-    }
-
-    private func permissionRow(title: String, detail: String, granted: Bool, required: Bool, action: @escaping () -> Void, extra: AnyView?) -> some View {
-        HStack(spacing: 14) {
-            Image(systemName: granted ? "checkmark.circle.fill" : (required ? "exclamationmark.circle.fill" : "circle"))
-                .font(.system(size: 18))
-                .foregroundStyle(granted ? Theme.success : (required ? Theme.warning : Theme.textTertiary))
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 6) {
-                    Text(title).font(.system(size: 14, weight: .semibold))
-                    Text(required ? "Required" : "Optional")
-                        .font(.system(size: 10, weight: .semibold))
-                        .foregroundStyle(Theme.textSecondary)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 1)
-                        .background(Theme.control)
-                        .clipShape(RoundedRectangle(cornerRadius: 4))
-                }
-                Text(detail).font(.system(size: 12)).foregroundStyle(Theme.textSecondary).fixedSize(horizontal: false, vertical: true)
-            }
-            Spacer()
-            if let extraView = extra {
-                extraView
-            }
-            if granted {
-                Text("Allowed").font(.system(size: 12)).foregroundStyle(Theme.success)
-            } else {
-                Button("Allow…", action: action).buttonStyle(SecondaryButtonStyle())
-            }
-        }
-        .padding(12)
-        .background(Theme.panel)
-        .clipShape(RoundedRectangle(cornerRadius: 10))
     }
 
     private var shortcuts: some View {
@@ -453,7 +384,7 @@ struct OnboardingView: View {
                     .padding(10)
                     .background(Theme.control)
                     .clipShape(RoundedRectangle(cornerRadius: 8))
-                Text("Bugbear lives in the menu bar, top right. Click the bear to save from the buffer, take screenshots, record, or open the toolbox.")
+                Text("\(AppInfo.name) lives in the menu bar, top right. Click the bear to save from the buffer, take screenshots, record, or open the toolbox.")
                     .font(.system(size: 13))
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -494,14 +425,10 @@ struct OnboardingView: View {
     }
 
     private func relaunch() {
+        if SystemActions.recordInstead("relaunch") { return }
         // Back on the Permissions step after the restart, with Screen Recording now allowed.
         UserDefaults.standard.set(OnboardingView.permissionsPage, forKey: OnboardingView.pageKey)
-        let path = Bundle.main.bundlePath
-        let task = Process()
-        task.executableURL = URL(fileURLWithPath: "/bin/sh")
-        task.arguments = ["-c", "sleep 1; open \"\(path)\""]
-        try? task.run()
-        NSApp.terminate(nil)
+        Relaunch.now()
     }
 }
 
@@ -570,5 +497,60 @@ struct ScreenCaptureIndicatorNote: View {
         .background(Theme.panel)
         .clipShape(RoundedRectangle(cornerRadius: 8))
         .tip("The purple icon is macOS's own sign that an app captures the screen. Apps cannot hide it.")
+    }
+}
+
+/// What a permission is used for, shown as small examples under it in the welcome guide.
+struct PermissionUse: Identifiable, Equatable {
+    var symbol: String
+    var text: String
+    var id: String { text }
+
+    static let screen = [
+        PermissionUse(symbol: "gobackward.30", text: "⌥⇧1: the last 30 s"),
+        PermissionUse(symbol: "camera.viewfinder", text: "Screenshots"),
+        PermissionUse(symbol: "record.circle", text: "Recordings"),
+        PermissionUse(symbol: "text.viewfinder", text: "Text from screen"),
+    ]
+    static let accessibility = [
+        PermissionUse(symbol: "list.number", text: "Click “Sign in” in steps"),
+        PermissionUse(symbol: "command", text: "⌘C in clips"),
+        PermissionUse(symbol: "arrow.down.to.line", text: "Scrolling shots"),
+        PermissionUse(symbol: "macwindow", text: "Window sizes"),
+    ]
+    static let microphone = [
+        PermissionUse(symbol: "waveform", text: "Your voice in clips"),
+    ]
+    static let camera = [
+        PermissionUse(symbol: "person.crop.circle", text: "Your face in a bubble"),
+    ]
+    static let browsers = [
+        PermissionUse(symbol: "link", text: "URL in reports"),
+        PermissionUse(symbol: "list.number", text: "Open shop.test/login in steps"),
+    ]
+}
+
+struct PermissionUses: View {
+    var uses: [PermissionUse]
+
+    var body: some View {
+        FlowLayout(spacing: 5) {
+            ForEach(uses) { use in
+                HStack(spacing: 4) {
+                    Image(systemName: use.symbol)
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(Theme.accentSoft)
+                    Text(use.text)
+                        .font(.system(size: 11))
+                        .foregroundStyle(Theme.text)
+                        .lineLimit(1)
+                        .fixedSize()
+                }
+                .padding(.horizontal, 7)
+                .padding(.vertical, 3)
+                .background(Theme.control)
+                .clipShape(Capsule())
+            }
+        }
     }
 }

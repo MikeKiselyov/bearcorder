@@ -6,12 +6,12 @@ final class JiraReportTests: XCTestCase {
         var environment = EnvironmentSnapshot(osVersion: "15.1", appName: "Chrome", appVersion: "131.0", url: "stage.example.com/[cart]")
         environment.extras = [EnvironmentSnapshot.Field(name: "Stand", value: "stage-3")]
         let actions = [BugReport.Action(kind: .click, time: 4, target: "\"Pay\" button", app: "Chrome")]
-        let text = BugReport.report(environment: environment, actions: actions, files: ["/tmp/clip.mp4"], format: .jira)
-        XCTAssertTrue(text.hasPrefix("h2. Summary"))
-        XCTAssertTrue(text.contains("# {{00:04}} Click \"Pay\" button in Chrome"))
+        let text = BugReport.report(environment: environment, actions: actions, format: .jira)
+        XCTAssertTrue(text.hasPrefix("h2. Steps to reproduce"), text)
+        XCTAssertTrue(text.contains("# Click \"Pay\" button in Chrome"))
         XCTAssertTrue(text.contains("* *Stand:* stage-3"))
         XCTAssertTrue(text.contains("* *URL:* stage.example.com/\\[cart\\]"))
-        XCTAssertTrue(text.hasSuffix("h2. Attachments\n* {{/tmp/clip.mp4}}"))
+        XCTAssertFalse(text.contains("Attachments") || text.contains("Summary") || text.contains("{{00:"), text)
     }
 
     func testExtrasComeFirstAndShowInBadge() {
@@ -21,10 +21,77 @@ final class JiraReportTests: XCTestCase {
         XCTAssertTrue(environment.badgeLines().contains("Build: 1.42 · Account: qa+1@example.com"))
     }
 
+    func testHiddenFieldsLeaveThePanelTheBadgeAndTheReport() {
+        var environment = EnvironmentSnapshot(osVersion: "15.1", deviceModel: "Mac15,3", display: "3024×1964 @2x", appName: "Chrome", appVersion: "131.0", url: "stage.example.com", locale: "en-US")
+        environment.hiddenFields = ["Locale", "URL", "Time"]
+        var labels: [String] = []
+        for row in environment.rows() {
+            labels.append(row.label)
+        }
+        XCTAssertEqual(labels, ["macOS", "Device", "Display", "App"])
+        let badge = environment.badgeLines()
+        XCTAssertEqual(badge, ["macOS 15.1 · Chrome 131.0", "Mac15,3", "3024×1964 @2x"])
+        let report = BugReport.report(environment: environment, actions: [], format: .markdown)
+        XCTAssertFalse(report.contains("stage.example.com"))
+        XCTAssertFalse(report.contains("Locale"))
+        XCTAssertTrue(report.contains("- Device: Mac15,3"))
+    }
+
+    /// The copy button tells whether the report will have steps before it is pasted.
+    func testCopyButtonSaysHowManySteps() {
+        XCTAssertEqual(BugReport.copyButtonTitle(stepCount: 0), "Copy bug report · no steps")
+        XCTAssertEqual(BugReport.copyButtonTitle(stepCount: 1), "Copy bug report · 1 step")
+        XCTAssertEqual(BugReport.copyButtonTitle(stepCount: 7), "Copy bug report · 7 steps")
+    }
+
+    /// The badge left out Device, Locale and Appearance although they were on.
+    func testBadgeShowsEveryFieldThatIsOn() {
+        var environment = EnvironmentSnapshot(osVersion: "15.1", deviceModel: "Mac15,3", display: "3024×1964 @2x", appName: "Chrome", appVersion: "131.0", url: "stage.example.com", locale: "en-US")
+        environment.appearance = "Dark"
+        environment.hiddenFields = ["Time"]
+        XCTAssertEqual(environment.badgeLines(), ["macOS 15.1 · Chrome 131.0", "Mac15,3", "3024×1964 @2x", "stage.example.com", "en-US · Dark"])
+        environment.hiddenFields = ["Time", "Locale"]
+        XCTAssertEqual(environment.badgeLines().last, "Dark")
+    }
+
+    func testHiddenMacOSAndAppLeaveNoEmptyBadgeLine() {
+        var environment = EnvironmentSnapshot(osVersion: "15.1", appName: "Chrome")
+        environment.hiddenFields = ["macOS", "App", "Time"]
+        XCTAssertEqual(environment.badgeLines(), [])
+        environment.hiddenFields = ["App", "Time"]
+        environment.osBuild = "24B83"
+        XCTAssertEqual(environment.badgeLines(), ["macOS 15.1 (24B83)"])
+    }
+
+    func testRenamedFieldsShowTheirNewName() {
+        var environment = EnvironmentSnapshot(osVersion: "15.1", deviceModel: "Mac15,3", appName: "Chrome")
+        environment.renamedFields = ["Device": "Model", "App": "  ", "Time": "Captured at"]
+        var labels: [String] = []
+        for row in environment.rows() {
+            labels.append(row.label)
+        }
+        XCTAssertEqual(labels, ["macOS", "Model", "App", "Captured at"])
+        let jira = BugReport.report(environment: environment, actions: [], format: .jira)
+        XCTAssertTrue(jira.contains("* *Model:* Mac15,3"))
+        XCTAssertFalse(jira.contains("*Device:*"))
+    }
+
+    func testFieldChoicesAreSavedWithTheCapture() throws {
+        var environment = EnvironmentSnapshot(osVersion: "15.1")
+        environment.hiddenFields = ["Locale"]
+        environment.renamedFields = ["Device": "Model"]
+        let decoded = try JSONDecoder().decode(EnvironmentSnapshot.self, from: JSONEncoder().encode(environment))
+        XCTAssertEqual(decoded.hiddenFields, ["Locale"])
+        XCTAssertEqual(decoded.renamedFields, ["Device": "Model"])
+    }
+
     func testOldCapturesWithoutExtrasStillDecode() throws {
         let json = #"{"osVersion":"15","osBuild":"","deviceModel":"","display":"","appName":"","appVersion":"","appBundleId":"","url":"","locale":"","timeZone":"","appearance":"","capturedAt":0}"#
         let snapshot = try JSONDecoder().decode(EnvironmentSnapshot.self, from: Data(json.utf8))
         XCTAssertNil(snapshot.extras)
+        XCTAssertNil(snapshot.hiddenFields)
+        XCTAssertTrue(snapshot.shows(.locale))
+        XCTAssertEqual(snapshot.name(of: .device), "Device")
     }
 }
 

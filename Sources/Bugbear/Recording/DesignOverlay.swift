@@ -28,11 +28,9 @@ final class DesignOverlay {
     @ObservationIgnored private var controlsPanel: NSPanel?
 
     func openFromFile() {
-        let panel = NSOpenPanel()
-        panel.allowedContentTypes = [.png, .jpeg, .tiff, .heic, .pdf]
-        panel.message = "Choose a design export (PNG from Figma works best)"
         NSApp.activate(ignoringOtherApps: true)
-        if panel.runModal() == .OK, let url = panel.url, let loaded = NSImage(contentsOf: url) {
+        let chosen = SystemActions.chooseImages(message: "Choose a design export (PNG from Figma works best)", multiple: false, startingAt: nil, types: [.png, .jpeg, .tiff, .heic, .pdf])
+        if let url = chosen.first, let loaded = NSImage(contentsOf: url) {
             show(loaded)
         }
     }
@@ -127,6 +125,7 @@ final class DesignOverlay {
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         panel.isReleasedWhenClosed = false
         panel.contentView = hosting
+        panel.identifier = NSUserInterfaceItemIdentifier("design-overlay")
         if let visible = NSScreen.main?.visibleFrame {
             panel.setFrameOrigin(CGPoint(x: visible.maxX - hosting.fittingSize.width - 20, y: visible.minY + 20))
         }
@@ -186,11 +185,13 @@ struct DesignOverlayControls: View {
                     Image(systemName: "xmark.circle.fill").foregroundStyle(Theme.textSecondary)
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("Close the overlay")
                 .tip("Close the overlay")
             }
             HStack(spacing: 8) {
                 Text("Opacity").font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
                 Slider(value: $overlay.opacity, in: 0.1...1)
+                    .accessibilityLabel("Opacity")
                     .frame(width: 140)
                     .tip("How see-through the design is, so you can compare it with the real UI under it")
                 Text("\(Int(overlay.opacity * 100))%").font(.system(size: 12, design: .monospaced)).frame(width: 40)
@@ -212,7 +213,9 @@ struct DesignOverlayControls: View {
         .padding(14)
         .frame(width: 300)
         .foregroundStyle(Theme.text)
-        .background(Theme.panel)
+        // Solid: the panel floats over whatever is on screen.
+        .background(Color(hex: 0x1E1A24, alpha: 0.96))
+        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Theme.border, lineWidth: 1))
         .clipShape(RoundedRectangle(cornerRadius: 12))
         .preferredColorScheme(.dark)
     }

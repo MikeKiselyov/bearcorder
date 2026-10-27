@@ -23,7 +23,7 @@ struct VideoOverlay: Identifiable, Codable, Equatable {
             case .text: return "textformat"
             case .arrow: return "arrow.up.right"
             case .rectangle: return "rectangle"
-            case .blur: return "square.grid.3x3.fill"
+            case .blur: return "eye.slash"
             }
         }
     }
@@ -104,8 +104,50 @@ struct VideoProject: Codable, Equatable {
     var gifFramesPerSecond = 12
     /// MP4 size limit in MB, nil for no limit. Optional so older project.json files still load.
     var sizeLimitMB: Int?
+    /// The current step ("3. Click "Pay" button") as a caption at the bottom. Optional so older
+    /// project.json files still load.
+    var showSteps: Bool?
+
+    var isShowingSteps: Bool {
+        return showSteps ?? false
+    }
 
     init(duration: Double) {
         timeline = EditTimeline(sourceDuration: duration)
+    }
+}
+
+extension VideoProject {
+    /// Marks saved before the fixes: dragged off the frame, or added at the last frame and only a
+    /// few microseconds long. They are put back in the frame and made a few seconds long.
+    func repairingMarks() -> VideoProject {
+        var fixed = self
+        for index in fixed.overlays.indices {
+            var overlay = fixed.overlays[index]
+            var box = overlay.rect
+            if overlay.kind == .text {
+                box = CGRect(origin: overlay.start, size: .zero)
+            }
+            let shift = MarkMove.keepInside(minX: box.minX, minY: box.minY, maxX: box.maxX, maxY: box.maxY, dx: 0, dy: 0)
+            overlay.start = CGPoint(x: overlay.start.x + shift.dx, y: overlay.start.y + shift.dy)
+            overlay.end = CGPoint(x: overlay.end.x + shift.dx, y: overlay.end.y + shift.dy)
+            if overlay.span.duration < 0.1 {
+                overlay.span = TimeSpan.mark(at: overlay.span.start, length: 3, inside: fixed.timeline.trim)
+            }
+            fixed.overlays[index] = overlay
+        }
+        return fixed
+    }
+}
+
+extension VideoOverlay {
+    /// The area text covers in 0…1 frame coordinates, growing with its words and size, for picking
+    /// and moving it on the video.
+    static func textBox(_ overlay: VideoOverlay) -> CGRect {
+        let letters = max(4, overlay.text.count)
+        let scale = max(0.5, overlay.effectiveScale)
+        let width = min(0.9, (0.012 * Double(letters) + 0.03) * scale)
+        let height = 0.05 * scale
+        return CGRect(x: overlay.start.x, y: overlay.start.y, width: width, height: height)
     }
 }

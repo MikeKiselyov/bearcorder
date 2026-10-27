@@ -109,6 +109,12 @@ final class ScreenBuffer: NSObject, SCStreamOutput, SCStreamDelegate {
 
     static func requestScreenRecordingAccess() {
         CGRequestScreenCaptureAccess()
+        // macOS lists an app under Screen & System Audio Recording only once it tries to capture.
+        // On a new install nothing has tried yet (the buffer waits for the welcome guide), so the
+        // person found no Bugbear to switch on: asking for the screens puts it on the list.
+        Task {
+            _ = try? await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
+        }
     }
 
     // MARK: Start / stop
@@ -204,6 +210,17 @@ final class ScreenBuffer: NSObject, SCStreamOutput, SCStreamDelegate {
         stream = nil
         dropHeldFrame()
         await finishCurrentSegment()
+    }
+
+    /// On quit: only ends the capture, so macOS takes its indicator down. The segment is not
+    /// finished, the buffer folder is deleted right after anyway.
+    func stopCaptureForQuit() async {
+        stopHeartbeat()
+        if let current = stream {
+            try? await current.stopCapture()
+            Log.info("buffer[\(displayID)] capture stopped for quit")
+        }
+        stream = nil
     }
 
     /// A frame held back for later must not open a new segment after the capture stopped.
@@ -418,7 +435,11 @@ final class ScreenBuffer: NSObject, SCStreamOutput, SCStreamDelegate {
         guard let input = videoInput, let index = currentSegmentIndex else { return }
         if !input.isReadyForMoreMediaData {
             droppedFrames += 1
-            if droppedFrames % 30 == 1 {
+            // A frame now and then while the Mac is busy is normal and the clip does not show it;
+            // every 30 dropped (2 s at 15 fps) is worth an error.
+            if droppedFrames == 1 {
+                Log.info("buffer[\(displayID)] writer not ready, dropped a frame")
+            } else if droppedFrames % 30 == 0 {
                 Log.error("buffer[\(displayID)] writer not ready, dropped \(droppedFrames) frames")
             }
         }

@@ -80,6 +80,19 @@ final class CaptureStore {
 
     private(set) var captures: [Capture] = []
     private var thumbnailCache: [UUID: NSImage] = [:]
+    /// Captures whose system log was written after they were added (it takes a few seconds), so an
+    /// editor already open shows its "System log" button.
+    private(set) var systemLogsSaved: Set<UUID> = []
+
+    func systemLogSaved(for id: UUID) {
+        systemLogsSaved.insert(id)
+    }
+
+    /// Whether the capture has a system log; views that call it update when a late one arrives.
+    func hasSystemLog(_ capture: Capture) -> Bool {
+        _ = systemLogsSaved.contains(capture.id)
+        return FileManager.default.fileExists(atPath: capture.systemLogURL.path)
+    }
 
     private init() {
         load()

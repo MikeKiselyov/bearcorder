@@ -114,6 +114,10 @@ enum Automation {
             for window in NSApp.windows where window.isVisible && window.title != "" {
                 window.close()
             }
+            // Marks drawn on the screen stay after Esc until closed; a test leaves none behind.
+            if app.recording == nil && app.overlay.isVisible {
+                app.hideOverlay()
+            }
             report(command, "ok")
         default:
             if let result = await FeatureAutomation.run(parts) {

@@ -13,12 +13,16 @@ struct VideoSidebar: View {
                 selectionPanel
                 Divider().overlay(Theme.border)
                 environmentPanel
+                    .onAppear { model.refreshEnvironmentFields(includingYourFields: false) }
+                    .onChange(of: EnvironmentCollector.fieldSettings) { model.refreshEnvironmentFields(includingYourFields: true) }
                 Divider().overlay(Theme.border)
                 exportPanel
             }
+            // The panel's width holds whatever is inside: a wide button pushed it out of the window.
+            .frame(width: 270)
         }
         .frame(width: 270)
-        .background(Theme.window)
+        .background(Theme.sidebar)
     }
 
     private func binding(_ keyPath: WritableKeyPath<VideoProject, Bool>) -> Binding<Bool> {
@@ -36,6 +40,14 @@ struct VideoSidebar: View {
             SectionLabel("Overlays")
             SettingToggle(title: "Highlight clicks", isOn: binding(\.showClicks))
             SettingToggle(title: "Show keystrokes", isOn: binding(\.showKeys))
+            SettingToggle(title: "Show steps", isOn: Binding(get: {
+                model.project.isShowingSteps
+            }, set: { value in
+                model.checkpoint()
+                model.project.showSteps = value
+                model.projectChanged()
+            }))
+            .tip("Caption each step at the bottom: clicks, typing and pages opened, like in the bug report")
             SettingToggle(title: "Environment badge", isOn: binding(\.showBadge))
             if model.project.showBadge {
                 Picker("Corner", selection: Binding(get: { model.project.badgeCorner }, set: { value in
@@ -102,6 +114,7 @@ struct VideoSidebar: View {
                             Image(systemName: "minus").frame(width: 24, height: 22).contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
+                        .accessibilityLabel("Smaller mark")
                         .tip("Smaller (-)")
                         Text("\(Int(overlay.effectiveScale * 100))%")
                             .font(.system(size: 12, design: .monospaced))
@@ -112,6 +125,7 @@ struct VideoSidebar: View {
                             Image(systemName: "plus").frame(width: 24, height: 22).contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
+                        .accessibilityLabel("Bigger mark")
                         .tip("Bigger (+)")
                     }
                     .padding(.horizontal, 8)
@@ -172,6 +186,13 @@ struct VideoSidebar: View {
             HStack {
                 SectionLabel("Environment")
                 Spacer()
+                Button("Edit") {
+                    WindowManager.shared.openSettings(page: .reports)
+                }
+                .buttonStyle(.plain)
+                .font(.system(size: 12))
+                .foregroundStyle(Theme.link)
+                .tip("Choose the fields, their names and your own fields in Settings → Bug reports")
                 Button("Copy") {
                     NSPasteboard.general.clearContents()
                     NSPasteboard.general.setString(model.capture.environment.markdown(), forType: .string)
@@ -181,16 +202,16 @@ struct VideoSidebar: View {
                 .font(.system(size: 12))
                 .foregroundStyle(Theme.link)
             }
-            CopyReportButton(help: "Steps from your clicks and keys, environment and the saved file") { format in
+            CopyReportButton(help: "Steps from your clicks and keys, environment and the saved file", stepCount: model.reportStepCount) { format in
                 model.copyBugReport(format: format)
             }
             .frame(maxWidth: .infinity)
             HStack(spacing: 14) {
-                if FileManager.default.fileExists(atPath: model.capture.systemLogURL.path) {
-                    Button("System log") { NSWorkspace.shared.open(model.capture.systemLogURL) }
+                if CaptureStore.shared.hasSystemLog(model.capture) {
+                    Button("System log") { SystemActions.open(model.capture.systemLogURL) }
                 }
                 if FileManager.default.fileExists(atPath: model.capture.crashReportURL.path) {
-                    Button("Crash report") { NSWorkspace.shared.open(model.capture.crashReportURL) }
+                    Button("Crash report") { SystemActions.open(model.capture.crashReportURL) }
                 }
             }
             .buttonStyle(.plain)
@@ -229,6 +250,7 @@ struct VideoSidebar: View {
                     .labelsHidden()
                     .pickerStyle(.menu)
                     .frame(width: 170)
+                    .accessibilityLabel("Quality")
                     .tip("Picture size of the MP4 and about how big the file comes out. Lower quality makes a smaller file")
                 }
                 row("Size limit") {
@@ -247,6 +269,7 @@ struct VideoSidebar: View {
                         Text("100 MB").tag(100)
                     }
                     .labelsHidden()
+                    .accessibilityLabel("Size limit")
                     .pickerStyle(.menu)
                     .frame(width: 110)
                 }
@@ -261,6 +284,7 @@ struct VideoSidebar: View {
                         Text("15 fps").tag(15)
                     }
                     .labelsHidden()
+                    .accessibilityLabel("GIF frame rate")
                     .pickerStyle(.menu)
                     .frame(width: 110)
                 }

@@ -14,6 +14,41 @@ public struct TimeSpan: Equatable, Codable, Hashable {
     public func contains(_ time: Double) -> Bool {
         return time >= start && time < end
     }
+
+    /// A new mark of `length` seconds at the playhead, inside `area` (the part of the clip that is
+    /// kept). Near the end it starts earlier: a mark added at the last frame came out a few
+    /// microseconds long and never showed.
+    public static func mark(at playhead: Double, length: Double, inside area: TimeSpan) -> TimeSpan {
+        let markLength = min(length, area.duration)
+        var start = max(area.start, min(playhead, area.end))
+        if start + markLength > area.end {
+            start = area.end - markLength
+        }
+        return TimeSpan(start: start, end: start + markLength)
+    }
+}
+
+/// Moving a mark on the video, in 0…1 coordinates of the frame.
+public enum MarkMove {
+    /// The shift that keeps the mark's box (`minX`…`maxX`, `minY`…`maxY`) inside the frame: a mark
+    /// dragged past the edge stops there instead of leaving the picture.
+    public static func keepInside(minX: Double, minY: Double, maxX: Double, maxY: Double, dx: Double, dy: Double) -> (dx: Double, dy: Double) {
+        var shiftX = dx
+        var shiftY = dy
+        if minX + shiftX < 0 {
+            shiftX = -minX
+        }
+        if maxX + shiftX > 1 {
+            shiftX = 1 - maxX
+        }
+        if minY + shiftY < 0 {
+            shiftY = -minY
+        }
+        if maxY + shiftY > 1 {
+            shiftY = 1 - maxY
+        }
+        return (dx: shiftX, dy: shiftY)
+    }
 }
 
 public struct SpeedEdit: Equatable, Codable, Hashable {

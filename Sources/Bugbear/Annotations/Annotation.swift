@@ -4,6 +4,8 @@ import SwiftUI
 enum AnnotationTool: String, CaseIterable, Identifiable, Codable {
     case select
     case arrow
+    /// An arrow with a note at its tail: drag to the problem, then type what is wrong.
+    case callout
     case rectangle
     case ellipse
     case line
@@ -23,6 +25,7 @@ enum AnnotationTool: String, CaseIterable, Identifiable, Codable {
         switch self {
         case .select: return "Select"
         case .arrow: return "Arrow"
+        case .callout: return "Arrow with text"
         case .rectangle: return "Rectangle"
         case .ellipse: return "Ellipse"
         case .line: return "Line"
@@ -41,6 +44,7 @@ enum AnnotationTool: String, CaseIterable, Identifiable, Codable {
         switch self {
         case .select: return "cursorarrow"
         case .arrow: return "arrow.up.right"
+        case .callout: return ToolIcon.arrowWithText
         case .rectangle: return "rectangle"
         case .ellipse: return "circle"
         case .line: return "line.diagonal"
@@ -48,7 +52,7 @@ enum AnnotationTool: String, CaseIterable, Identifiable, Codable {
         case .pen: return "pencil.tip"
         case .text: return "textformat"
         case .step: return "1.circle"
-        case .blur: return "square.grid.3x3.fill"
+        case .blur: return "eye.slash"
         case .magnifier: return "plus.magnifyingglass"
         case .crop: return "crop"
         case .image: return "photo"
@@ -60,6 +64,7 @@ enum AnnotationTool: String, CaseIterable, Identifiable, Codable {
         switch self {
         case .select: return "pick, move and resize marks"
         case .arrow: return "point at something"
+        case .callout: return "point at something and type the note right at the arrow"
         case .rectangle: return "frame an area"
         case .ellipse: return "circle an area"
         case .line: return "draw a straight line"
@@ -74,10 +79,20 @@ enum AnnotationTool: String, CaseIterable, Identifiable, Codable {
         }
     }
 
+    /// The tool buttons of the screenshot editor, in order.
+    static let screenshotEditorTools: [AnnotationTool] = [.select, .arrow, .callout, .rectangle, .ellipse, .line, .highlighter, .pen, .text, .step, .blur, .magnifier, .crop]
+
+    /// Marks with a text label: text, and the arrow with text. Their size is the text size and
+    /// their fill is the label behind the text.
+    var hasLabel: Bool {
+        return self == .text || self == .callout
+    }
+
     var keyboardShortcut: Character? {
         switch self {
         case .select: return "v"
         case .arrow: return "a"
+        case .callout: return "k"
         case .rectangle: return "r"
         case .ellipse: return "o"
         case .line: return "l"
@@ -293,6 +308,10 @@ struct Annotation: Identifiable, Codable, Equatable {
     /// The picture file of an image mark, saved next to the screenshot.
     var imagePath: String?
 
+    /// The picture's area, for an arrow with text: its note is kept inside it, also when the arrow
+    /// starts at an edge. Optional so older project.json files still load.
+    var labelArea: CGRect?
+
     var rect: CGRect {
         return CGRect(x: min(start.x, end.x), y: min(start.y, end.y), width: abs(end.x - start.x), height: abs(end.y - start.y))
     }
@@ -321,6 +340,8 @@ struct Annotation: Identifiable, Codable, Equatable {
             return CGRect(x: start.x, y: start.y, width: size.width, height: size.height)
         case .arrow, .line:
             return rect.insetBy(dx: -lineWidth * 3, dy: -lineWidth * 3)
+        case .callout:
+            return rect.insetBy(dx: -lineWidth * 3, dy: -lineWidth * 3).union(AnnotationRenderer.calloutLabelBox(self))
         default:
             return rect
         }
@@ -344,6 +365,11 @@ struct Annotation: Identifiable, Codable, Equatable {
     func hitTest(_ point: CGPoint, tolerance: CGFloat) -> Bool {
         switch tool {
         case .arrow, .line:
+            return AnnotationRenderer.distance(from: point, toSegment: start, end) <= max(tolerance, lineWidth * 2)
+        case .callout:
+            if AnnotationRenderer.calloutLabelBox(self).insetBy(dx: -tolerance, dy: -tolerance).contains(point) {
+                return true
+            }
             return AnnotationRenderer.distance(from: point, toSegment: start, end) <= max(tolerance, lineWidth * 2)
         case .pen, .highlighter:
             if points.count < 2 { return false }
@@ -371,23 +397,9 @@ struct Annotation: Identifiable, Codable, Equatable {
     var layerName: String {
         switch tool {
         case .text: return text.isEmpty ? "Text" : "Text · \(text.prefix(18))"
+        case .callout: return text.isEmpty ? "Arrow with text" : "Arrow · \(text.prefix(18))"
         case .step: return "Step \(number)"
         default: return tool.title
         }
     }
-}
-
-/// Saved look: color + stroke (the "style preset" in the side panel).
-struct StylePreset: Identifiable, Equatable {
-    var id: String { name }
-    var name: String
-    var color: AnnotationColor
-    var stroke: StrokeSize
-
-    static let all: [StylePreset] = [
-        StylePreset(name: "QA default", color: .coral, stroke: .medium),
-        StylePreset(name: "Subtle", color: .yellow, stroke: .thin),
-        StylePreset(name: "Bold", color: .coral, stroke: .thick),
-        StylePreset(name: "Brand", color: .purple, stroke: .medium),
-    ]
 }

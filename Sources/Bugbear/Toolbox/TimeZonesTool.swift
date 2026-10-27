@@ -72,6 +72,7 @@ struct TimeZonesTool: View {
                 Text("Compare at").font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
                 Slider(value: $shiftMinutes, in: -720...720, step: 30)
                     .tint(Theme.accent)
+                    .accessibilityLabel("Compare at")
                     .tip("Move the time forward or back to see what time it will be in every zone, for example to plan a call")
                 Text(shiftLabel)
                     .font(.system(size: 12, design: .monospaced))

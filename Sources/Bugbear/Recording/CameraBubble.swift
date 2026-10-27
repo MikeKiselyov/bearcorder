@@ -74,6 +74,7 @@ final class CameraBubble: NSObject {
 
     private func makePanel() {
         let newPanel = KeyablePanel(contentRect: CGRect(x: 0, y: 0, width: size, height: size), styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
+        newPanel.identifier = NSUserInterfaceItemIdentifier("camera")
         newPanel.isOpaque = false
         newPanel.backgroundColor = .clear
         newPanel.hasShadow = true

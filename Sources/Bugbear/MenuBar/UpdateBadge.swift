@@ -49,6 +49,7 @@ struct UpdateBadge: View {
                 Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(Theme.warning)
             }
             .buttonStyle(.plain)
+            .accessibilityLabel("The update failed, show why")
             .tip(message)
             .popover(isPresented: $showsDetails, arrowEdge: .bottom) {
                 failure(message)
@@ -70,9 +71,12 @@ struct UpdateBadge: View {
                     HStack(alignment: .firstTextBaseline, spacing: 6) {
                         Text("•").foregroundStyle(Theme.textSecondary)
                         if let url = change.url(repository: updater.repository) {
-                            Link(destination: url) {
+                            Button {
+                                SystemActions.open(url)
+                            } label: {
                                 Text(changeLabel(change)).multilineTextAlignment(.leading).fixedSize(horizontal: false, vertical: true)
                             }
+                            .buttonStyle(.plain)
                             .foregroundStyle(Theme.link)
                             .tip("Open on GitHub: \(url.absoluteString)")
                         } else {
@@ -101,7 +105,7 @@ struct UpdateBadge: View {
                     updater.update()
                 }
                 .buttonStyle(AccentButtonStyle())
-                .tip("Pull, build and install the new version, then restart Bugbear")
+                .tip("Pull, build and install the new version, then restart \(AppInfo.name)")
             }
         }
         .padding(16)
@@ -146,11 +150,12 @@ struct UpdateSettingsSection: View {
                 Text("What's new")
                 Spacer()
                 Button("Show…") { WhatsNewTracker.openLatest() }
+                    .accessibilityLabel("Show what's new")
                     .tip("Show what changed in this version")
             }
             if updater.canCheck {
                 Toggle("Check GitHub for new versions", isOn: $settings.checkForUpdates)
-                    .tip("Check for a newer Bugbear release every 6 hours and show a badge in the menu bar panel")
+                    .tip("Check for a newer \(AppInfo.name) release every 6 hours and show a badge in the menu bar panel")
                 HStack {
                     Text(statusText).font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
                     Spacer()

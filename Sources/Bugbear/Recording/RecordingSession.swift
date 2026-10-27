@@ -1,3 +1,4 @@
+import BugbearCore
 import Foundation
 import Observation
 import QuartzCore
@@ -14,28 +15,29 @@ final class RecordingSession {
     }
 
     private(set) var state: State = .recording
-    let startTime: Double
-    private(set) var pauses: [(start: Double, end: Double?)] = []
+    private(set) var timeline: PauseTimeline
+
+    var startTime: Double {
+        return timeline.startTime
+    }
 
     init(startTime: Double = CACurrentMediaTime()) {
-        self.startTime = startTime
+        timeline = PauseTimeline(startTime: startTime)
     }
 
     var isPaused: Bool {
         return state == .paused
     }
 
-    func pause() {
+    func pause(at time: Double = CACurrentMediaTime()) {
         if state == .paused { return }
-        pauses.append((start: CACurrentMediaTime(), end: nil))
+        timeline.pause(at: time)
         state = .paused
     }
 
-    func resume() {
+    func resume(at time: Double = CACurrentMediaTime()) {
         if state == .recording { return }
-        if let last = pauses.indices.last {
-            pauses[last].end = CACurrentMediaTime()
-        }
+        timeline.resume(at: time)
         state = .recording
     }
 
@@ -49,27 +51,12 @@ final class RecordingSession {
 
     /// Recorded seconds, not counting pauses.
     func elapsed(now: Double = CACurrentMediaTime()) -> Double {
-        var paused = 0.0
-        for pause in pauses {
-            paused += (pause.end ?? now) - pause.start
-        }
-        return max(0, now - startTime - paused)
+        return timeline.elapsed(now: now)
     }
 
     /// Host-time ranges to keep, in order.
     func keptRanges(until end: Double) -> [(start: Double, end: Double)] {
-        var ranges: [(start: Double, end: Double)] = []
-        var cursor = startTime
-        for pause in pauses {
-            if pause.start > cursor {
-                ranges.append((start: cursor, end: pause.start))
-            }
-            cursor = pause.end ?? end
-        }
-        if end > cursor {
-            ranges.append((start: cursor, end: end))
-        }
-        return ranges
+        return timeline.keptRanges(until: end)
     }
 }
 

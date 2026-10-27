@@ -10,6 +10,9 @@
 #   NO_COLOR            plain text, no colors or animation
 set -euo pipefail
 
+# The name people see. This file runs before the source is downloaded, so it keeps its own copy;
+# a unit test checks it matches AppInfo.name.
+APP_NAME="Bugbear"
 REPO_URL="${BUGBEAR_REPO:-https://github.com/MikeKiselyov/bugbear-app.git}"
 SOURCE_DIR="${BUGBEAR_SOURCE_DIR:-$HOME/.bugbear}"
 
@@ -89,7 +92,7 @@ stop() {
 # Runs a command with its output in a log file, showing a spinner, the time and a few friendly lines.
 TIPS=(
     "The first build takes a couple of minutes. Good moment for a cup of tea ☕"
-    "Bugbear keeps the last minutes of your screen, so a bug cannot hide."
+    "$APP_NAME keeps the last minutes of your screen, so a bug cannot hide."
     "⌥⇧1 saves the last 30 seconds. ⌥⇧M marks the moment the bug happened."
     "⌥⇧4 screenshots an area, ⌥⇧D opens the dev toolbox with your clipboard."
     "Everything stays on your Mac. Nothing is uploaded anywhere."
@@ -130,7 +133,7 @@ step "Checking your Mac"
 macos_version="$(sw_vers -productVersion)"
 macos_major="$(echo "$macos_version" | cut -d. -f1)"
 if [ "$macos_major" -lt 14 ]; then
-    stop "Bugbear needs macOS 14 Sonoma or later (this Mac has $macos_version)."
+    stop "$APP_NAME needs macOS 14 Sonoma or later (this Mac has $macos_version)."
 fi
 done_step "macOS $macos_version"
 
@@ -163,7 +166,7 @@ fi
 
 LOG="$SOURCE_DIR/build/install.log"
 mkdir -p "$SOURCE_DIR/build"
-if ! with_spinner "Building Bugbear" "$LOG" "$SOURCE_DIR/scripts/build-app.sh" --install; then
+if ! with_spinner "Building $APP_NAME" "$LOG" "$SOURCE_DIR/scripts/build-app.sh" --install; then
     printf '   %s✗  The build failed.%s The end of the log (%s):\n\n' "$BAD" "$N" "${LOG/#$HOME/~}" >&2
     tail -20 "$LOG" | sed 's/^/      /' >&2
     exit 1

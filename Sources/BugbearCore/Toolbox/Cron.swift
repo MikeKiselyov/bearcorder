@@ -100,15 +100,6 @@ public struct CronExpression: Equatable {
         throw ParseError(message: "Unknown \(label): \(text)")
     }
 
-    func matches(_ date: Date, calendar: Calendar) -> Bool {
-        let parts = calendar.dateComponents([.minute, .hour, .day, .month, .weekday], from: date)
-        guard let minute = parts.minute, let hour = parts.hour, let day = parts.day, let month = parts.month, let weekday = parts.weekday else { return false }
-        if !minutes.contains(minute) || !hours.contains(hour) || !months.contains(month) {
-            return false
-        }
-        return dayMatches(day: day, weekday: weekday - 1)
-    }
-
     func dayMatches(day: Int, weekday: Int) -> Bool {
         let dayOfMonthMatch = daysOfMonth.contains(day)
         let dayOfWeekMatch = daysOfWeek.contains(weekday)
@@ -207,6 +198,12 @@ public struct CronExpression: Equatable {
             }
             if times.count <= 6 {
                 return "At " + times.joined(separator: ", ")
+            }
+            if let step = stepOf(hours, from: 0, count: 24) {
+                if minute == 0 {
+                    return "Every \(step) hours"
+                }
+                return "At minute \(minute) of every \(step) hours"
             }
             return "At minute \(minute) past hours \(listText(hours, full: 0...23))"
         }

@@ -124,6 +124,7 @@ struct TimeTool: View {
             Text("+ Add zone").font(.system(size: 12))
         }
         .menuStyle(.borderlessButton)
+        .accessibilityLabel("Add zone")
         .frame(maxWidth: .infinity, minHeight: 50)
         .tip("Add a time zone to compare this time with")
         .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color(hex: 0x45484F), style: StrokeStyle(lineWidth: 1, dash: [4, 3])))
