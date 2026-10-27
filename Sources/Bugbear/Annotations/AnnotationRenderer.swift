@@ -94,6 +94,11 @@ enum AnnotationRenderer {
             path.stroke()
         case .text:
             drawTextLabel(annotation)
+        case .callout:
+            drawArrow(from: annotation.start, to: annotation.end, width: annotation.lineWidth, color: color)
+            var label = annotation
+            label.start = calloutLabelBox(annotation).origin
+            drawTextLabel(label)
         case .step:
             drawStep(annotation)
         case .blur:
@@ -175,32 +180,98 @@ enum AnnotationRenderer {
         return path
     }
 
+    /// Shown, dimmed, where the text goes while nothing is typed yet. The typing field has no
+    /// placeholder of its own: two of them showed on top of each other.
+    static let textPlaceholder = "Type…"
+
     static func textAttributes(_ annotation: Annotation) -> [NSAttributedString.Key: Any] {
         let font = NSFont.systemFont(ofSize: annotation.fontSize, weight: .bold)
+        var alpha: CGFloat = 1
+        if annotation.text.isEmpty {
+            alpha = 0.5
+        }
         if annotation.hasClearBackground {
             // Negative stroke width fills the letters and outlines them, so the text reads on any picture.
             return [
                 .font: font,
-                .foregroundColor: annotation.color.nsColor,
-                .strokeColor: annotation.color.outline,
+                .foregroundColor: annotation.color.nsColor.withAlphaComponent(alpha),
+                .strokeColor: annotation.color.outline.withAlphaComponent(alpha),
                 .strokeWidth: -4,
             ]
         }
         return [
             .font: font,
-            .foregroundColor: annotation.color.contrastingText,
+            .foregroundColor: annotation.color.contrastingText.withAlphaComponent(alpha),
         ]
     }
 
+    /// What goes into a saved or copied picture: text not typed yet is left out, and an arrow with
+    /// text without its note is a plain arrow.
+    static func forExport(_ annotations: [Annotation]) -> [Annotation] {
+        var kept: [Annotation] = []
+        for annotation in annotations {
+            if annotation.tool == .text && annotation.text.isEmpty {
+                continue
+            }
+            var exported = annotation
+            if annotation.tool == .callout && annotation.text.isEmpty {
+                exported.tool = .arrow
+            }
+            kept.append(exported)
+        }
+        return kept
+    }
+
     static func textSize(_ annotation: Annotation) -> CGSize {
-        let text = annotation.text.isEmpty ? "Text" : annotation.text
+        let text = annotation.text.isEmpty ? textPlaceholder : annotation.text
         let size = (text as NSString).boundingRect(with: CGSize(width: 10000, height: 10000), options: [.usesLineFragmentOrigin], attributes: textAttributes(annotation)).size
         let padding = annotation.fontSize * 0.45
         return CGSize(width: ceil(size.width) + padding * 2, height: ceil(size.height) + padding * 1.2)
     }
 
+    /// Where the note of an arrow with text sits: against the arrow's tail, on the side the arrow
+    /// comes from, so the text never covers the arrow or what it points at.
+    static func calloutLabelBox(_ annotation: Annotation) -> CGRect {
+        let size = textSize(annotation)
+        let tail = annotation.start
+        let dx = annotation.end.x - tail.x
+        let dy = annotation.end.y - tail.y
+        var origin = CGPoint.zero
+        if abs(dx) >= abs(dy) {
+            origin.y = tail.y - size.height / 2
+            if dx >= 0 {
+                origin.x = tail.x - size.width
+            } else {
+                origin.x = tail.x
+            }
+        } else {
+            origin.x = tail.x - size.width / 2
+            if dy >= 0 {
+                origin.y = tail.y - size.height
+            } else {
+                origin.y = tail.y
+            }
+        }
+        // Inside the picture: an arrow from an edge would put its note off the picture.
+        if let area = annotation.labelArea {
+            if origin.x + size.width > area.maxX {
+                origin.x = area.maxX - size.width
+            }
+            if origin.x < area.minX {
+                origin.x = area.minX
+            }
+            if origin.y + size.height > area.maxY {
+                origin.y = area.maxY - size.height
+            }
+            if origin.y < area.minY {
+                origin.y = area.minY
+            }
+        }
+        return CGRect(origin: origin, size: size)
+    }
+
     static func drawTextLabel(_ annotation: Annotation) {
-        let text = annotation.text.isEmpty ? "Text" : annotation.text
+        let text = annotation.text.isEmpty ? textPlaceholder : annotation.text
         let size = textSize(annotation)
         let box = CGRect(origin: annotation.start, size: size)
         let padding = annotation.fontSize * 0.45
@@ -394,7 +465,7 @@ enum AnnotationRenderer {
         context.draw(base, in: full)
         context.restoreGState()
 
-        draw(annotations, baseImage: base, in: context)
+        draw(forExport(annotations), baseImage: base, in: context)
         if let lines = badgeLines {
             drawBadge(lines: lines, corner: badgeCorner, bounds: area, scale: badgeScale, in: context)
         }

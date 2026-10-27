@@ -128,7 +128,7 @@ struct WhatsNewView: View {
             .background(Theme.sidebar)
         }
         .foregroundStyle(Theme.text)
-        .background(Theme.window)
+        .auroraBackground()
     }
 
     private var header: some View {
@@ -140,7 +140,7 @@ struct WhatsNewView: View {
                 .frame(width: 52, height: 47)
                 .foregroundStyle(Theme.text)
             VStack(alignment: .leading, spacing: 4) {
-                Text("What's new in Bugbear").font(.system(size: 24, weight: .bold))
+                Text("What's new in \(AppInfo.name)").font(.system(size: 24, weight: .bold))
                 Text("Version \(Updater.shared.versionText)")
                     .font(.system(size: 13))
                     .foregroundStyle(Theme.textSecondary)
@@ -148,8 +148,49 @@ struct WhatsNewView: View {
         }
     }
 
+    /// The picture of an item, a PNG, a JPEG or an animated GIF: from the app bundle, or from the source
+    /// folder for builds run from .build (self-test, snapshots).
+    static func imageURL(named name: String) -> URL? {
+        if name.isEmpty { return nil }
+        for ext in ["png", "gif", "jpg"] {
+            if let url = Bundle.main.url(forResource: name, withExtension: ext, subdirectory: "WhatsNew") {
+                return url
+            }
+        }
+        var root = URL(fileURLWithPath: #filePath)
+        for _ in 0..<4 {
+            root.deleteLastPathComponent()
+        }
+        for ext in ["png", "gif", "jpg"] {
+            let url = root.appendingPathComponent(WhatsNew.imageFolder).appendingPathComponent("\(name).\(ext)")
+            if FileManager.default.fileExists(atPath: url.path) {
+                return url
+            }
+        }
+        return nil
+    }
+
+    /// Loaded once: a new NSImage on every redraw would restart an animation.
+    private static var loadedImages: [String: NSImage] = [:]
+
+    static func image(named name: String) -> NSImage? {
+        if let loaded = loadedImages[name] {
+            return loaded
+        }
+        guard let url = imageURL(named: name), let image = NSImage(contentsOf: url) else { return nil }
+        loadedImages[name] = image
+        return image
+    }
+
     private func card(_ item: WhatsNewRelease.Item) -> some View {
         VStack(alignment: .leading, spacing: 8) {
+            if let picture = WhatsNewView.image(named: item.image) {
+                AnimatedPicture(image: picture)
+                    .aspectRatio(picture.size, contentMode: .fit)
+                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                    .overlay(RoundedRectangle(cornerRadius: 6).stroke(Theme.borderStrong, lineWidth: 1))
+                    .frame(maxWidth: .infinity, maxHeight: 170)
+            }
             HStack(spacing: 10) {
                 Image(systemName: item.symbol)
                     .font(.system(size: 16))
@@ -194,6 +235,27 @@ struct WhatsNewView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(Theme.panel)
             .clipShape(RoundedRectangle(cornerRadius: 10))
+        }
+    }
+}
+
+/// A picture that plays when it is an animated GIF; SwiftUI's Image shows only the first frame.
+struct AnimatedPicture: NSViewRepresentable {
+    var image: NSImage
+
+    func makeNSView(context: Context) -> NSImageView {
+        let view = NSImageView()
+        view.image = image
+        view.animates = true
+        view.imageScaling = .scaleProportionallyUpOrDown
+        view.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        view.setContentCompressionResistancePriority(.defaultLow, for: .vertical)
+        return view
+    }
+
+    func updateNSView(_ view: NSImageView, context: Context) {
+        if view.image !== image {
+            view.image = image
         }
     }
 }

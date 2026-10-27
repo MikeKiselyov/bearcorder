@@ -38,7 +38,7 @@ enum ScreenshotComparison {
 
     @MainActor
     static func make(before: Capture, after: Capture) -> Output? {
-        guard let first = ScreenshotDocument(capture: before)?.render(), let second = ScreenshotDocument(capture: after)?.render() else { return nil }
+        guard let first = ScreenshotDocument(capture: before, forEditing: false)?.render(), let second = ScreenshotDocument(capture: after, forEditing: false)?.render() else { return nil }
         // Diff at up to 1600 px wide: fast, and fine enough to box changes.
         let diffWidth = min(1600, second.width)
         let diffScale = CGFloat(diffWidth) / CGFloat(second.width)
@@ -150,7 +150,7 @@ struct ScreenshotCompareView: View {
             }
         }
         .foregroundStyle(Theme.text)
-        .background(Theme.window)
+        .auroraBackground()
         .task {
             let made = ScreenshotComparison.make(before: before, after: after)
             output = made
@@ -200,7 +200,7 @@ struct ScreenshotCompareView: View {
                     Text("Drag: before on the left, after on the right")
                         .font(.system(size: 11))
                         .padding(6)
-                        .background(Theme.panel.opacity(0.9))
+                        .background(Color.black.opacity(0.65))
                         .clipShape(RoundedRectangle(cornerRadius: 6))
                         .padding(8)
                 }
@@ -273,8 +273,10 @@ struct VideoCompareView: View {
                 }
                 .buttonStyle(.plain)
                 .keyboardShortcut(.space, modifiers: [])
+                .accessibilityLabel(isPlaying ? "Pause both" : "Play both")
                 .tip("Play or pause both clips together (Space)")
                 Slider(value: Binding(get: { position }, set: { value in seek(value) }), in: 0...longest)
+                    .accessibilityLabel("Position")
                     .tip("Scrub both clips to the same moment")
                 Text("\(TimeFormat.clock(position)) / \(TimeFormat.clock(longest))")
                     .font(.system(size: 12, design: .monospaced))
@@ -283,7 +285,7 @@ struct VideoCompareView: View {
             .padding(12)
         }
         .foregroundStyle(Theme.text)
-        .background(Theme.window)
+        .auroraBackground()
         .onAppear {
             firstPlayer.replaceCurrentItem(with: AVPlayerItem(url: before.mediaURL))
             secondPlayer.replaceCurrentItem(with: AVPlayerItem(url: after.mediaURL))
@@ -305,7 +307,8 @@ struct VideoCompareView: View {
     private func clip(_ title: String, _ player: AVPlayer) -> some View {
         VStack(spacing: 8) {
             Text(title).font(.system(size: 12, weight: .semibold)).foregroundStyle(Theme.textSecondary)
-            VideoPlayer(player: player)
+            // Without the player's own buttons: "Play both" and the slider keep the two clips together.
+            PlayerView(player: player)
         }
     }
 

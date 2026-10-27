@@ -1,4 +1,5 @@
 import AppKit
+import BugbearCore
 import SwiftUI
 
 /// The five colors in the editors. They start as the usual ones; a color picked in the color
@@ -9,10 +10,12 @@ enum RecentColors {
     static let defaults: [AnnotationColor] = [.coral, .yellow, .blue, .green, .purple]
     static let changed = Notification.Name("BugbearRecentColorsChanged")
     private static let key = "recentAnnotationColors"
+    /// Tests pick colors too; they go to the test store, not the person's palette.
+    private static var store: UserDefaults { EditorMemory.defaults }
 
     static func load() -> [AnnotationColor] {
         var colors: [AnnotationColor] = []
-        for value in UserDefaults.standard.stringArray(forKey: key) ?? [] {
+        for value in store.stringArray(forKey: key) ?? [] {
             if value.hasPrefix("#"), let hex = UInt32(value.dropFirst(), radix: 16) {
                 colors.append(AnnotationColor(hex: hex))
             }
@@ -45,13 +48,13 @@ enum RecentColors {
         for kept in updated {
             names.append(String(format: "#%06X", kept.hex))
         }
-        UserDefaults.standard.set(names, forKey: key)
+        store.set(names, forKey: key)
         NotificationCenter.default.post(name: changed, object: nil)
     }
 
     /// Back to the usual five.
     static func clear() {
-        UserDefaults.standard.removeObject(forKey: key)
+        store.removeObject(forKey: key)
         NotificationCenter.default.post(name: changed, object: nil)
     }
 }
@@ -314,7 +317,7 @@ struct DeleteKeyMonitor: NSViewRepresentable {
         private func handle(_ event: NSEvent) -> Bool {
             guard event.window === window else { return false }
             let commandOnly = event.modifierFlags.intersection([.command, .option, .control, .shift]) == [.command]
-            if commandOnly && event.charactersIgnoringModifiers?.lowercased() == "v" {
+            if commandOnly && LatinKeys.key(forKeyCode: event.keyCode, typed: event.charactersIgnoringModifiers ?? "") == "v" {
                 if window?.firstResponder is NSText {
                     return false
                 }

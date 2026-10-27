@@ -70,7 +70,44 @@ final class CronTests: XCTestCase {
         XCTAssertTrue(try CronExpression.parse("0 0 30 2 *").nextRuns(after: now, count: 1, timeZone: utc).isEmpty)
     }
 
+    func testMoreDescriptions() throws {
+        XCTAssertEqual(try CronExpression.parse("* * * * *").description, "Every minute")
+        XCTAssertEqual(try CronExpression.parse("5 * * * *").description, "At minute 5 of every hour")
+        XCTAssertEqual(try CronExpression.parse("0,30 * * * *").description, "Every 30 minutes")
+        XCTAssertEqual(try CronExpression.parse("15,45 * * * *").description, "At minutes 15, 45 of every hour")
+        XCTAssertEqual(try CronExpression.parse("0 9,17 * * *").description, "At 09:00, 17:00")
+        XCTAssertEqual(try CronExpression.parse("0 */2 * * *").description, "Every 2 hours")
+        XCTAssertEqual(try CronExpression.parse("30 */3 * * *").description, "At minute 30 of every 3 hours")
+        XCTAssertEqual(try CronExpression.parse("0 1,2,3,5,8,13,21 * * *").description, "At minute 0 past hours 1-3, 5, 8, 13, 21")
+        XCTAssertEqual(try CronExpression.parse("0 0 * * SAT,SUN").description, "At 00:00, on weekends")
+        XCTAssertEqual(try CronExpression.parse("0 0 * * 7").description, "At 00:00, on Sunday")
+        XCTAssertEqual(try CronExpression.parse("0 0 13 * FRI").description, "At 00:00, on day 13 of the month or on Friday")
+        XCTAssertEqual(try CronExpression.parse("@hourly").description, "At minute 0 of every hour")
+    }
+
+    // With both a day of the month and a weekday, cron runs on either one.
+    func testDayOfMonthOrWeekday() throws {
+        // Saturday 2026-10-24 10:58 UTC; next: Friday 30 Oct, Friday 6 Nov, Friday 13 Nov (both).
+        let now = Date(timeIntervalSince1970: 1_792_839_492)
+        let runs = try CronExpression.parse("0 0 13 * FRI").nextRuns(after: now, count: 3, timeZone: utc)
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = utc
+        var days: [Int] = []
+        for run in runs {
+            days.append(calendar.component(.day, from: run))
+        }
+        XCTAssertEqual(days, [30, 6, 13])
+        // Sunday written as 7 is the same as 0.
+        let sundays = try CronExpression.parse("0 12 * * 7").nextRuns(after: now, count: 1, timeZone: utc)
+        XCTAssertEqual(calendar.component(.weekday, from: sundays[0]), 1)
+    }
+
     func testErrors() {
+        XCTAssertThrowsError(try CronExpression.parse("*/0 * * * *"))
+        XCTAssertThrowsError(try CronExpression.parse("5-1 * * * *"))
+        XCTAssertThrowsError(try CronExpression.parse("0 0 * * 8"))
+        XCTAssertThrowsError(try CronExpression.parse("0 24 * * *"))
+        XCTAssertThrowsError(try CronExpression.parse("0 0 0 * *"))
         XCTAssertThrowsError(try CronExpression.parse("* * *"))
         XCTAssertThrowsError(try CronExpression.parse("61 * * * *"))
         XCTAssertThrowsError(try CronExpression.parse("0 0 * FOO *"))

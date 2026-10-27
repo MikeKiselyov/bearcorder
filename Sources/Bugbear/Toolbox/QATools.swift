@@ -50,6 +50,7 @@ struct TestDataTool: View {
                     .tip("Country for names and phone number formats")
                 Spacer()
                 Button("Generate") { generatePeople() }
+                    .accessibilityLabel("Generate people")
                     .buttonStyle(SecondaryButtonStyle())
                     .tip("Generate five new fake people")
                 CopyButton(text: peopleAsText(), title: "Copy all", primary: false)
@@ -77,6 +78,7 @@ struct TestDataTool: View {
                     .tip("Card brand, sets the number prefix and length")
                 Spacer()
                 Button("Generate") { generateCard() }
+                    .accessibilityLabel("Generate card")
                     .buttonStyle(SecondaryButtonStyle())
                     .tip("Generate a new fake card number, expiry and CVC")
             }
@@ -103,6 +105,7 @@ struct TestDataTool: View {
                     .tip("Country of the IBAN, sets its length and format")
                 Spacer()
                 Button("Generate") { generateIBAN() }
+                    .accessibilityLabel("Generate IBAN")
                     .buttonStyle(SecondaryButtonStyle())
                     .tip("Generate a new IBAN with valid check digits")
             }
@@ -126,6 +129,7 @@ struct TestDataTool: View {
                     .tip("Include symbols")
                 Spacer()
                 Button("Generate") { generatePasswords() }
+                    .accessibilityLabel("Generate passwords")
                     .buttonStyle(SecondaryButtonStyle())
                     .tip("Generate three new passwords")
             }
@@ -467,10 +471,7 @@ struct QRTool: View {
 
     private func save(_ image: NSImage?) {
         guard let qr = image, let data = QRCode.pngData(qr) else { return }
-        let panel = NSSavePanel()
-        panel.allowedContentTypes = [.png]
-        panel.nameFieldStringValue = "qr-code.png"
-        if panel.runModal() == .OK, let url = panel.url {
+        if let url = SystemActions.chooseSaveLocation(name: "qr-code.png", type: .png) {
             try? data.write(to: url)
         }
     }

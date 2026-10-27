@@ -31,7 +31,6 @@ final class Updater {
     private(set) var lastChecked: Date?
 
     let commit: String
-    let branch: String
     let repository: String
     let sourcePath: String
 
@@ -40,13 +39,12 @@ final class Updater {
     private init() {
         let info = Bundle.main.infoDictionary ?? [:]
         commit = info["BugbearCommit"] as? String ?? ""
-        branch = info["BugbearBranch"] as? String ?? ""
         repository = info["BugbearRepository"] as? String ?? ""
         sourcePath = info["BugbearSourcePath"] as? String ?? ""
     }
 
     static var logURL: URL {
-        return FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Logs/Bugbear/update.log")
+        return FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Logs/\(AppInfo.storageName)/update.log")
     }
 
     /// False for builds outside a git checkout of a GitHub repository, or before the first commit.
@@ -79,14 +77,14 @@ final class Updater {
         if Automation.isEnabled, let override = UserDefaults.standard.string(forKey: "updateCompareURL"), !override.isEmpty {
             return URL(string: override)
         }
-        return UpdateInfo.compareURL(repository: repository, commit: commit, branch: branch)
+        return UpdateInfo.updateCompareURL(repository: repository, builtCommit: commit)
     }
 
     private var catalogURL: URL? {
         if Automation.isEnabled, let override = UserDefaults.standard.string(forKey: "updateCatalogURL"), !override.isEmpty {
             return URL(string: override)
         }
-        return UpdateInfo.catalogURL(repository: repository, branch: branch)
+        return UpdateInfo.updateCatalogURL(repository: repository)
     }
 
     func start() {
@@ -107,6 +105,7 @@ final class Updater {
     /// Background checks stay quiet on errors (offline, rate limit); a manual check reports them.
     /// Only a higher release version counts as an update; the commits are fetched to list the changes.
     func check(userInitiated: Bool) async {
+        if SystemActions.recordInstead("check for updates") { return }
         guard canCheck, let catalogURL else { return }
         if state == .updating || state == .checking { return }
         state = .checking
@@ -147,6 +146,7 @@ final class Updater {
     /// Runs scripts/update.sh: git pull, build, replace this app and relaunch it.
     /// On success the script quits this process; on failure the reason is shown and logged.
     func update() {
+        if SystemActions.recordInstead("update") { return }
         guard canUpdate else {
             state = .failed("The source folder \(sourcePath) is missing. Reinstall with scripts/install.sh.")
             return
@@ -202,6 +202,6 @@ final class Updater {
     }
 
     func showLog() {
-        NSWorkspace.shared.open(Updater.logURL)
+        SystemActions.open(Updater.logURL)
     }
 }

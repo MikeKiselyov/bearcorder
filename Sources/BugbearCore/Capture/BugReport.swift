@@ -19,13 +19,20 @@ public enum BugReport {
         public var target: String
         /// App that received the click. Empty when unknown.
         public var app: String
+        /// Typing: what the field held when the typing stopped. Empty unless the person turned on
+        /// typed text in steps; never for password fields.
+        public var text: String
+        /// The web page the action happened on, when it was in a browser. Empty otherwise.
+        public var url: String
 
-        public init(kind: ActionKind, time: Double, label: String = "", target: String = "", app: String = "") {
+        public init(kind: ActionKind, time: Double, label: String = "", target: String = "", app: String = "", text: String = "", url: String = "") {
             self.kind = kind
             self.time = time
             self.label = label
             self.target = target
             self.app = app
+            self.text = text
+            self.url = url
         }
     }
 
@@ -39,16 +46,36 @@ public enum BugReport {
         public var id: String { rawValue }
     }
 
-    /// One line per step, "[00:04] Click …". Runs of typing merge into one step;
-    /// a click right after another on the same target is a double-click.
+    /// One line per step, "[00:04] Click …". Runs of typing in one field merge into one step that
+    /// shows the newest text; a click right after another on the same target is a double-click;
+    /// a new web page adds an "Open …" step before the first action on it.
+    /// Keys that edit the text being typed.
+    static let typingEditKeys: Set<String> = ["Space", "Delete", "⌥ Delete", "⌃ Delete", "Fwd Delete"]
+
     public static func stepLines(from actions: [Action]) -> [(time: Double, text: String)] {
         var steps: [(time: Double, text: String, action: Action)] = []
         let sorted = actions.sorted { first, second in first.time < second.time }
+        var currentPage = ""
         for action in sorted {
+            let page = pageName(action.url)
+            if !page.isEmpty && page != currentPage {
+                currentPage = page
+                let opened = Action(kind: .marker, time: action.time, url: action.url)
+                steps.append((time: action.time, text: "Open \(page)", action: opened))
+            }
             let text = describe(action)
             if let last = steps.last {
-                let sameTyping = action.kind == .key && action.label == typingLabel && last.action.kind == .key && last.action.label == typingLabel
+                let sameTyping = action.kind == .key && action.label == typingLabel && last.action.kind == .key && last.action.label == typingLabel && last.action.target == action.target
                 if sameTyping {
+                    if !action.text.isEmpty {
+                        steps[steps.count - 1].text = text
+                        steps[steps.count - 1].action = action
+                    }
+                    continue
+                }
+                // Space and Delete while typing are part of the typing, not steps of their own:
+                // "Type text, Press Space, Type text" became three steps for one field.
+                if last.action.kind == .key && last.action.label == typingLabel && action.kind == .key && typingEditKeys.contains(action.label) {
                     continue
                 }
                 let repeatedClick = action.kind == .click && last.action.kind == .click && last.action.target == action.target && last.action.app == action.app && action.time - last.action.time < 0.5
@@ -66,11 +93,24 @@ public enum BugReport {
         return lines
     }
 
-    /// Numbered Markdown steps: "1. [00:04] Click …".
+    /// What the copy button says, so it is clear before pasting whether the report has steps.
+    /// Short enough for the editors' side panels; the format is ticked in the button's menu.
+    public static func copyButtonTitle(stepCount: Int) -> String {
+        if stepCount == 1 {
+            return "Copy bug report · 1 step"
+        }
+        if stepCount > 1 {
+            return "Copy bug report · \(stepCount) steps"
+        }
+        return "Copy bug report · no steps"
+    }
+
+    /// Numbered Markdown steps: "1. Click …". No times: a ticket reader repeats the steps, the
+    /// seconds into the clip only got in the way.
     public static func steps(from actions: [Action]) -> [String] {
         var lines: [String] = []
         for (index, step) in stepLines(from: actions).enumerated() {
-            lines.append("\(index + 1). [\(clock(step.time))] \(step.text)")
+            lines.append("\(index + 1). \(step.text)")
         }
         return lines
     }
@@ -81,7 +121,14 @@ public enum BugReport {
             return "⚑ Bug moment"
         case .key:
             if action.label == typingLabel {
-                return "Type text"
+                var text = "Type text"
+                if !action.text.isEmpty {
+                    text = "Type \"\(shortText(action.text))\""
+                }
+                if !action.target.isEmpty {
+                    text += " in \(action.target)"
+                }
+                return text
             }
             return "Press \(action.label)"
         case .click:
@@ -94,6 +141,38 @@ public enum BugReport {
             }
             return text
         }
+    }
+
+    /// Longest typed text shown in a step.
+    static let maxTextLength = 80
+
+    /// Typed text on one line, cut to `maxTextLength`.
+    static func shortText(_ text: String) -> String {
+        var line = text.replacingOccurrences(of: "\r", with: " ").replacingOccurrences(of: "\n", with: " ")
+        line = line.trimmingCharacters(in: .whitespaces)
+        if line.count > maxTextLength {
+            return String(line.prefix(maxTextLength - 1)) + "…"
+        }
+        return line
+    }
+
+    /// "stage.myapp.com/checkout" for "https://stage.myapp.com/checkout?token=…#top". The query is
+    /// left out: it can hold tokens, codes or an email, and changes without a new page.
+    static func pageName(_ url: String) -> String {
+        var name = url
+        if let cut = name.firstIndex(where: { character in character == "?" || character == "#" }) {
+            name = String(name[..<cut])
+        }
+        for scheme in ["https://", "http://"] where name.hasPrefix(scheme) {
+            name = String(name.dropFirst(scheme.count))
+        }
+        if name.hasSuffix("/") {
+            name.removeLast()
+        }
+        if name.count > 120 {
+            name = String(name.prefix(119)) + "…"
+        }
+        return name
     }
 
     /// "00:04", "1:02:05", or "−00:12" for times before a screenshot.
@@ -112,18 +191,17 @@ public enum BugReport {
         return text
     }
 
-    public static func markdown(environment: EnvironmentSnapshot, actions: [Action], files: [String], timeZone zone: TimeZone = .current) -> String {
-        return report(environment: environment, actions: actions, files: files, format: .markdown, timeZone: zone)
+    public static func markdown(environment: EnvironmentSnapshot, actions: [Action], timeZone zone: TimeZone = .current) -> String {
+        return report(environment: environment, actions: actions, format: .markdown, timeZone: zone)
     }
 
-    public static func report(environment: EnvironmentSnapshot, actions: [Action], files: [String], format: Format, timeZone zone: TimeZone = .current) -> String {
+    /// The ticket body: steps, expected and actual result, environment. No Summary (the ticket has
+    /// a title of its own) and no attachments (local file paths mean nothing to whoever reads it).
+    public static func report(environment: EnvironmentSnapshot, actions: [Action], format: Format, timeZone zone: TimeZone = .current) -> String {
         if format == .jira {
-            return jira(environment: environment, actions: actions, files: files, timeZone: zone)
+            return jira(environment: environment, actions: actions, timeZone: zone)
         }
         var lines: [String] = []
-        lines.append("## Summary")
-        lines.append("")
-        lines.append("")
         lines.append("## Steps to reproduce")
         let steps = steps(from: actions)
         if steps.isEmpty {
@@ -142,28 +220,19 @@ public enum BugReport {
         for row in environment.rows(timeZone: zone) {
             lines.append("- \(row.label): \(row.value)")
         }
-        if !files.isEmpty {
-            lines.append("")
-            lines.append("## Attachments")
-            for file in files {
-                lines.append("- \(file)")
-            }
-        }
         return lines.joined(separator: "\n")
     }
 
-    /// Jira wiki: "h2." headings, "#" numbered steps, "*Label:*" environment, {{monospace}} times and paths.
-    static func jira(environment: EnvironmentSnapshot, actions: [Action], files: [String], timeZone zone: TimeZone) -> String {
+    /// Jira wiki: "h2." headings, "#" numbered steps, "*Label:*" environment.
+    static func jira(environment: EnvironmentSnapshot, actions: [Action], timeZone zone: TimeZone) -> String {
         var lines: [String] = []
-        lines.append("h2. Summary")
-        lines.append("")
         lines.append("h2. Steps to reproduce")
         let steps = stepLines(from: actions)
         if steps.isEmpty {
             lines.append("# ")
         }
         for step in steps {
-            lines.append("# {{\(clock(step.time))}} \(jiraEscape(step.text))")
+            lines.append("# \(jiraEscape(step.text, textMarkup: true))")
         }
         lines.append("")
         lines.append("h2. Expected result")
@@ -174,21 +243,23 @@ public enum BugReport {
         for row in environment.rows(timeZone: zone) {
             lines.append("* *\(jiraEscape(row.label)):* \(jiraEscape(row.value))")
         }
-        if !files.isEmpty {
-            lines.append("")
-            lines.append("h2. Attachments")
-            for file in files {
-                lines.append("* {{\(file)}}")
-            }
-        }
         return lines.joined(separator: "\n")
     }
 
     /// Brackets and braces would turn into links and macros in Jira.
-    static func jiraEscape(_ text: String) -> String {
+    /// Brackets, braces and pipes are links, macros and tables in Jira. With `textMarkup`, also
+    /// * _ + ^ ~ (bold, italic, underline, super/subscript around words), which typed text in steps
+    /// often has; environment values like URLs keep them, or their links would break.
+    static func jiraEscape(_ text: String, textMarkup: Bool = false) -> String {
+        var markup: Set<Character> = ["[", "]", "{", "}", "|"]
+        if textMarkup {
+            for character in ["*", "_", "+", "^", "~"] as [Character] {
+                markup.insert(character)
+            }
+        }
         var result = ""
         for character in text {
-            if character == "[" || character == "]" || character == "{" || character == "}" || character == "|" {
+            if markup.contains(character) {
                 result.append("\\")
             }
             result.append(character)

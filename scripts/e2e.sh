@@ -60,7 +60,11 @@ at_least() { python3 -c "import sys; sys.exit(0 if float('$1') >= float('$2') el
 
 echo "==> build"
 scripts/build-app.sh >/dev/null 2>&1 || { echo "build failed"; exit 1; }
+# Quit the person's Bugbear and keep a copy of their settings before any test setting is written.
+quit_running_bugbear
 defaults write "$BUNDLE_ID" automationEnabled -bool true
+# Editor choices made by the tests go to a store of their own (EditorMemory); start it empty.
+defaults delete "$BUNDLE_ID.tests" 2>/dev/null
 defaults write "$BUNDLE_ID" recordSystemAudio -bool false
 defaults write "$BUNDLE_ID" recordMicrophone -bool false
 defaults write "$BUNDLE_ID" bufferMinutes -int 3
@@ -74,7 +78,6 @@ python3 -m http.server 8765 --bind 127.0.0.1 --directory "$FEED_DIR" >/dev/null 
 FEED_PID=$!
 defaults write "$BUNDLE_ID" updateCompareURL "http://127.0.0.1:8765/compare.json"
 defaults write "$BUNDLE_ID" updateCatalogURL "http://127.0.0.1:8765/catalog.swift"
-quit_running_bugbear
 rm -f "$LOG"
 open "$TEST_APP"
 echo "==> waiting 20 s with a mostly static screen"
@@ -127,6 +130,32 @@ sleep 3
 run record-resume >/dev/null
 draw=$(run draw-toggle)
 if echo "$draw" | grep -q "visible=true drawing=true"; then pass "draw on screen during recording"; else fail "draw on screen during recording" "$draw"; fi
+# A real drag on the screen leaves a mark that shows: the flags above were true while nothing drew.
+live=$(run live-state)
+lx=$(field "$live" x); ly=$(field "$live" y); lw=$(field "$live" w); lh=$(field "$live" h)
+cx=$((lx + lw / 2)); cy=$((ly + lh / 2))
+before_coral=$(field "$(run "screen-color:$((cx - 170)),$((cy - 110)),340,220")" coral)
+run "post-drag:$((cx - 150)),$((cy - 90)):$((cx + 150)),$((cy + 90))" >/dev/null
+sleep 0.6
+live_after=$(run live-state)
+after_coral=$(field "$(run "screen-color:$((cx - 170)),$((cy - 110)),340,220")" coral)
+echo "      $live → marks=$(field "$live_after" marks) coral $before_coral → $after_coral"
+if [ "$(field "$live_after" marks)" -ge 1 ] 2>/dev/null; then pass "a drag while drawing adds a mark"; else fail "a drag while drawing adds a mark" "$live_after"; fi
+if [ "${after_coral:-0}" -gt $(( ${before_coral:-0} + 200 )) ] 2>/dev/null; then pass "the mark drawn during recording shows on the screen"; else fail "the mark drawn during recording shows on the screen" "coral $before_coral → $after_coral"; fi
+# With two displays, drawing goes where the pointer is, not only on the recorded display.
+other=$(run screen-center:1)
+if [ "$(field "$other" count)" -gt 1 ] 2>/dev/null; then
+    ox=$(field "$other" x); oy=$(field "$other" y)
+    run draw-toggle >/dev/null
+    run "post-move:$ox,$oy" >/dev/null
+    run draw-toggle >/dev/null
+    moved=$(run live-state)
+    mx=$(field "$moved" x); my=$(field "$moved" y); mw=$(field "$moved" w); mh=$(field "$moved" h)
+    run "post-drag:$((ox - 150)),$((oy - 90)):$((ox + 150)),$((oy + 90))" >/dev/null
+    sleep 0.6
+    other_coral=$(field "$(run "screen-color:$((ox - 170)),$((oy - 110)),340,220")" coral)
+    if [ "$ox" -ge "$mx" ] && [ "$ox" -le $((mx + mw)) ] && [ "$oy" -ge "$my" ] && [ "$oy" -le $((my + mh)) ] && [ "${other_coral:-0}" -gt 200 ] 2>/dev/null; then pass "drawing on the other display shows there"; else fail "drawing on the other display" "$moved coral=$other_coral at $ox,$oy"; fi
+fi
 sleep 3
 run draw-toggle >/dev/null
 wall_stop=$(date +%s.%N)
@@ -180,15 +209,22 @@ if [ -n "$file" ] && [ -f "$file" ]; then pass "all-displays screenshot ($(sips 
 run close-windows >/dev/null
 
 # 8. A marker makes the next save reach back to it.
+now_seconds() { perl -MTime::HiRes=time -e 'printf "%.2f", time'; }
+marked_at=$(now_seconds)
 run mark >/dev/null
 sleep 25
+saved_at=$(now_seconds)
 result=$(run save:5 90)
 echo "      $result"
 file=$(file_of "$result")
 if [ -n "$file" ] && [ -f "$file" ]; then
     duration=$(media_duration "$file")
-    # Marked 25 s ago, plus 5 s of lead-in: about 30 s instead of 5.
-    if near "$duration" 30 1.5; then pass "save after ⌥⇧M reaches back to the marker (${duration}s)"; else fail "save after a marker" "got $duration, expected about 30"; fi
+    # The clip goes back to 5 s before the marker. The app logs how far back the marker was when the
+    # save started; that has to match the test's own clock, and the clip has to match that.
+    marker_ago=$(grep "save reaches back to a marker" "$LOG" | tail -1 | sed 's/.*marker \([0-9.]*\)s ago.*/\1/')
+    measured_ago=$(echo "$saved_at - $marked_at" | bc)
+    expected=$(echo "${marker_ago:-0} + 5" | bc)
+    if [ -n "$marker_ago" ] && near "$marker_ago" "$measured_ago" 1.5 && near "$duration" "$expected" 0.6; then pass "save after ⌥⇧M reaches back to the marker (${duration}s, marker ${marker_ago}s ago)"; else fail "save after a marker" "got $duration, expected $expected (marker ${marker_ago:-not logged}s ago, the test measured ${measured_ago}s)"; fi
 else
     fail "save after a marker produced a file" "$result"
 fi
@@ -214,6 +250,22 @@ if [ -n "$saved" ]; then
     duration=$(media_duration "$capture_folder/original.mp4")
     if at_least "${duration:-0}" 30; then pass "crash saves the time before it (${duration}s clip)"; else fail "crash clip length" "got $duration"; fi
     if [ -f "$capture_folder/crash-report.ips" ]; then pass "crash report kept next to the clip"; else fail "crash report kept next to the clip" "$capture_folder"; fi
+    # The crash clip's editor opens its crash report and system log (recorded, not opened). The
+    # system log is written a few seconds after the clip; wait for it so both buttons are there.
+    for _ in $(seq 1 20); do
+        if [ -f "$capture_folder/system.log" ]; then break; fi
+        sleep 0.5
+    done
+    run system-actions:start >/dev/null
+    run "open-capture:$capture_id" >/dev/null
+    run "press:video:Crash report" >/dev/null
+    run "press:video:System log" >/dev/null
+    opened=$(run system-actions:read)
+    run system-actions:stop >/dev/null
+    run close-windows >/dev/null
+    if [[ "$opened" == *"crash-report.ips"* ]] && { [ ! -f "$capture_folder/system.log" ] || [[ "$opened" == *"system.log"* ]]; }; then
+        if [ -f "$capture_folder/system.log" ]; then pass "the crash clip's \"Crash report\" and \"System log\" buttons open them"; else pass "the crash clip's \"Crash report\" button opens it (no system log was saved)"; fi
+    else fail "crash clip buttons" "$opened"; fi
 else
     fail "crash detected and saved" "no 'crash clip saved' in the log"
 fi
@@ -226,11 +278,11 @@ if grep -q "system log for .*: [0-9]* lines" "$LOG"; then pass "system log colle
 result=$(run update-check 30)
 if echo "$result" | grep -q 'version: "99.0.0"' && echo "$result" | grep -q "newCommitCount: 2"; then pass "update check finds version 99.0.0 with 2 commits"; else fail "update check" "$result"; fi
 if echo "$result" | grep -q 'title: "Better crop"' && echo "$result" | grep -q "pullRequest: Optional(5)" && echo "$result" | grep -q "changeCount: 1"; then pass "update lists the merged pull request by its title"; else fail "update pull request" "$result"; fi
-current_version=$("$ROOT/build/Bugbear.app/Contents/MacOS/Bugbear" --version)
+current_version=$("$TEST_APP/Contents/MacOS/Bugbear" --version)
 printf 'WhatsNewRelease(id: 1, version: "%s", title: "Same", items: [])\n' "$current_version" > "$FEED_DIR/catalog.swift"
 result=$(run update-check 30)
 if echo "$result" | grep -q "upToDate"; then pass "same version $current_version is not an update"; else fail "same version is not an update" "$result"; fi
-plist_version=$(defaults read "$ROOT/build/Bugbear.app/Contents/Info" CFBundleShortVersionString)
+plist_version=$(defaults read "$TEST_APP/Contents/Info" CFBundleShortVersionString)
 if [ "$plist_version" = "$current_version" ]; then pass "app version $plist_version comes from the release notes"; else fail "app version" "plist=$plist_version catalog=$current_version"; fi
 kill "$FEED_PID" 2>/dev/null
 defaults delete "$BUNDLE_ID" updateCompareURL 2>/dev/null

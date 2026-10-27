@@ -62,10 +62,13 @@ verdict() {
 
 echo "==> build"
 scripts/build-app.sh >/dev/null 2>&1 || { echo "build failed"; exit 1; }
+# Quit the person's Bugbear and keep a copy of their settings before any test setting is written.
+quit_running_bugbear
 defaults write "$BUNDLE_ID" automationEnabled -bool true
+# Editor choices made by the tests go to a store of their own (EditorMemory); start it empty.
+defaults delete "$BUNDLE_ID.tests" 2>/dev/null
 defaults write "$BUNDLE_ID" recordSystemAudio -bool false
 defaults write "$BUNDLE_ID" recordMicrophone -bool false
-quit_running_bugbear
 rm -f "$LOG"
 open "$TEST_APP"
 sleep 8

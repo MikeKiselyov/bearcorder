@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import BugbearCore
 
 /// The Bugbear logo: a bear looking through a magnifying glass at a bug, as one flat shape.
 /// Drawn in code so the menu bar glyph, the in-app logo and the app icon are the same picture.
@@ -210,6 +211,6 @@ struct LogoView: View {
             .interpolation(.high)
             .aspectRatio(contentMode: .fit)
             .frame(width: size, height: size)
-            .accessibilityLabel("Bugbear logo")
+            .accessibilityLabel("\(AppInfo.name) logo")
     }
 }

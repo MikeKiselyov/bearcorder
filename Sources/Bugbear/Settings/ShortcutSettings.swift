@@ -21,6 +21,7 @@ struct ShortcutSettingsSection: View {
                             .font(.system(size: 12, weight: .medium, design: .monospaced))
                             .frame(minWidth: 96)
                     }
+                    .accessibilityLabel("\(action.title): \(label(for: action))")
                     .tip("Click, then press the new keys. Esc cancels, Delete removes the shortcut.")
                 }
             }

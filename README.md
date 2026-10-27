@@ -25,6 +25,8 @@
 - [Permissions](#permissions)
 - [More: uninstall, help, development](#more)
 
+Every feature, explained with pictures: **[docs/features.md](docs/features.md)**.
+
 ## Install
 
 You need macOS 14 Sonoma or later (Apple silicon or Intel). Open **Terminal** and paste:
@@ -101,7 +103,8 @@ Settings → Buffer.
   Saving 30 seconds is instant.
 - System audio and microphone are optional.
 - Clicks and shortcut keys are recorded alongside, so the editor can show them on the video.
-  Plain typing is never stored as text; it shows up as "typing…".
+  What you type is kept as text only if you turn on Show what I type in steps; password fields are
+  never read.
 - When an app you used in the last 10 minutes crashes, the minute before the crash is saved to
   Recent automatically, with the macOS crash report next to it.
 - Each saved clip gets the tested app's system log for the same seconds (`system.log`).
@@ -137,8 +140,10 @@ all displays when more than one is connected.
 </p>
 
 - Trim, cut out parts, slow motion, freeze frame.
-- Text, arrows, boxes and blur with their own time ranges on the timeline. `+` and `-` resize them.
-  Text sits on a colored label or, with Background → Transparent, is drawn as outlined letters.
+- Text, arrows, boxes and blur with their own time ranges on the timeline: drag a bar to move it,
+  its edges to make it longer or shorter. Click with Text and type right on the video. `+` and `-`
+  resize marks. Text sits on a colored label or, with Background → Transparent, is drawn as outlined
+  letters.
 - Highlight clicks, show keystrokes, environment badge.
 - Export MP4 or GIF with a size limit (10-100 MB) for trackers that cap attachments.
 
@@ -163,21 +168,22 @@ all displays when more than one is connected.
   editor opens in about half a second. Settings → Screenshots turns the copying off.
 - **Scrolling screenshot**: pick an area; the app scrolls it and glues one long image.
   Sticky headers and footers appear once.
-- Editor: arrow, rectangle, ellipse, line, highlighter, pen, text, numbered steps, pixelate blur,
-  magnifier, crop. `+` and `-` change line thickness and text size. The button next to the text size
+- Editor: arrow, arrow with text, rectangle, ellipse, line, highlighter, pen, text, numbered steps,
+  pixelate blur, magnifier, crop. `+` and `-` change line thickness and text size. The button next to the text size
   switches text between a colored label and outlined letters on a transparent background.
-- Combine several screenshots side by side, environment badge, style presets, layers, undo and redo.
+- Combine several screenshots side by side, environment badge, layers, undo and redo.
 - Copy (`⌘C`), save to a folder, or drag the result straight into Jira or Slack.
 
 ### Bug reports
 
 **Copy bug report** puts a ready report on the clipboard in Markdown or Jira wiki:
 
-- numbered steps built from your clicks and keys (`Click "Submit" button in Safari`, `Press ⌘ Enter`);
+- numbered steps built from your clicks and keys (`Click "Submit" button in Safari`, `Press ⌘ Enter`),
+  a step for every page you open, and what you typed if you turn that on;
 - Expected / Actual placeholders;
-- the environment: macOS, display, app and version, browser URL, locale, time;
-- your own fields (stand, build, test account…) from **Settings → Bug reports**;
-- the saved files.
+- the environment: macOS, display, app and version, browser URL, locale, time; turn fields off or
+  rename them in **Settings → Bug reports**;
+- your own fields (stand, build, test account…).
 
 No AI, nothing leaves the Mac. Element names need Accessibility access; password fields are never read.
 
@@ -258,14 +264,14 @@ your Mac (1-2 minutes) and restarts it, then "What's new" shows what changed.
 | Permission | Needed for | When it is asked |
 |---|---|---|
 | Screen & System Audio Recording | buffer, recordings, screenshots | first start; relaunch the app after allowing |
-| Accessibility | keys in videos, element names in reports, window resize, scrolling screenshot (optional) | Settings → Recording → Grant |
+| Accessibility | keys in videos, element names in reports, window resize, scrolling screenshot (optional) | Settings → Permissions → Allow… |
 | Microphone | voice in recordings (optional) | when you turn the mic on |
 | Camera | webcam bubble (optional) | when you turn the camera on |
-| Automation, per browser | browser URL in the environment (optional) | the first screenshot in that browser |
+| Automation, per browser | browser URL in the environment (optional) | the first screenshot in that browser; Settings → Permissions shows it |
 
 ## More
 
-- [Uninstall](docs/uninstall.md) and where Bugbear keeps captures and logs
+- [Uninstall](docs/uninstall.md) with one command, and where Bugbear keeps captures and logs
 - Something went wrong? Attach `~/Library/Logs/Bugbear/bugbear.log` to an
   [issue](https://github.com/MikeKiselyov/bugbear-app/issues).
 - For developers: [build from source](docs/development.md), [tests](docs/testing.md),

@@ -83,32 +83,56 @@ final class ScreenshotDocument {
         let image: CGImage
     }
 
-    let capture: Capture
+    private(set) var capture: Capture
     private(set) var base: CGImage
     var annotations: [Annotation] = []
     var crop: CGRect?
     var selectedId: UUID?
-    var tool: AnnotationTool = .arrow {
+    // The tool, color, sizes, badge and format start as the last screenshot left them
+    // (EditorMemory), and each change is remembered for the next one.
+    var tool: AnnotationTool = EditorMemory.screenshotTool {
         didSet {
             if tool != .select { selectedId = nil }
+            EditorMemory.screenshotTool = tool
         }
     }
-    var color: AnnotationColor = .coral
-    var stroke: StrokeSize = .medium
+    var color: AnnotationColor = EditorMemory.screenshotColor {
+        didSet { EditorMemory.screenshotColor = color }
+    }
+    // Resizing a selected mark with + and - is about that mark, not the size of new ones.
+    var stroke: StrokeSize = EditorMemory.screenshotStroke {
+        didSet {
+            if selectedId == nil { EditorMemory.screenshotStroke = stroke }
+        }
+    }
     /// Text and step label size in points, before the image scale.
-    var textPoints: CGFloat = TextSizes.standard
+    var textPoints: CGFloat = EditorMemory.screenshotTextPoints {
+        didSet {
+            if selectedId == nil { EditorMemory.screenshotTextPoints = textPoints }
+        }
+    }
     /// New text has no label behind it, only outlined letters.
-    var clearTextBackground: Bool = UserDefaults.standard.bool(forKey: "clearTextBackground") {
-        didSet { UserDefaults.standard.set(clearTextBackground, forKey: "clearTextBackground") }
+    var clearTextBackground: Bool = EditorMemory.clearTextBackground {
+        didSet { EditorMemory.clearTextBackground = clearTextBackground }
     }
     /// New rectangles and ellipses get a see-through fill of their color.
-    var shapeFill: Bool = UserDefaults.standard.bool(forKey: "shapeFill") {
-        didSet { UserDefaults.standard.set(shapeFill, forKey: "shapeFill") }
+    var shapeFill: Bool = EditorMemory.shapeFill {
+        didSet { EditorMemory.shapeFill = shapeFill }
     }
-    var showBadge = false
-    var badgeCorner: BadgeCorner = .topRight
-    var exportFormat: ExportFormat = ExportFormat(rawValue: UserDefaults.standard.string(forKey: "screenshotExportFormat") ?? "") ?? .png {
-        didSet { UserDefaults.standard.set(exportFormat.rawValue, forKey: "screenshotExportFormat") }
+    var showBadge = EditorMemory.screenshotShowsBadge {
+        didSet {
+            if !isLoadingProject { EditorMemory.screenshotShowsBadge = showBadge }
+        }
+    }
+    var badgeCorner: BadgeCorner = EditorMemory.screenshotBadgeCorner {
+        didSet {
+            if !isLoadingProject { EditorMemory.screenshotBadgeCorner = badgeCorner }
+        }
+    }
+    /// An older capture's badge is its own, not a new choice to remember.
+    @ObservationIgnored private var isLoadingProject = false
+    var exportFormat: ExportFormat = ExportFormat(rawValue: EditorMemory.screenshotFormat) ?? .png {
+        didSet { EditorMemory.screenshotFormat = exportFormat.rawValue }
     }
     /// File size in bytes of each export format for the picture as it is now.
     var exportSizes: [ExportFormat: Int] = [:]
@@ -122,8 +146,14 @@ final class ScreenshotDocument {
     private var undoStack: [Snapshot] = []
     private var redoStack: [Snapshot] = []
 
-    init?(capture: Capture) {
+    /// `forEditing` false is for drawing the screenshot elsewhere (a step guide, a comparison):
+    /// it shows what was saved with it, never the editor's remembered badge.
+    init?(capture: Capture, forEditing: Bool = true) {
         self.capture = capture
+        if !forEditing {
+            showBadge = false
+            badgeCorner = .topRight
+        }
         let combined = capture.folder.appendingPathComponent("base.png")
         var image: CGImage? = nil
         if FileManager.default.fileExists(atPath: combined.path) {
@@ -238,16 +268,24 @@ final class ScreenshotDocument {
         saveProject()
     }
 
+    /// An arrow with text left without text becomes a plain arrow.
+    func makePlainArrow(_ id: UUID) {
+        guard let index = annotations.firstIndex(where: { item in item.id == id }) else { return }
+        annotations[index].tool = .arrow
+        annotations[index].text = ""
+        saveProject()
+    }
+
     /// Color/stroke buttons also restyle the selected mark.
     func applyStyleToSelection() {
         guard let id = selectedId, let index = annotations.firstIndex(where: { item in item.id == id }) else { return }
         checkpoint()
         annotations[index].color = color
         annotations[index].lineWidth = lineWidth
-        if annotations[index].tool == .text || annotations[index].tool == .step {
+        if annotations[index].tool.hasLabel || annotations[index].tool == .step {
             annotations[index].fontSize = annotations[index].tool == .step ? fontSize * 1.1 : fontSize
         }
-        if annotations[index].tool == .text {
+        if annotations[index].tool.hasLabel {
             annotations[index].clearBackground = clearTextBackground
         }
         if annotations[index].tool == .rectangle || annotations[index].tool == .ellipse {
@@ -268,7 +306,7 @@ final class ScreenshotDocument {
         if let selectedMark = selected {
             targetTool = selectedMark.tool
         }
-        if targetTool == .text {
+        if targetTool.hasLabel {
             return .text
         }
         if targetTool == .rectangle || targetTool == .ellipse {
@@ -295,7 +333,7 @@ final class ScreenshotDocument {
         }
         guard let id = selectedId, let index = annotations.firstIndex(where: { item in item.id == id }) else { return }
         checkpoint()
-        if annotations[index].tool == .text {
+        if annotations[index].tool.hasLabel {
             annotations[index].clearBackground = !filled
         }
         if annotations[index].tool == .rectangle || annotations[index].tool == .ellipse {
@@ -336,13 +374,13 @@ final class ScreenshotDocument {
         if let selectedMark = selected {
             targetTool = selectedMark.tool
         }
-        return targetTool == .text || targetTool == .step
+        return targetTool.hasLabel || targetTool == .step
     }
 
     /// The size the size buttons show: of the selected mark, or for new marks.
     var sizeValue: Int {
         if sizeIsText {
-            if let selectedMark = selected, selectedMark.tool == .text || selectedMark.tool == .step {
+            if let selectedMark = selected, selectedMark.tool.hasLabel || selectedMark.tool == .step {
                 var points = selectedMark.fontSize / unit
                 if selectedMark.tool == .step {
                     points = points / 1.1
@@ -364,7 +402,7 @@ final class ScreenshotDocument {
         if let selectedMark = selected {
             targetTool = selectedMark.tool
         }
-        if targetTool == .text || targetTool == .step {
+        if targetTool.hasLabel || targetTool == .step {
             var current = textPoints
             if let selectedMark = selected {
                 current = selectedMark.fontSize / unit
@@ -388,7 +426,7 @@ final class ScreenshotDocument {
         guard let id = selectedId, let index = annotations.firstIndex(where: { item in item.id == id }) else { return }
         checkpoint()
         let mark = annotations[index]
-        if mark.tool == .text {
+        if mark.tool.hasLabel {
             annotations[index].fontSize = fontSize
         } else if mark.tool == .step {
             annotations[index].fontSize = fontSize * 1.1
@@ -408,12 +446,6 @@ final class ScreenshotDocument {
             crop = nil
         }
         saveProject()
-    }
-
-    func applyPreset(_ preset: StylePreset) {
-        color = preset.color
-        stroke = preset.stroke
-        applyStyleToSelection()
     }
 
     /// Puts another image to the right of the current one (scaled to the same height).
@@ -554,7 +586,6 @@ final class ScreenshotDocument {
                 updateThumbnail(image)
             }
             message = "Saved to \(url.deletingLastPathComponent().lastPathComponent)"
-            savedFile = url
             return url
         } catch {
             message = "Could not save: \(error.localizedDescription)"
@@ -562,15 +593,8 @@ final class ScreenshotDocument {
         }
     }
 
-    /// The file saved with "Save", listed in the bug report.
-    private var savedFile: URL?
-
     func copyBugReport(format: BugReport.Format) {
-        var files: [URL] = []
-        if let saved = savedFile {
-            files.append(saved)
-        }
-        BugReportBuilder.copy(for: capture, timeMap: nil, files: files, format: format)
+        BugReportBuilder.copy(for: capture, timeMap: nil, format: format)
         message = "Bug report copied. Paste it into the ticket."
     }
 
@@ -586,6 +610,17 @@ final class ScreenshotDocument {
     }
 
     // MARK: Persistence
+
+    /// Shows the report fields as Settings → Bug reports has them now, and keeps that in the capture.
+    /// On opening only which fields show and their names follow; your fields keep the values they
+    /// had when the capture was taken, unless you change them while the editor is open.
+    func refreshEnvironmentFields(includingYourFields: Bool) {
+        var environment = capture.environment
+        EnvironmentCollector.applyFieldSettings(to: &environment, includingYourFields: includingYourFields)
+        if environment == capture.environment { return }
+        capture.environment = environment
+        try? CaptureStore.shared.replace(capture)
+    }
 
     func saveProject() {
         let project = Project(
@@ -603,6 +638,8 @@ final class ScreenshotDocument {
 
     private func loadProject() {
         guard let data = try? Data(contentsOf: capture.projectURL), let project = try? JSONDecoder().decode(Project.self, from: data) else { return }
+        isLoadingProject = true
+        defer { isLoadingProject = false }
         annotations = project.annotations
         crop = project.crop
         showBadge = project.showBadge

@@ -125,18 +125,20 @@ struct FeedbackView: View {
                 return "lightbulb"
             })
             .frame(width: 360)
-            .tip("Problems and ideas go to the Bugbear repository on GitHub as issues")
+            .tip("Problems and ideas go to the \(AppInfo.name) repository on GitHub as issues")
             .onChange(of: model.kind) { model.refresh() }
 
             VStack(alignment: .leading, spacing: 6) {
                 Text("Title").font(Theme.sectionLabel).foregroundStyle(Theme.textSecondary)
                 TextField(titlePlaceholder, text: $model.title)
                     .textFieldStyle(.roundedBorder)
+                    .accessibilityLabel("Title")
             }
 
             VStack(alignment: .leading, spacing: 6) {
                 Text(detailsLabel).font(Theme.sectionLabel).foregroundStyle(Theme.textSecondary)
                 TextEditor(text: $model.details)
+                    .accessibilityLabel("Details")
                     .font(.system(size: 13))
                     .scrollContentBackground(.hidden)
                     .padding(6)
@@ -148,9 +150,9 @@ struct FeedbackView: View {
 
             if model.kind == .problem {
                 Toggle("Attach logs", isOn: $model.includeLogs)
-                    .tip("Add the last lines of Bugbear's log to the issue and save the full logs as a zip to drag into it")
+                    .tip("Add the last lines of \(AppInfo.name)'s log to the issue and save the full logs as a zip to drag into it")
                 if model.includeLogs {
-                    Text("A zip with Bugbear's full log and crash reports is saved to \(Feedback.redact(AppSettings.shared.outputFolderPath)) and shown in Finder. Drag it into the issue on GitHub.")
+                    Text("A zip with \(AppInfo.name)'s full log and crash reports is saved to \(Feedback.redact(AppSettings.shared.outputFolderPath)) and shown in Finder. Drag it into the issue on GitHub.")
                         .font(.system(size: 12))
                         .foregroundStyle(Theme.textSecondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -199,7 +201,7 @@ struct FeedbackView: View {
         .padding(.top, 40)
         .padding(.bottom, 18)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(Theme.window)
+        .auroraBackground()
     }
 
     private var titlePlaceholder: String {
@@ -213,7 +215,7 @@ struct FeedbackView: View {
         if model.kind == .problem {
             return "What happened? What did you expect?"
         }
-        return "What would you like Bugbear to do?"
+        return "What would you like \(AppInfo.name) to do?"
     }
 
     private var previewText: String {
@@ -229,7 +231,7 @@ struct FeedbackView: View {
             parts.append("Log (up to the last \(report.logLines.count) lines; fewer if the link gets too long):\n" + report.logText)
         }
         if report.kind == .problem && model.includeLogs {
-            parts.append("Zip: environment.txt, the full bugbear.log and Bugbear's crash reports from the last 14 days.")
+            parts.append("Zip: environment.txt, the full bugbear.log and \(AppInfo.name)'s crash reports from the last 14 days.")
         }
         return parts.joined(separator: "\n\n")
     }

@@ -37,6 +37,11 @@ final class AppSettings {
     var readBrowserURL: Bool {
         didSet { defaults.set(readBrowserURL, forKey: "readBrowserURL") }
     }
+    /// Steps show what was typed into a field ("Type "john@test.com" in "Email" text field").
+    /// Off unless the person turns it on: typed text can be personal. Never for password fields.
+    var recordTypedText: Bool {
+        didSet { defaults.set(recordTypedText, forKey: "recordTypedText") }
+    }
     /// A new screenshot goes to the clipboard right away, ready for ⌘V.
     var copyScreenshots: Bool {
         didSet { defaults.set(copyScreenshots, forKey: "copyScreenshots") }
@@ -74,6 +79,14 @@ final class AppSettings {
                 defaults.set(data, forKey: "reportFields")
             }
         }
+    }
+    /// Fields Bugbear collects by itself that the tester turned off (`StandardField` raw values).
+    var hiddenEnvironmentFields: [String] {
+        didSet { defaults.set(hiddenEnvironmentFields, forKey: "hiddenEnvironmentFields") }
+    }
+    /// The tester's own names for fields Bugbear collects, by `StandardField` raw value.
+    var renamedEnvironmentFields: [String: String] {
+        didSet { defaults.set(renamedEnvironmentFields, forKey: "renamedEnvironmentFields") }
     }
     /// Delete captures older than this many days; 0 keeps them forever.
     var keepCapturesDays: Int {
@@ -114,9 +127,10 @@ final class AppSettings {
             "recordClicks": true,
             "recordKeys": true,
             "readBrowserURL": true,
+            "recordTypedText": false,
             "copyScreenshots": true,
             "startBufferOnLaunch": true,
-            "outputFolderPath": FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Desktop/Bugbear").path,
+            "outputFolderPath": FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Desktop/\(AppInfo.storageName)").path,
             "timeZones": ["UTC", "Europe/Lisbon", "Europe/Minsk", "America/New_York", "Asia/Tokyo"],
             "captureAllDisplays": true,
             "recordSystemAudio": false,
@@ -139,6 +153,7 @@ final class AppSettings {
         recordClicks = defaults.bool(forKey: "recordClicks")
         recordKeys = defaults.bool(forKey: "recordKeys")
         readBrowserURL = defaults.bool(forKey: "readBrowserURL")
+        recordTypedText = defaults.bool(forKey: "recordTypedText")
         copyScreenshots = defaults.bool(forKey: "copyScreenshots")
         startBufferOnLaunch = defaults.bool(forKey: "startBufferOnLaunch")
         outputFolderPath = defaults.string(forKey: "outputFolderPath") ?? NSHomeDirectory()
@@ -153,16 +168,33 @@ final class AppSettings {
         bugReportFormat = defaults.string(forKey: "bugReportFormat") ?? BugReport.Format.markdown.rawValue
         keepCapturesDays = defaults.integer(forKey: "keepCapturesDays")
         maxCapturesGB = defaults.integer(forKey: "maxCapturesGB")
-        // People who used Bugbear before this setting existed keep all their crash clips until they
-        // choose otherwise; new installs pick a time in the welcome guide (7 days by default).
-        if defaults.object(forKey: "keepCrashClipsDays") == nil && defaults.bool(forKey: "onboardingCompleted") {
-            defaults.set(0, forKey: "keepCrashClipsDays")
-        }
+        AppSettings.keepCrashClipsForEarlierUsers(defaults, domain: Bundle.main.bundleIdentifier ?? "")
         keepCrashClipsDays = defaults.integer(forKey: "keepCrashClipsDays")
         offerCrashReports = defaults.bool(forKey: "offerCrashReports")
         reportFields = []
         if let data = defaults.data(forKey: "reportFields"), let fields = try? JSONDecoder().decode([EnvironmentSnapshot.Field].self, from: data) {
             reportFields = fields
+        }
+        hiddenEnvironmentFields = defaults.stringArray(forKey: "hiddenEnvironmentFields") ?? []
+        renamedEnvironmentFields = defaults.dictionary(forKey: "renamedEnvironmentFields") as? [String: String] ?? [:]
+    }
+
+    /// The release that added the crash clip setting (0.9.0).
+    static let crashClipSettingReleaseID = 14
+
+    /// People who used Bugbear before the crash clip setting existed keep all their crash clips until
+    /// they choose otherwise; everyone else keeps the time picked in the welcome guide (7 days by
+    /// default). An earlier user is one whose last seen release is older than the setting: a value
+    /// the person never changed is not saved, so "not saved" alone also matches everyone who left
+    /// the guide's 7 days as they were. `object(forKey:)` would also return the registered default.
+    static func keepCrashClipsForEarlierUsers(_ defaults: UserDefaults, domain: String) {
+        if domain.isEmpty { return }
+        let saved = defaults.persistentDomain(forName: domain) ?? [:]
+        if saved["keepCrashClipsDays"] != nil { return }
+        let lastSeenRelease = defaults.integer(forKey: "whatsNewLastSeenID")
+        if lastSeenRelease == 0 || lastSeenRelease >= crashClipSettingReleaseID { return }
+        if defaults.bool(forKey: "onboardingCompleted") {
+            defaults.set(0, forKey: "keepCrashClipsDays")
         }
     }
 
@@ -189,7 +221,7 @@ enum AppPaths {
 
     static var support: URL {
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-        var folder = base.appendingPathComponent("Bugbear", isDirectory: true)
+        var folder = base.appendingPathComponent(AppInfo.storageName, isDirectory: true)
         if let override = supportOverride {
             folder = override
         }
@@ -210,7 +242,7 @@ enum AppPaths {
     }
 
     static var temporary: URL {
-        let folder = FileManager.default.temporaryDirectory.appendingPathComponent("Bugbear", isDirectory: true)
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent(AppInfo.storageName, isDirectory: true)
         try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         return folder
     }
@@ -220,7 +252,7 @@ enum AppPaths {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.dateFormat = "yyyy-MM-dd 'at' HH.mm.ss"
-        return "Bugbear \(formatter.string(from: date))"
+        return "\(AppInfo.name) \(formatter.string(from: date))"
     }
 
     /// Returns a URL in `folder` that does not exist yet.

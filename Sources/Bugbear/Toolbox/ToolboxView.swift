@@ -28,7 +28,7 @@ struct ToolboxView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .foregroundStyle(Theme.text)
-        .background(Theme.window)
+        .auroraBackground()
         .onAppear {
             selected = initialTool
             if !initialInput.isEmpty {
@@ -37,6 +37,9 @@ struct ToolboxView: View {
             if detectedFromClipboard {
                 detectedNote = "Detected from clipboard"
             }
+        }
+        .onChange(of: selected, initial: true) { _, tool in
+            ToolboxState.shown = tool
         }
         .onReceive(NotificationCenter.default.publisher(for: .toolboxSelect)) { notification in
             guard let raw = notification.userInfo?["tool"] as? String, let tool = ToolKind(rawValue: raw) else { return }
@@ -202,6 +205,7 @@ struct ToolboxView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(tool.rawValue)
         .tip(purpose(tool))
     }
 
@@ -384,6 +388,8 @@ struct CopyButton: View {
     let text: String
     var title = "Copy  ⇧⌘C"
     var primary = true
+    /// What VoiceOver (and tests) call it when the title alone is not unique, e.g. "Copy header".
+    var name: String? = nil
     @State private var copied = false
 
     var body: some View {
@@ -397,6 +403,7 @@ struct CopyButton: View {
         .buttonStyle(AccentButtonStyle(isEnabled: !text.isEmpty))
         .disabled(text.isEmpty)
         .keyboardShortcut(primary ? KeyboardShortcut("c", modifiers: [.command, .shift]) : nil)
+        .accessibilityLabel(name ?? title)
         .tip(primary ? "Copy the result to the clipboard (⇧⌘C)" : "Copy to the clipboard")
     }
 }
@@ -432,4 +439,10 @@ struct ValueRow: View {
         .background(Theme.panel)
         .clipShape(RoundedRectangle(cornerRadius: 8))
     }
+}
+
+/// The tool the toolbox window shows, for tests that open it from the menu.
+@MainActor
+enum ToolboxState {
+    static var shown: ToolKind?
 }

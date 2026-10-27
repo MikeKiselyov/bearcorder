@@ -1,4 +1,5 @@
 import AppKit
+import BugbearCore
 import Observation
 import QuartzCore
 
@@ -14,7 +15,7 @@ final class LiveOverlay {
     }
     var tool: AnnotationTool = .arrow
     var color: AnnotationColor = .coral
-    var stroke: StrokeSize = .medium
+    var stroke: StrokeSize = .thick
     /// Marks fade out after a few seconds so the screen stays usable.
     var autoFade = true
     private(set) var annotations: [(annotation: Annotation, createdAt: Double)] = []
@@ -67,9 +68,26 @@ final class LiveOverlay {
         return window?.isVisible ?? false
     }
 
+    /// Where the drawing window is, in screen coordinates.
+    var frame: CGRect {
+        return window?.frame ?? .zero
+    }
+
+    /// For tests: where the drawing window is (top-left screen points) and whether it takes the mouse.
+    var stateForChecks: String {
+        guard let panel = window else { return "window=none" }
+        let mainHeight = NSScreen.screens.first?.frame.maxY ?? 0
+        let frame = panel.frame
+        let viewSize = drawingView?.bounds.size ?? .zero
+        return "visible=\(panel.isVisible) drawing=\(isDrawing) key=\(panel.isKeyWindow) mouse=\(!panel.ignoresMouseEvents) x=\(Int(frame.minX)) y=\(Int(mainHeight - frame.maxY)) w=\(Int(frame.width)) h=\(Int(frame.height)) view=\(Int(viewSize.width))x\(Int(viewSize.height)) marks=\(annotations.count)"
+    }
+
     private func applyDrawingState() {
         guard let panel = window else { return }
         panel.ignoresMouseEvents = !isDrawing
+        // The tint shows at once, and the window is no longer fully clear: macOS lets clicks pass
+        // through fully clear windows, and nothing was drawn.
+        drawingView?.needsDisplay = true
         if isDrawing {
             panel.makeKey()
             NSCursor.crosshair.set()
@@ -235,7 +253,8 @@ final class OverlayDrawingView: NSView {
             overlay.isDrawing = false
             return
         }
-        if event.modifierFlags.contains(.command), event.charactersIgnoringModifiers == "z" {
+        let key = LatinKeys.key(forKeyCode: event.keyCode, typed: event.charactersIgnoringModifiers ?? "")
+        if event.modifierFlags.contains(.command), key == "z" {
             overlay.undo()
             return
         }
@@ -243,7 +262,6 @@ final class OverlayDrawingView: NSView {
             overlay.clear()
             return
         }
-        let key = (event.charactersIgnoringModifiers ?? "").lowercased()
         for tool in LiveOverlay.liveTools {
             if let shortcut = tool.keyboardShortcut, String(shortcut) == key {
                 overlay.tool = tool

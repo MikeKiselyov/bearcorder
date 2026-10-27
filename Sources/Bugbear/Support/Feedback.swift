@@ -21,7 +21,7 @@ enum Feedback {
 
     static func environment(kind: FeedbackReport.Kind) -> [EnvironmentSnapshot.Field] {
         var fields: [EnvironmentSnapshot.Field] = []
-        fields.append(EnvironmentSnapshot.Field(name: "Bugbear", value: Updater.shared.versionText))
+        fields.append(EnvironmentSnapshot.Field(name: AppInfo.name, value: Updater.shared.versionText))
         let version = ProcessInfo.processInfo.operatingSystemVersion
         let build = EnvironmentCollector.sysctlString("kern.osversion")
         fields.append(EnvironmentSnapshot.Field(name: "macOS", value: "\(version.majorVersion).\(version.minorVersion).\(version.patchVersion) (\(build))"))
@@ -131,7 +131,7 @@ enum Feedback {
     nonisolated static func makeLogArchive(environmentText: String, in folder: URL, crashFolder: URL = CrashWatcher.defaultFolder) -> Result<URL, ArchiveError> {
         let files = FileManager.default
         let staging = files.temporaryDirectory.appendingPathComponent("bugbear-report-\(UUID().uuidString)", isDirectory: true)
-        let contents = staging.appendingPathComponent("Bugbear logs", isDirectory: true)
+        let contents = staging.appendingPathComponent("\(AppInfo.name) logs", isDirectory: true)
         defer { try? files.removeItem(at: staging) }
         do {
             try files.createDirectory(at: contents, withIntermediateDirectories: true)
@@ -152,9 +152,9 @@ enum Feedback {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.dateFormat = "yyyy-MM-dd 'at' HH.mm.ss"
-        var archive = folder.appendingPathComponent("Bugbear logs \(formatter.string(from: Date())).zip")
+        var archive = folder.appendingPathComponent("\(AppInfo.name) logs \(formatter.string(from: Date())).zip")
         if files.fileExists(atPath: archive.path) {
-            archive = folder.appendingPathComponent("Bugbear logs \(UUID().uuidString.prefix(8)).zip")
+            archive = folder.appendingPathComponent("\(AppInfo.name) logs \(UUID().uuidString.prefix(8)).zip")
         }
         let task = Process()
         task.executableURL = URL(fileURLWithPath: "/usr/bin/ditto")
@@ -188,13 +188,13 @@ enum Feedback {
             }.value
             switch result {
             case .success(let archive):
-                NSWorkspace.shared.activateFileViewerSelecting([archive])
+                SystemActions.reveal([archive])
             case .failure:
                 warning = "The logs zip could not be saved to \(redact(folder.path)), so the issue opened without it."
             }
         }
         Log.info("Feedback: opening the \(report.kind.rawValue) form on GitHub")
-        NSWorkspace.shared.open(url)
+        SystemActions.open(url)
         return (opened: true, warning: warning)
     }
 
@@ -268,17 +268,17 @@ enum Feedback {
         model.title = title
         model.details = "\(title). "
         model.crash = redact(message)
-        model.notice = "Bugbear ran into an error. A report helps fix it. Add what you were doing when it happened."
+        model.notice = "\(AppInfo.name) ran into an error. A report helps fix it. Add what you were doing when it happened."
         WindowManager.shared.openFeedback(model: model)
     }
 
     static func openCrashReport(crashText: String) {
         let model = FeedbackModel(kind: .problem)
-        model.title = "Bugbear quit unexpectedly"
+        model.title = "\(AppInfo.name) quit unexpectedly"
         // The form needs a description; this is a start the person can add to.
-        model.details = "Bugbear quit unexpectedly. "
+        model.details = "\(AppInfo.name) quit unexpectedly. "
         model.crash = crashText
-        model.notice = "Bugbear quit unexpectedly last time. Sending a report with the crash details helps fix it. Add what you were doing, if you remember."
+        model.notice = "\(AppInfo.name) quit unexpectedly last time. Sending a report with the crash details helps fix it. Add what you were doing, if you remember."
         WindowManager.shared.openFeedback(model: model)
     }
 }

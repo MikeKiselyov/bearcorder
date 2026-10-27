@@ -15,7 +15,7 @@ struct VideoEditorView: View {
                 ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
-        .background(Theme.window)
+        .auroraBackground()
         .onAppear {
             if model == nil {
                 model = VideoEditorModel(capture: capture)
@@ -52,7 +52,6 @@ private struct VideoEditorContent: View {
     var body: some View {
         VStack(spacing: 0) {
             toolbar
-            Divider().overlay(Theme.border)
             HStack(spacing: 0) {
                 VideoStage(model: model)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -72,6 +71,12 @@ private struct VideoEditorContent: View {
         .focused($focused)
         .focusEffectDisabled()
         .onAppear { focused = true }
+        // Typing on the video took the focus; the editor's keys (Space, I, O, + and -) need it back.
+        .onChange(of: model.editingTextID) { _, editing in
+            if editing == nil {
+                focused = true
+            }
+        }
         .onKeyPress(.space) {
             if isTypingText { return .ignored }
             model.togglePlay()
@@ -137,38 +142,11 @@ private struct VideoEditorContent: View {
 
     private var toolbar: some View {
         HStack(spacing: 4) {
-            ToolButton(systemImage: "arrow.uturn.backward", help: "Undo the last change (⌘Z)") { model.undo() }
-                .disabled(!model.canUndo)
-            ToolButton(systemImage: "arrow.uturn.forward", help: "Redo what was undone (⇧⌘Z)") { model.redo() }
-            Rectangle().fill(Theme.borderStrong).frame(width: 1, height: 22).padding(.horizontal, 6)
-            ToolbarTextButton(systemImage: "scissors", title: "Cut", help: "Cut the selected range (drag on the ruler first)") {
-                model.cutSelection()
-            }
-            ToolbarTextButton(systemImage: "arrow.right.to.line", title: "In", help: "Trim start at playhead (I)") {
-                model.setTrimStart(model.playhead)
-            }
-            ToolbarTextButton(systemImage: "arrow.left.to.line", title: "Out", help: "Trim end at playhead (O)") {
-                model.setTrimEnd(model.playhead)
-            }
-            Rectangle().fill(Theme.borderStrong).frame(width: 1, height: 22).padding(.horizontal, 6)
-            ToolbarTextButton(systemImage: "textformat", title: "Text", help: "Drag on the video to place text", isSelected: model.tool == .text) {
-                model.tool = model.tool == .text ? .select : .text
-            }
-            ToolbarTextButton(systemImage: "arrow.up.right", title: "Arrow", help: "Drag on the video to draw an arrow", isSelected: model.tool == .arrow) {
-                model.tool = model.tool == .arrow ? .select : .arrow
-            }
-            ToolbarTextButton(systemImage: "rectangle", title: "Box", help: "Drag on the video to draw a box", isSelected: model.tool == .rectangle) {
-                model.tool = model.tool == .rectangle ? .select : .rectangle
-            }
-            ToolbarTextButton(systemImage: "square.grid.3x3.fill", title: "Blur", help: "Drag on the video to blur an area", isSelected: model.tool == .blur) {
-                model.tool = model.tool == .blur ? .select : .blur
-            }
-            Rectangle().fill(Theme.borderStrong).frame(width: 1, height: 22).padding(.horizontal, 6)
-            ToolbarTextButton(systemImage: "tortoise", title: "Slow-mo", help: "Half speed for the selected range (or 3 s from the playhead)") {
-                model.slowMotion()
-            }
-            ToolbarTextButton(systemImage: "pause.rectangle", title: "Freeze", help: "Hold the current frame for 2 s") {
-                model.freezeFrame()
+            // Without room for every title (a narrow window) the buttons show only their icons:
+            // titles wrapped to two lines and pushed the screen picker out of the window.
+            ViewThatFits(in: .horizontal) {
+                toolGroup(showTitles: true)
+                toolGroup(showTitles: false)
             }
             Spacer()
             screenPicker
@@ -177,7 +155,49 @@ private struct VideoEditorContent: View {
             }
         }
         .padding(.horizontal, 12)
-        .frame(height: 48)
+        .frame(height: 52)
+    }
+
+    private func toolGroup(showTitles: Bool) -> some View {
+        HStack(spacing: 4) {
+            ToolButton(systemImage: "arrow.uturn.backward", help: "Undo the last change (⌘Z)") { model.undo() }
+                .disabled(!model.canUndo)
+            ToolButton(systemImage: "arrow.uturn.forward", help: "Redo what was undone (⇧⌘Z)") { model.redo() }
+            Rectangle().fill(Theme.borderStrong).frame(width: 1, height: 22).padding(.horizontal, 6)
+            ToolbarTextButton(showsTitle: showTitles, systemImage: "scissors", title: "Cut", help: "Cut the selected range (drag on the ruler first)") {
+                model.cutSelection()
+            }
+            ToolbarTextButton(showsTitle: showTitles, systemImage: "arrow.right.to.line", title: "In", help: "Trim start at playhead (I)") {
+                model.setTrimStart(model.playhead)
+            }
+            ToolbarTextButton(showsTitle: showTitles, systemImage: "arrow.left.to.line", title: "Out", help: "Trim end at playhead (O)") {
+                model.setTrimEnd(model.playhead)
+            }
+            Rectangle().fill(Theme.borderStrong).frame(width: 1, height: 22).padding(.horizontal, 6)
+            ToolbarTextButton(showsTitle: showTitles, systemImage: "textformat", title: "Text", help: "Drag on the video to place text", isSelected: model.tool == .text) {
+                model.tool = model.tool == .text ? .select : .text
+            }
+            ToolbarTextButton(showsTitle: showTitles, systemImage: "arrow.up.right", title: "Arrow", help: "Drag on the video to draw an arrow", isSelected: model.tool == .arrow) {
+                model.tool = model.tool == .arrow ? .select : .arrow
+            }
+            ToolbarTextButton(showsTitle: showTitles, systemImage: "rectangle", title: "Box", help: "Drag on the video to draw a box", isSelected: model.tool == .rectangle) {
+                model.tool = model.tool == .rectangle ? .select : .rectangle
+            }
+            ToolbarTextButton(showsTitle: showTitles, systemImage: "eye.slash", title: "Blur", help: "Drag on the video to blur an area", isSelected: model.tool == .blur) {
+                model.tool = model.tool == .blur ? .select : .blur
+            }
+            Rectangle().fill(Theme.borderStrong).frame(width: 1, height: 22).padding(.horizontal, 6)
+            ToolbarTextButton(showsTitle: showTitles, systemImage: "tortoise", title: "Slow-mo", help: "Half speed for the selected range (or 3 s from the playhead)") {
+                model.slowMotion()
+            }
+            ToolbarTextButton(showsTitle: showTitles, systemImage: "pause.rectangle", title: "Freeze", help: "Hold the current frame for 2 s") {
+                model.freezeFrame()
+            }
+        }
+        .padding(.horizontal, 6)
+        .frame(height: 44)
+        .glassCard(cornerRadius: 14)
+        .shadow(color: Color.black.opacity(0.35), radius: 14, y: 6)
     }
 
     /// Clips saved from several displays: pick one display or all of them side by side.
@@ -190,6 +210,7 @@ private struct VideoEditorContent: View {
                 Picker(selection: Binding(get: { model.capture.selectedScreen ?? screens[0].id }, set: { id in onSelectScreen(id) })) {
                     ForEach(screens) { screen in
                         Text(screen.name).tag(screen.id)
+                            .accessibilityLabel("Screen: \(screen.name)")
                     }
                 } label: {
                     EmptyView()
@@ -255,7 +276,104 @@ private struct VideoEditorContent: View {
     }
 }
 
+/// The field for typing a text mark right on the video. An AppKit field that takes the keyboard
+/// itself as soon as it is shown: with a SwiftUI field the focus did not always move, and the
+/// letters reached the editor's shortcuts (O trimmed, Space played) instead of the text.
+private struct InlineTextField: NSViewRepresentable {
+    var text: String
+    var textColor: NSColor
+    var onChange: (String) -> Void
+    /// Return.
+    var onCommit: () -> Void
+    /// The field lost the keyboard (a click somewhere else).
+    var onEnd: () -> Void
+
+    func makeCoordinator() -> Coordinator {
+        return Coordinator(self)
+    }
+
+    func makeNSView(context: Context) -> NSTextField {
+        let field = NSTextField(string: text)
+        field.isBordered = false
+        field.drawsBackground = false
+        field.focusRingType = .none
+        field.font = NSFont.systemFont(ofSize: 15, weight: .bold)
+        field.textColor = textColor
+        field.placeholderString = "Type…"
+        field.delegate = context.coordinator
+        field.setAccessibilityLabel("Text on the video")
+        // The click that placed the text then focuses the editor itself (it is focusable for its
+        // shortcuts), after this field asked: so it asks again until it has the keyboard.
+        for delay in [0.0, 0.15, 0.35, 0.6] {
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+                if field.currentEditor() == nil, let window = field.window {
+                    window.makeKeyAndOrderFront(nil)
+                    window.makeFirstResponder(field)
+                }
+            }
+        }
+        return field
+    }
+
+    func updateNSView(_ field: NSTextField, context: Context) {
+        context.coordinator.parent = self
+        field.textColor = textColor
+        // Only from outside (the side panel); while typing the field holds the newest text.
+        if field.currentEditor() == nil && field.stringValue != text {
+            field.stringValue = text
+        }
+    }
+
+    final class Coordinator: NSObject, NSTextFieldDelegate {
+        var parent: InlineTextField
+        private var committed = false
+
+        init(_ parent: InlineTextField) {
+            self.parent = parent
+        }
+
+        func controlTextDidChange(_ notification: Notification) {
+            guard let field = notification.object as? NSTextField else { return }
+            parent.onChange(field.stringValue)
+        }
+
+        func control(_ control: NSControl, textView: NSTextView, doCommandBy selector: Selector) -> Bool {
+            if selector == #selector(NSResponder.insertNewline(_:)) || selector == #selector(NSResponder.cancelOperation(_:)) {
+                committed = true
+                parent.onCommit()
+                return true
+            }
+            return false
+        }
+
+        func controlTextDidEndEditing(_ notification: Notification) {
+            if committed { return }
+            parent.onEnd()
+        }
+    }
+}
+
+/// The arrow being dragged on the video: a line with a head at the end.
+private struct ArrowPreview: Shape {
+    var start: CGPoint
+    var end: CGPoint
+
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        path.move(to: start)
+        path.addLine(to: end)
+        let angle = atan2(end.y - start.y, end.x - start.x)
+        let head: CGFloat = 16
+        path.move(to: end)
+        path.addLine(to: CGPoint(x: end.x - head * cos(angle - .pi / 6), y: end.y - head * sin(angle - .pi / 6)))
+        path.move(to: end)
+        path.addLine(to: CGPoint(x: end.x - head * cos(angle + .pi / 6), y: end.y - head * sin(angle + .pi / 6)))
+        return path
+    }
+}
+
 private struct ToolbarTextButton: View {
+    var showsTitle = true
     let systemImage: String
     let title: String
     let help: String
@@ -266,7 +384,9 @@ private struct ToolbarTextButton: View {
         Button(action: action) {
             HStack(spacing: 6) {
                 Image(systemName: systemImage).font(.system(size: 13))
-                Text(title).font(.system(size: 13))
+                if showsTitle {
+                    Text(title).font(.system(size: 13)).lineLimit(1).fixedSize()
+                }
             }
             .foregroundStyle(isSelected ? Theme.accentSoft : Theme.text)
             .padding(.horizontal, 10)
@@ -276,6 +396,7 @@ private struct ToolbarTextButton: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(title)
         .tip(help)
     }
 }
@@ -340,7 +461,7 @@ private struct VideoStage: View {
 
                 // Outline of the selected overlay when it is on screen right now.
                 if let overlay = model.selectedOverlay, overlay.span.contains(model.playhead) {
-                    let rect = denormalize(overlay.kind == .text ? CGRect(origin: overlay.start, size: CGSize(width: 0.12, height: 0.05)) : overlay.rect, in: videoRect)
+                    let rect = denormalize(markBox(overlay), in: videoRect)
                     Rectangle()
                         .stroke(Theme.link, style: StrokeStyle(lineWidth: 1.5, dash: [5, 4]))
                         .frame(width: max(rect.width, 12), height: max(rect.height, 12))
@@ -350,13 +471,38 @@ private struct VideoStage: View {
                 }
 
                 if let start = dragStart, let current = dragCurrent, model.tool != .select {
-                    let rect = CGRect(x: min(start.x, current.x), y: min(start.y, current.y), width: abs(current.x - start.x), height: abs(current.y - start.y))
-                    Rectangle()
-                        .stroke(Theme.accent, style: StrokeStyle(lineWidth: 2, dash: [6, 4]))
-                        .background(Theme.accent.opacity(0.08))
-                        .frame(width: rect.width, height: rect.height)
-                        .offset(x: rect.minX, y: rect.minY)
-                        .allowsHitTesting(false)
+                    // While dragging: the arrow as it will be, a dashed area for a box or blur.
+                    if model.tool == .arrow {
+                        ArrowPreview(start: start, end: current)
+                            .stroke(Theme.accent, style: StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round))
+                            .allowsHitTesting(false)
+                    } else {
+                        let rect = CGRect(x: min(start.x, current.x), y: min(start.y, current.y), width: abs(current.x - start.x), height: abs(current.y - start.y))
+                        Rectangle()
+                            .stroke(Theme.accent, style: StrokeStyle(lineWidth: 2, dash: [6, 4]))
+                            .background(Theme.accent.opacity(0.08))
+                            .frame(width: rect.width, height: rect.height)
+                            .offset(x: rect.minX, y: rect.minY)
+                            .allowsHitTesting(false)
+                    }
+                }
+
+                // Typing a text mark right on the video.
+                if let id = model.editingTextID, let overlay = model.project.overlays.first(where: { item in item.id == id }) {
+                    let point = denormalize(CGRect(origin: overlay.start, size: .zero), in: videoRect).origin
+                    InlineTextField(
+                        text: overlay.text,
+                        textColor: overlay.color.contrastingText,
+                        onChange: { value in model.setText(value, of: id) },
+                        onCommit: { model.finishTextEditing() },
+                        onEnd: { model.finishTextEditing(removingEmpty: false) }
+                    )
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .frame(width: 240, height: 30)
+                    .background(overlay.color.color.opacity(0.9))
+                    .clipShape(RoundedRectangle(cornerRadius: 5))
+                    .offset(x: min(point.x, max(0, proxy.size.width - 240)), y: point.y)
                 }
 
                 if model.tool != .select {
@@ -380,16 +526,30 @@ private struct VideoStage: View {
                         finishDrag(value, videoRect: videoRect)
                     }
             )
-            .onTapGesture {
-                model.togglePlay()
+            .onTapGesture(count: 1, coordinateSpace: .local) { location in
+                handleClick(at: location, videoRect: videoRect)
             }
         }
+        .background(
+            GeometryReader { proxy in
+                Color.clear
+                    .onAppear { rememberStage(proxy) }
+                    .onChange(of: proxy.size) { rememberStage(proxy) }
+                    .onChange(of: aspect) { rememberStage(proxy) }
+            }
+        )
         .task {
             if let track = try? await model.asset.loadTracks(withMediaType: .video).first,
                let size = try? await track.load(.naturalSize), size.height > 0 {
                 aspect = size.width / size.height
             }
         }
+    }
+
+    private func rememberStage(_ proxy: GeometryProxy) {
+        let stage = proxy.frame(in: .global)
+        let video = fittedRect(in: proxy.size)
+        model.stageVideoRect = CGRect(x: stage.minX + video.minX, y: stage.minY + video.minY, width: video.width, height: video.height)
     }
 
     private func fittedRect(in size: CGSize) -> CGRect {
@@ -408,6 +568,44 @@ private struct VideoStage: View {
         return CGPoint(x: max(0, min(1, x)), y: max(0, min(1, y)))
     }
 
+    /// One click, without waiting to see if a second one follows (a double-click gesture made
+    /// every click late): typing ends, Text places text, a click on a mark picks it and a second
+    /// click on picked text types into it, anywhere else the video plays or pauses.
+    private func handleClick(at location: CGPoint, videoRect: CGRect) {
+        if model.editingTextID != nil {
+            model.finishTextEditing()
+            return
+        }
+        if model.tool == .text {
+            let point = normalize(location, in: videoRect)
+            model.addOverlay(kind: .text, start: point, end: point)
+            return
+        }
+        if model.tool != .select {
+            model.message = "Drag on the video to draw the \(model.tool.overlayKind?.title.lowercased() ?? "mark")"
+            return
+        }
+        for overlay in model.project.overlays.reversed() where overlay.span.contains(model.playhead) {
+            let box = denormalize(markBox(overlay), in: videoRect).insetBy(dx: -10, dy: -10)
+            if !box.contains(location) { continue }
+            if overlay.kind == .text && model.selection == .overlay(overlay.id) {
+                model.beginTextEditing(overlay.id)
+            } else {
+                model.selection = .overlay(overlay.id)
+            }
+            return
+        }
+        model.togglePlay()
+    }
+
+    /// The area a mark covers in 0…1 frame coordinates; text gets a small box at its start.
+    private func markBox(_ overlay: VideoOverlay) -> CGRect {
+        if overlay.kind == .text {
+            return VideoOverlay.textBox(overlay)
+        }
+        return overlay.rect
+    }
+
     private func denormalize(_ rect: CGRect, in video: CGRect) -> CGRect {
         return CGRect(x: video.minX + rect.minX * video.width, y: video.minY + rect.minY * video.height, width: rect.width * video.width, height: rect.height * video.height)
     }
@@ -420,18 +618,21 @@ private struct VideoStage: View {
             dragCurrent = value.location
             return
         }
-        // Move the selected overlay.
-        guard let overlay = model.selectedOverlay ?? moveOriginal else { return }
+        // Move the selected overlay: only one on screen now, and only when the drag starts on it.
+        // Before, any drag moved it, also while it was not in this frame, and it slid off the video.
         if moveOriginal == nil {
+            guard let overlay = model.selectedOverlay, overlay.span.contains(model.playhead) else { return }
+            let box = denormalize(markBox(overlay), in: videoRect).insetBy(dx: -12, dy: -12)
+            if !box.contains(value.startLocation) { return }
             moveOriginal = overlay
             model.checkpoint()
         }
         guard let original = moveOriginal else { return }
-        let dx = value.translation.width / videoRect.width
-        let dy = value.translation.height / videoRect.height
+        let box = markBox(original)
+        let shift = MarkMove.keepInside(minX: box.minX, minY: box.minY, maxX: box.maxX, maxY: box.maxY, dx: value.translation.width / videoRect.width, dy: value.translation.height / videoRect.height)
         var moved = original
-        moved.start = CGPoint(x: original.start.x + dx, y: original.start.y + dy)
-        moved.end = CGPoint(x: original.end.x + dx, y: original.end.y + dy)
+        moved.start = CGPoint(x: original.start.x + shift.dx, y: original.start.y + shift.dy)
+        moved.end = CGPoint(x: original.end.x + shift.dx, y: original.end.y + shift.dy)
         model.updateOverlay(moved)
     }
 

@@ -13,6 +13,18 @@ public struct EnvironmentSnapshot: Codable, Equatable {
         }
     }
 
+    /// A field Bugbear fills in by itself. The raw value is its usual name in the report.
+    public enum StandardField: String, CaseIterable, Codable {
+        case macOS = "macOS"
+        case device = "Device"
+        case display = "Display"
+        case app = "App"
+        case url = "URL"
+        case locale = "Locale"
+        case appearance = "Appearance"
+        case time = "Time"
+    }
+
     public var osVersion: String
     public var osBuild: String
     public var deviceModel: String
@@ -27,6 +39,10 @@ public struct EnvironmentSnapshot: Codable, Equatable {
     public var capturedAt: Date
     /// Report fields from Settings. Optional so captures saved before them still load.
     public var extras: [Field]?
+    /// Fields the tester turned off in Settings (`StandardField` raw values). Optional so older captures load.
+    public var hiddenFields: [String]?
+    /// Names the tester gave fields in Settings, by `StandardField` raw value.
+    public var renamedFields: [String: String]?
 
     public init(
         osVersion: String = "",
@@ -66,33 +82,92 @@ public struct EnvironmentSnapshot: Codable, Equatable {
         return "macOS \(osVersion) (\(osBuild))"
     }
 
-    /// Rows for the side panel, skipping empty values.
+    /// Whether this field goes into the panel, the badge and the report.
+    public func shows(_ field: StandardField) -> Bool {
+        guard let hidden = hiddenFields else { return true }
+        return !hidden.contains(field.rawValue)
+    }
+
+    /// The field's name in the panel and the report: the tester's own name, or the usual one.
+    public func name(of field: StandardField) -> String {
+        guard let names = renamedFields, let renamed = names[field.rawValue] else { return field.rawValue }
+        let trimmed = renamed.trimmingCharacters(in: .whitespaces)
+        if trimmed.isEmpty {
+            return field.rawValue
+        }
+        return trimmed
+    }
+
+    /// What a field holds in this capture, "" when nothing was collected.
+    public func value(of field: StandardField, timeZone zone: TimeZone = .current) -> String {
+        switch field {
+        case .macOS:
+            if osBuild.isEmpty { return osVersion }
+            return "\(osVersion) (\(osBuild))"
+        case .device:
+            return deviceModel
+        case .display:
+            return display
+        case .app:
+            if appName.isEmpty { return "" }
+            return appLine
+        case .url:
+            return url
+        case .locale:
+            return locale
+        case .appearance:
+            return appearance
+        case .time:
+            return TimeConverter.format(capturedAt, pattern: "yyyy-MM-dd HH:mm:ss", timeZone: zone)
+        }
+    }
+
+    /// Rows for the side panel, skipping empty values and fields turned off.
     public func rows(timeZone zone: TimeZone = .current) -> [(label: String, value: String)] {
         var rows: [(label: String, value: String)] = []
         for field in extras ?? [] {
             rows.append((label: field.name, value: field.value))
         }
-        rows.append((label: "macOS", value: osBuild.isEmpty ? osVersion : "\(osVersion) (\(osBuild))"))
-        if !deviceModel.isEmpty { rows.append((label: "Device", value: deviceModel)) }
-        if !display.isEmpty { rows.append((label: "Display", value: display)) }
-        if !appName.isEmpty { rows.append((label: "App", value: appLine)) }
-        if !url.isEmpty { rows.append((label: "URL", value: url)) }
-        if !locale.isEmpty { rows.append((label: "Locale", value: locale)) }
-        if !appearance.isEmpty { rows.append((label: "Appearance", value: appearance)) }
-        rows.append((label: "Time", value: TimeConverter.format(capturedAt, pattern: "yyyy-MM-dd HH:mm:ss", timeZone: zone)))
+        for field in StandardField.allCases where shows(field) {
+            let value = value(of: field, timeZone: zone)
+            if !value.isEmpty {
+                rows.append((label: name(of: field), value: value))
+            }
+        }
         return rows
     }
 
-    /// Short lines drawn as a badge over a screenshot or video.
+    /// Short lines drawn as a badge over a screenshot or video: every field that is on, values only.
     public func badgeLines(timeZone zone: TimeZone = .current) -> [String] {
         var lines: [String] = []
-        if appName.isEmpty {
-            lines.append(osLine)
-        } else {
-            lines.append("macOS \(osVersion) · \(appLine)")
+        var firstLine: [String] = []
+        let showsApp = shows(.app) && !appName.isEmpty
+        // Next to the app the build is left out to keep the line short.
+        if shows(.macOS) && showsApp {
+            firstLine.append("macOS \(osVersion)")
+        } else if shows(.macOS) {
+            firstLine.append(osLine)
         }
-        if !display.isEmpty { lines.append(display) }
-        if !url.isEmpty { lines.append(url) }
+        if showsApp {
+            firstLine.append(appLine)
+        }
+        if !firstLine.isEmpty {
+            lines.append(firstLine.joined(separator: " · "))
+        }
+        if shows(.device) && !deviceModel.isEmpty { lines.append(deviceModel) }
+        if shows(.display) && !display.isEmpty { lines.append(display) }
+        if shows(.url) && !url.isEmpty { lines.append(url) }
+        // Locale and appearance are short: one line for both.
+        var lookLine: [String] = []
+        if shows(.locale) && !locale.isEmpty {
+            lookLine.append(locale)
+        }
+        if shows(.appearance) && !appearance.isEmpty {
+            lookLine.append(appearance)
+        }
+        if !lookLine.isEmpty {
+            lines.append(lookLine.joined(separator: " · "))
+        }
         var fieldTexts: [String] = []
         for field in extras ?? [] {
             fieldTexts.append("\(field.name): \(field.value)")
@@ -100,7 +175,9 @@ public struct EnvironmentSnapshot: Codable, Equatable {
         if !fieldTexts.isEmpty {
             lines.append(fieldTexts.joined(separator: " · "))
         }
-        lines.append(TimeConverter.format(capturedAt, pattern: "yyyy-MM-dd HH:mm:ss", timeZone: zone))
+        if shows(.time) {
+            lines.append(TimeConverter.format(capturedAt, pattern: "yyyy-MM-dd HH:mm:ss", timeZone: zone))
+        }
         return lines
     }
 

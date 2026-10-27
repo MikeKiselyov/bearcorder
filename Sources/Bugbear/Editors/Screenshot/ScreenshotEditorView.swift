@@ -20,7 +20,7 @@ struct ScreenshotEditorView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
-        .background(Theme.window)
+        .auroraBackground()
         .onAppear {
             if document == nil {
                 let opened = ScreenshotDocument(capture: capture)
@@ -54,12 +54,11 @@ private struct ScreenshotEditorContent: View {
     var switchingScreen: Bool
     var onSelectScreen: (String) -> Void
 
-    static let editorTools: [AnnotationTool] = [.select, .arrow, .rectangle, .ellipse, .line, .highlighter, .pen, .text, .step, .blur, .magnifier, .crop]
+    static let editorTools = AnnotationTool.screenshotEditorTools
 
     var body: some View {
         VStack(spacing: 0) {
             toolbar
-            Divider().overlay(Theme.border)
             HStack(spacing: 0) {
                 AnnotationCanvas(document: document)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -75,7 +74,7 @@ private struct ScreenshotEditorContent: View {
                         document.insertImage(image)
                         return true
                     }))
-                Divider().overlay(Theme.border)
+                Rectangle().fill(Theme.border).frame(width: 1)
                 sidebar
             }
             Divider().overlay(Theme.border)
@@ -94,7 +93,7 @@ private struct ScreenshotEditorContent: View {
             ToolButton(systemImage: "arrow.uturn.forward", help: "Redo what was undone (⇧⌘Z)") { document.redo() }
                 .disabled(!document.canRedo)
 
-            Rectangle().fill(Theme.borderStrong).frame(width: 1, height: 24).padding(.horizontal, 8)
+            Rectangle().fill(Theme.borderStrong).frame(width: 1, height: 22).padding(.horizontal, 6)
 
             ForEach(Self.editorTools) { tool in
                 ToolButton(systemImage: tool.symbol, help: "\(tool.title) (\(String(tool.keyboardShortcut ?? " ").uppercased())): \(tool.purpose)", isSelected: document.tool == tool) {
@@ -108,14 +107,14 @@ private struct ScreenshotEditorContent: View {
                 combine()
             }
 
-            Rectangle().fill(Theme.borderStrong).frame(width: 1, height: 24).padding(.horizontal, 8)
+            Rectangle().fill(Theme.borderStrong).frame(width: 1, height: 22).padding(.horizontal, 6)
 
             ColorPalette(selection: document.color, swatchSize: 18) { color in
                 document.color = color
                 document.applyStyleToSelection()
             }
 
-            Rectangle().fill(Theme.borderStrong).frame(width: 1, height: 24).padding(.horizontal, 8)
+            Rectangle().fill(Theme.borderStrong).frame(width: 1, height: 22).padding(.horizontal, 6)
 
             HStack(spacing: 6) {
                 FillToggle(isFilled: document.isFilled, isEnabled: document.fillTarget != nil) { filled in
@@ -126,9 +125,13 @@ private struct ScreenshotEditorContent: View {
                 }
             }
 
-            Spacer(minLength: 0)
         }
+        .padding(.horizontal, 6)
+        .frame(height: 44)
+        .glassCard(cornerRadius: 14)
+        .shadow(color: Color.black.opacity(0.35), radius: 14, y: 6)
         .padding(.horizontal, 12)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .frame(height: 52)
     }
 
@@ -146,8 +149,9 @@ private struct ScreenshotEditorContent: View {
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 6)
-            .background(Color(hex: 0x1C1D20, alpha: 0.92))
-            .clipShape(RoundedRectangle(cornerRadius: 8))
+            .background(Color(hex: 0x1E1A24, alpha: 0.92))
+            .overlay(RoundedRectangle(cornerRadius: 10).stroke(Theme.border, lineWidth: 1))
+            .clipShape(RoundedRectangle(cornerRadius: 10))
             .padding(.top, 10)
         }
     }
@@ -156,20 +160,19 @@ private struct ScreenshotEditorContent: View {
 
     private var sidebar: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 0) {
-                environmentPanel
-                Divider().overlay(Theme.border)
-                presetPanel
-                Divider().overlay(Theme.border)
+            VStack(alignment: .leading, spacing: 10) {
+                environmentPanel.frame(maxWidth: .infinity, alignment: .leading).glassCard()
+                    .onAppear { document.refreshEnvironmentFields(includingYourFields: false) }
+                    .onChange(of: EnvironmentCollector.fieldSettings) { document.refreshEnvironmentFields(includingYourFields: true) }
                 if let selected = document.selected {
-                    inspector(selected)
-                    Divider().overlay(Theme.border)
+                    inspector(selected).frame(maxWidth: .infinity, alignment: .leading).glassCard()
                 }
-                layersPanel
+                layersPanel.frame(maxWidth: .infinity, alignment: .leading).glassCard()
             }
+            .padding(12)
         }
-        .frame(width: 270)
-        .background(Theme.window)
+        .frame(width: 290)
+        .background(Theme.sidebar)
     }
 
     private var environmentPanel: some View {
@@ -177,12 +180,19 @@ private struct ScreenshotEditorContent: View {
             HStack {
                 SectionLabel("Environment")
                 Spacer()
+                Button("Edit") {
+                    WindowManager.shared.openSettings(page: .reports)
+                }
+                .buttonStyle(.plain)
+                .font(.system(size: 12))
+                .foregroundStyle(Theme.link)
+                .tip("Choose the fields, their names and your own fields in Settings → Bug reports")
                 Button("Copy") { document.copyEnvironment() }
                     .buttonStyle(.plain)
                     .font(.system(size: 12))
                     .foregroundStyle(Theme.link)
             }
-            CopyReportButton(help: "Steps from your clicks and keys in the last minute, environment and the saved file") { format in
+            CopyReportButton(help: "Steps from your clicks and keys in the last minute, environment and the saved file", stepCount: BugReportBuilder.stepCount(for: document.capture, timeMap: nil)) { format in
                 document.copyBugReport(format: format)
             }
             .frame(maxWidth: .infinity)
@@ -214,43 +224,13 @@ private struct ScreenshotEditorContent: View {
                 .font(.system(size: 12))
             }
         }
-        .padding(16)
-    }
-
-    private var presetPanel: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            SectionLabel("Style preset")
-            Menu {
-                ForEach(StylePreset.all) { preset in
-                    Button(preset.name) { document.applyPreset(preset) }
-                }
-            } label: {
-                HStack {
-                    Text(currentPresetName).font(.system(size: 13))
-                    Spacer()
-                    Image(systemName: "chevron.down").font(.system(size: 10))
-                }
-            }
-            .menuStyle(.borderlessButton)
-            .padding(.horizontal, 10)
-            .frame(height: 34)
-            .background(Theme.control)
-            .clipShape(RoundedRectangle(cornerRadius: 7))
-        }
-        .padding(16)
-    }
-
-    private var currentPresetName: String {
-        for preset in StylePreset.all where preset.color == document.color && preset.stroke == document.stroke {
-            return preset.name
-        }
-        return "Custom"
+        .padding(14)
     }
 
     private func inspector(_ annotation: Annotation) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             SectionLabel("Selected · \(annotation.tool.title)")
-            if annotation.tool == .text {
+            if annotation.tool.hasLabel {
                 TextField("Text", text: Binding(get: {
                     document.selected?.text ?? ""
                 }, set: { value in
@@ -278,7 +258,7 @@ private struct ScreenshotEditorContent: View {
             .buttonStyle(.plain)
             .foregroundStyle(Theme.accentSoft)
         }
-        .padding(16)
+        .padding(14)
     }
 
     private var layersPanel: some View {
@@ -292,7 +272,7 @@ private struct ScreenshotEditorContent: View {
             ForEach(document.annotations.reversed()) { annotation in
                 let isSelected = annotation.id == document.selectedId
                 HStack(spacing: 10) {
-                    Image(systemName: annotation.tool.symbol)
+                    ToolIcon(name: annotation.tool.symbol, size: 11)
                         .font(.system(size: 11))
                         .foregroundStyle(annotation.color.color)
                         .frame(width: 16)
@@ -309,8 +289,8 @@ private struct ScreenshotEditorContent: View {
                 }
                 .padding(.horizontal, 8)
                 .frame(height: 32)
-                .background(isSelected ? Theme.control : Color.clear)
-                .clipShape(RoundedRectangle(cornerRadius: 6))
+                .background(isSelected ? Theme.controlSelected : Color.clear)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
                 .contentShape(Rectangle())
                 .onTapGesture {
                     document.tool = .select
@@ -318,7 +298,7 @@ private struct ScreenshotEditorContent: View {
                 }
             }
         }
-        .padding(16)
+        .padding(14)
     }
 
     // MARK: Bottom bar
@@ -338,6 +318,7 @@ private struct ScreenshotEditorContent: View {
                 Picker(selection: Binding(get: { document.capture.selectedScreen ?? screens[0].id }, set: { id in onSelectScreen(id) })) {
                     ForEach(screens) { screen in
                         Text(screen.name).tag(screen.id)
+                            .accessibilityLabel("Screen: \(screen.name)")
                     }
                 } label: {
                     EmptyView()
@@ -402,11 +383,12 @@ private struct ScreenshotEditorContent: View {
             .pickerStyle(.menu)
             .frame(width: 210)
             .labelsHidden()
+            .accessibilityLabel("File type")
             .tip("File type and quality for Save, Drag and the file in Copy, with the size it comes out at. \(document.exportFormat.detail)")
 
             Button("Save to folder") {
                 if let url = document.saveToFolder() {
-                    NSWorkspace.shared.activateFileViewerSelecting([url])
+                    SystemActions.reveal([url])
                 }
             }
             .buttonStyle(SecondaryButtonStyle())
@@ -435,27 +417,17 @@ private struct ScreenshotEditorContent: View {
     }
 
     private func insertImage() {
-        let panel = NSOpenPanel()
-        panel.allowedContentTypes = [.image]
-        panel.allowsMultipleSelection = false
-        panel.message = "Pick a screenshot or picture to place on this one"
-        panel.directoryURL = AppSettings.shared.outputFolder
-        if panel.runModal() == .OK, let url = panel.url, let image = ImageFiles.load(url) {
+        let urls = SystemActions.chooseImages(message: "Pick a screenshot or picture to place on this one", multiple: false, startingAt: AppSettings.shared.outputFolder)
+        if let url = urls.first, let image = ImageFiles.load(url) {
             document.insertImage(image)
         }
     }
 
     private func combine() {
-        let panel = NSOpenPanel()
-        panel.allowedContentTypes = [.image]
-        panel.allowsMultipleSelection = true
-        panel.message = "Pick screenshots to place to the right"
-        panel.directoryURL = AppSettings.shared.outputFolder
-        if panel.runModal() == .OK {
-            for url in panel.urls {
-                if let image = ImageFiles.load(url) {
-                    document.combine(with: image)
-                }
+        let urls = SystemActions.chooseImages(message: "Pick screenshots to place to the right", multiple: true, startingAt: AppSettings.shared.outputFolder)
+        for url in urls {
+            if let image = ImageFiles.load(url) {
+                document.combine(with: image)
             }
         }
     }

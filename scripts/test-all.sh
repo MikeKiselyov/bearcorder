@@ -8,6 +8,7 @@
 # Suites:
 #   unit       swift test: parsers, converters, reports, timelines, disk tree (BugbearCore)
 #   self-test  media pipeline: export, edits, GIF, size limits, annotations, OCR, QR, stitching
+#   controls   every control in scripts/controls.txt has a check in the tests
 #   e2e        the real app: buffer, saving, recording with pause, audio, markers, crash watch, updates
 #   features   the real app with a browser: scrolling screenshot, ruler, color picker, overlay,
 #              area recording, shortcuts, reports, displays, menu panel, disk space
@@ -41,7 +42,13 @@ run_suite() {
     local status=$?
     local seconds=$(($(date +%s) - started))
     local summary
-    summary=$(grep -E "passed, [0-9]+ failed|Executed [0-9]+ tests|ALL CHECKS PASSED|ALL PERFORMANCE CHECKS PASSED|FAILED" "$log" | tail -1 | sed -E 's/^[[:space:]]+//')
+    summary=$(grep -E "passed, [0-9]+ failed|Executed [0-9]+ tests|ALL CHECKS PASSED|ALL PERFORMANCE CHECKS PASSED|control coverage ok|FAILED" "$log" | tail -1 | sed -E 's/^[[:space:]]+//')
+    # A suite that stops halfway can still exit 0 (its exit trap runs last); no summary line
+    # means it did not finish.
+    if [ "$status" = "0" ] && [ -z "$summary" ]; then
+        status=1
+        summary="stopped before its summary"
+    fi
     if [ "$status" = "0" ]; then
         echo "    ok - $summary (${seconds}s)"
         RESULTS+=("ok    $summary")
@@ -64,6 +71,7 @@ self_test() {
 
 run_suite unit swift test
 run_suite self-test self_test
+run_suite controls python3 -I scripts/control-coverage.py
 if [ "$QUICK" = "0" ]; then
     run_suite e2e scripts/e2e.sh
     run_suite features scripts/e2e-features.sh

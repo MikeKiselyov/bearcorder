@@ -6,6 +6,8 @@ struct TimelineEditor: View {
     @Bindable var model: VideoEditorModel
     @State private var rangeStart: Double?
     @State private var trimDragOriginal: TimeSpan?
+    /// A drag on the ruler: from the playhead it moves it, elsewhere it selects a range.
+    @State private var rulerDrag = RulerDrag()
 
     private let labelWidth: CGFloat = 84
     private let horizontalPadding: CGFloat = 16
@@ -93,22 +95,25 @@ struct TimelineEditor: View {
             .gesture(
                 DragGesture(minimumDistance: 0)
                     .onChanged { value in
-                        let time = clampTime(value.location.x / scale)
-                        if abs(value.translation.width) < 3 {
-                            model.seek(toSource: time)
-                            return
+                        let action = rulerDrag.changed(startX: value.startLocation.x, x: value.location.x, playheadX: model.playhead * scale, scale: scale)
+                        switch action {
+                        case .seek(let time):
+                            model.seek(toSource: clampTime(time))
+                        case .select(let start, let end):
+                            model.range = TimeSpan(start: clampTime(start), end: clampTime(end))
                         }
-                        let start = clampTime(value.startLocation.x / scale)
-                        model.range = TimeSpan(start: start, end: time)
                     }
                     .onEnded { value in
-                        if abs(value.translation.width) < 3 {
+                        if rulerDrag.ended(startX: value.startLocation.x, x: value.location.x) {
                             model.range = nil
                         }
                     }
             )
         }
     }
+
+    /// Extra grab area on each side of a trim handle, in points.
+    static let trimGrabPadding: CGFloat = 8
 
     private func rulerStep(scale: CGFloat) -> Double {
         let candidates: [Double] = [0.5, 1, 2, 5, 10, 15, 30, 60]
@@ -141,13 +146,24 @@ struct TimelineEditor: View {
                 }
             }
             .clipShape(RoundedRectangle(cornerRadius: 6))
+            // Dragging along the frames moves the playhead; the trim handles and cuts on top
+            // keep their own gestures.
+            .contentShape(Rectangle())
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { value in
+                        model.seek(toSource: clampTime(value.location.x / scale))
+                    }
+            )
 
             // Trimmed-away areas.
             Rectangle().fill(Color(hex: 0x0E0F11, alpha: 0.72))
                 .frame(width: trim.start * scale)
+                .allowsHitTesting(false)
             Rectangle().fill(Color(hex: 0x0E0F11, alpha: 0.72))
                 .frame(width: max(0, (model.duration - trim.end) * scale))
                 .offset(x: trim.end * scale)
+                .allowsHitTesting(false)
 
             // Cuts, hatched.
             ForEach(Array(model.project.timeline.cuts.enumerated()), id: \.offset) { index, cut in
@@ -178,8 +194,12 @@ struct TimelineEditor: View {
             .fill(Theme.accent)
             .frame(width: 10, height: 30)
             .overlay(Rectangle().fill(Theme.accentText.opacity(0.6)).frame(width: 2, height: 12))
+            // A wider area to grab than the handle looks.
+            .padding(.horizontal, TimelineEditor.trimGrabPadding)
+            .frame(height: 46)
+            .contentShape(Rectangle())
             .tip(isStart ? "Trim start (I)" : "Trim end (O)")
-            .offset(x: time * scale - 5)
+            .offset(x: time * scale - 5 - TimelineEditor.trimGrabPadding)
             .gesture(
                 DragGesture()
                     .onChanged { value in
@@ -256,7 +276,7 @@ struct TimelineEditor: View {
                     span: overlay.span,
                     scale: scale,
                     maxTime: model.duration,
-                    label: overlay.kind == .text ? overlay.text : overlay.kind.title,
+                    label: overlay.kind == .text && !overlay.text.isEmpty ? overlay.text : overlay.kind.title,
                     fill: overlay.kind == .blur ? Color(hex: 0x5A5E66) : overlay.color.color,
                     textColor: overlay.kind == .blur ? Theme.text : Color(nsColor: overlay.color.contrastingText),
                     isSelected: model.selection == .overlay(overlay.id),
@@ -275,6 +295,7 @@ struct TimelineEditor: View {
                 )
             }
         }
+        .coordinateSpace(name: SpanBar.trackSpace)
     }
 
     private func speedTrack(scale: CGFloat) -> some View {
@@ -314,10 +335,13 @@ struct TimelineEditor: View {
                 .onTapGesture { model.selection = .freeze(index) }
             }
         }
+        .coordinateSpace(name: SpanBar.trackSpace)
     }
 }
 
-/// A draggable bar for a time span: drag the body to move, the edges to resize.
+/// A draggable bar for a time span: drag the body to move, the edges to resize. One drag gesture
+/// decides by where it starts: separate gestures on the edges lost to the bar's own, so the
+/// edges never resized.
 private struct SpanBar: View {
     let span: TimeSpan
     let scale: CGFloat
@@ -330,7 +354,14 @@ private struct SpanBar: View {
     let onChange: (TimeSpan) -> Void
     let onSelect: () -> Void
 
+    private enum DragPart {
+        case start
+        case end
+        case body
+    }
+
     @State private var original: TimeSpan?
+    @State private var part: DragPart = .body
 
     var body: some View {
         let width = max(10, span.duration * scale)
@@ -343,35 +374,74 @@ private struct SpanBar: View {
                 .foregroundStyle(textColor)
                 .lineLimit(1)
                 .padding(.horizontal, 8)
-            // Edge handles.
+            // The edges show the resize cursor; the drag below does the resizing.
             HStack {
-                edge(isStart: true)
+                edgeCursor(width: SpanBar.edgeWidth(barWidth: width))
                 Spacer(minLength: 0)
-                edge(isStart: false)
+                edgeCursor(width: SpanBar.edgeWidth(barWidth: width))
             }
         }
         .frame(width: width, height: 20)
-        .offset(x: span.start * scale)
+        // A name the tests find the bar by, to drag it and its edges with the real mouse.
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Bar: \(label)")
+        .accessibilityAddTraits(.isButton)
         .contentShape(Rectangle())
         .onTapGesture(perform: onSelect)
         .gesture(
-            DragGesture(minimumDistance: 2)
+            // Measured on the track, which stays put: measured on the bar, which follows the
+            // pointer, a move came out shorter than the drag.
+            DragGesture(minimumDistance: 2, coordinateSpace: .named(SpanBar.trackSpace))
                 .onChanged { value in
-                    begin()
+                    if original == nil {
+                        original = span
+                        part = SpanBar.part(at: value.startLocation.x - span.start * scale, barWidth: width)
+                        onSelect()
+                        onBegin()
+                    }
                     guard let start = original else { return }
                     let delta = value.translation.width / scale
-                    var newStart = start.start + delta
-                    newStart = max(0, min(maxTime - start.duration, newStart))
-                    onChange(TimeSpan(start: newStart, end: newStart + start.duration))
+                    switch part {
+                    case .start:
+                        let newStart = max(0, min(start.end - 0.1, start.start + delta))
+                        onChange(TimeSpan(start: newStart, end: start.end))
+                    case .end:
+                        let newEnd = min(maxTime, max(start.start + 0.1, start.end + delta))
+                        onChange(TimeSpan(start: start.start, end: newEnd))
+                    case .body:
+                        var newStart = start.start + delta
+                        newStart = max(0, min(maxTime - start.duration, newStart))
+                        onChange(TimeSpan(start: newStart, end: newStart + start.duration))
+                    }
                 }
                 .onEnded { _ in original = nil }
         )
+        .offset(x: span.start * scale)
     }
 
-    private func edge(isStart: Bool) -> some View {
+    /// The coordinate space of the track the bars sit on.
+    static let trackSpace = "spanBarTrack"
+
+    /// How much of each end resizes: 10 pt, less on a short bar so its middle still moves it.
+    static func edgeWidth(barWidth: CGFloat) -> CGFloat {
+        return min(10, barWidth / 3)
+    }
+
+    private static func part(at x: CGFloat, barWidth: CGFloat) -> DragPart {
+        let edge = edgeWidth(barWidth: barWidth)
+        if x <= edge {
+            return .start
+        }
+        if x >= barWidth - edge {
+            return .end
+        }
+        return .body
+    }
+
+    private func edgeCursor(width: CGFloat) -> some View {
         Rectangle()
             .fill(Color.white.opacity(0.001))
-            .frame(width: 8)
+            .frame(width: width)
             .onHover { inside in
                 if inside {
                     NSCursor.resizeLeftRight.push()
@@ -379,30 +449,6 @@ private struct SpanBar: View {
                     NSCursor.pop()
                 }
             }
-            .gesture(
-                DragGesture(minimumDistance: 1)
-                    .onChanged { value in
-                        begin()
-                        guard let start = original else { return }
-                        let delta = value.translation.width / scale
-                        if isStart {
-                            let newStart = max(0, min(start.end - 0.1, start.start + delta))
-                            onChange(TimeSpan(start: newStart, end: start.end))
-                        } else {
-                            let newEnd = min(maxTime, max(start.start + 0.1, start.end + delta))
-                            onChange(TimeSpan(start: start.start, end: newEnd))
-                        }
-                    }
-                    .onEnded { _ in original = nil }
-            )
-    }
-
-    private func begin() {
-        if original == nil {
-            original = span
-            onSelect()
-            onBegin()
-        }
     }
 }
 

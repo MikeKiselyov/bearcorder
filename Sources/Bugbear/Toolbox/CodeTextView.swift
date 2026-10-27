@@ -8,6 +8,8 @@ struct CodeTextView: NSViewRepresentable {
     var isEditable = true
     var highlight: ((String) -> NSAttributedString)? = nil
     var placeholder: String = ""
+    /// What VoiceOver (and tests) call it; "Input" or "Output" when not given.
+    var label: String? = nil
 
     func makeNSView(context: Context) -> NSScrollView {
         let scrollView = NSTextView.scrollableTextView()
@@ -33,7 +35,7 @@ struct CodeTextView: NSViewRepresentable {
         textView.textContainerInset = NSSize(width: 12, height: 10)
         textView.isEditable = isEditable
         textView.isSelectable = true
-        textView.setAccessibilityLabel(isEditable ? "Input" : "Output")
+        textView.setAccessibilityLabel(label ?? (isEditable ? "Input" : "Output"))
         context.coordinator.textView = textView
         apply(text, to: textView)
         return scrollView

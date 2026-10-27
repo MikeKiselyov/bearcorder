@@ -2,58 +2,111 @@ import AppKit
 import BugbearCore
 import SwiftUI
 
-/// Settings → Bug reports: default format and fields added to every capture.
+/// Settings → Bug reports: default format, the fields Bugbear fills in and the tester's own fields.
 struct ReportSettingsSection: View {
     @Bindable private var settings = AppSettings.shared
 
     private let suggestions = ["Stand", "Build", "Test account", "Browser profile", "Feature flag", "Severity"]
 
     var body: some View {
-        Section("Bug reports") {
+        Section {
             Picker("Copy bug report as", selection: $settings.bugReportFormat) {
                 ForEach(BugReport.Format.allCases) { format in
                     Text(format.rawValue).tag(format.rawValue)
                 }
             }
             .tip("Format used when you copy a bug report from the editor")
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Your fields")
-                Text("Added to every new capture: the environment panel, the badge and the bug report. Empty values are skipped.")
+        }
+
+        Section {
+            ForEach(EnvironmentSnapshot.StandardField.allCases, id: \.self) { field in
+                HStack(spacing: 10) {
+                    Toggle("Include \(field.rawValue)", isOn: includeBinding(field))
+                        .toggleStyle(.checkbox)
+                        .labelsHidden()
+                        .tip("Put \(field.rawValue) into the panel, the badge and the bug report")
+                    TextField("", text: nameBinding(field), prompt: Text(field.rawValue))
+                        .labelsHidden()
+                        .textFieldStyle(.roundedBorder)
+                        .frame(width: 150)
+                        .accessibilityLabel("Name for \(field.rawValue)")
+                        .tip("The name shown in the panel and the report; clear it to go back to \(field.rawValue)")
+                        .disabled(!isIncluded(field))
+                    Text(example(field))
+                        .font(.system(size: 12))
+                        .foregroundStyle(isIncluded(field) ? Theme.textSecondary : Theme.textTertiary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                    Spacer(minLength: 0)
+                }
+            }
+        } header: {
+            Text("Filled in by \(AppInfo.name)")
+        } footer: {
+            Text("Collected with every capture. Rename a field or turn it off, and captures you already have show it that way too.")
+                .font(.system(size: 12))
+                .foregroundStyle(Theme.textSecondary)
+        }
+
+        Section {
+            if settings.reportFields.isEmpty {
+                Text("None yet. Add the stand, build or test account you work with, and every capture gets it.")
                     .font(.system(size: 12))
                     .foregroundStyle(Theme.textSecondary)
-                ForEach(settings.reportFields.indices, id: \.self) { index in
-                    HStack(spacing: 8) {
-                        TextField("Name", text: fieldBinding(index, name: true))
-                            .frame(width: 130)
-                            .tip("Field name, for example Stand or Build")
-                        TextField("Value", text: fieldBinding(index, name: false))
-                            .tip("Field value added to every new capture; leave empty to skip it")
-                        Button {
-                            settings.reportFields.remove(at: index)
-                        } label: {
-                            Image(systemName: "minus.circle")
-                        }
-                        .buttonStyle(.plain)
-                        .tip("Remove this field")
+            }
+            ForEach(settings.reportFields.indices, id: \.self) { index in
+                HStack(spacing: 8) {
+                    TextField("Name", text: fieldBinding(index, name: true))
+                        .frame(width: 130)
+                        .tip("Field name, for example Stand or Build")
+                    TextField("Value", text: fieldBinding(index, name: false))
+                        .tip("Field value added to every new capture; leave empty to skip it")
+                    Button {
+                        settings.reportFields.remove(at: index)
+                    } label: {
+                        Image(systemName: "minus.circle")
                     }
-                    .textFieldStyle(.roundedBorder)
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Remove field")
+                    .tip("Remove this field")
                 }
-                HStack(spacing: 10) {
-                    Button("Add field") {
-                        settings.reportFields.append(EnvironmentSnapshot.Field(name: "", value: ""))
-                    }
-                    .tip("Add your own field to every new capture and bug report")
+                .textFieldStyle(.roundedBorder)
+            }
+            HStack(spacing: 8) {
+                Button {
+                    settings.reportFields.append(EnvironmentSnapshot.Field(name: "", value: ""))
+                } label: {
+                    Label("New field", systemImage: "plus")
+                }
+                .tip("Add an empty field: type its name and value")
+                if !unusedSuggestions.isEmpty {
+                    Text("or")
+                        .font(.system(size: 12))
+                        .foregroundStyle(Theme.textSecondary)
                     ForEach(unusedSuggestions, id: \.self) { name in
-                        Button(name) {
+                        Button {
                             settings.reportFields.append(EnvironmentSnapshot.Field(name: name, value: ""))
+                        } label: {
+                            Text("+ \(name)")
+                                .font(.system(size: 12))
+                                .padding(.horizontal, 8)
+                                .frame(height: 22)
+                                .background(Theme.control)
+                                .clipShape(Capsule())
                         }
                         .buttonStyle(.plain)
-                        .font(.system(size: 12))
                         .foregroundStyle(Theme.link)
-                        .tip("Add a \(name) field to every new capture")
+                        .accessibilityLabel(name)
+                        .tip("Add a \(name) field, then type its value")
                     }
                 }
             }
+        } header: {
+            Text("Your fields")
+        } footer: {
+            Text("Added to every new capture: the environment panel, the badge and the bug report. Empty values are skipped.")
+                .font(.system(size: 12))
+                .foregroundStyle(Theme.textSecondary)
         }
     }
 
@@ -63,6 +116,59 @@ struct ReportSettingsSection: View {
             result.append(name)
         }
         return Array(result.prefix(4))
+    }
+
+    private func isIncluded(_ field: EnvironmentSnapshot.StandardField) -> Bool {
+        return !settings.hiddenEnvironmentFields.contains(field.rawValue)
+    }
+
+    private func includeBinding(_ field: EnvironmentSnapshot.StandardField) -> Binding<Bool> {
+        return Binding(get: {
+            return isIncluded(field)
+        }, set: { included in
+            var hidden = settings.hiddenEnvironmentFields
+            hidden.removeAll { name in name == field.rawValue }
+            if !included {
+                hidden.append(field.rawValue)
+            }
+            settings.hiddenEnvironmentFields = hidden
+        })
+    }
+
+    private func nameBinding(_ field: EnvironmentSnapshot.StandardField) -> Binding<String> {
+        return Binding(get: {
+            return settings.renamedEnvironmentFields[field.rawValue] ?? ""
+        }, set: { text in
+            // Empty shows the usual name as the placeholder; typing it is not a rename either.
+            if text.trimmingCharacters(in: .whitespaces).isEmpty || text == field.rawValue {
+                settings.renamedEnvironmentFields[field.rawValue] = nil
+            } else {
+                settings.renamedEnvironmentFields[field.rawValue] = text
+            }
+        })
+    }
+
+    /// What the field holds, as on this Mac now or as an example when it depends on the capture.
+    private func example(_ field: EnvironmentSnapshot.StandardField) -> String {
+        switch field {
+        case .macOS:
+            let version = ProcessInfo.processInfo.operatingSystemVersion
+            return "\(version.majorVersion).\(version.minorVersion).\(version.patchVersion) (\(EnvironmentCollector.sysctlString("kern.osversion")))"
+        case .device:
+            return EnvironmentCollector.sysctlString("hw.model")
+        case .display:
+            return EnvironmentCollector.displayDescription()
+        case .app:
+            return "The app in front and its version"
+        case .url:
+            return "The browser tab address"
+        case .locale:
+            return Locale.current.identifier.replacingOccurrences(of: "_", with: "-")
+        case .appearance:
+            return "Dark or Light"
+        case .time:
+            return "When the capture was taken"
+        }
     }
 
     private func fieldBinding(_ index: Int, name: Bool) -> Binding<String> {
@@ -95,7 +201,7 @@ struct StorageSettingsSection: View {
                 Text("Captures use")
                 Spacer()
                 Text(usedText).foregroundStyle(Theme.textSecondary)
-                Button("Show in Finder") { NSWorkspace.shared.open(AppPaths.captures) }
+                Button("Show in Finder") { SystemActions.open(AppPaths.captures) }
                     .tip("Open the captures folder in Finder")
             }
             Picker("Delete captures older than", selection: $settings.keepCapturesDays) {
@@ -111,7 +217,7 @@ struct StorageSettingsSection: View {
                 Text("30 days").tag(30)
                 Text("Never").tag(0)
             }
-            .tip("Clips Bugbear saved by itself when an app crashed, with the crash report")
+            .tip("Clips \(AppInfo.name) saved by itself when an app crashed, with the crash report")
             Picker("Keep captures under", selection: $settings.maxCapturesGB) {
                 Text("No limit").tag(0)
                 Text("2 GB").tag(2)
@@ -128,6 +234,7 @@ struct StorageSettingsSection: View {
                 Button("Clean up now") {
                     Task {
                         let deleted = await AppState.shared.cleanUpStorage()
+                        Log.info("clean up now: deleted \(deleted)")
                         resultText = deleted == 1 ? "Deleted 1 capture" : "Deleted \(deleted) captures"
                         await measure()
                     }

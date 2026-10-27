@@ -64,6 +64,10 @@ final class SpaceModel {
     @ObservationIgnored private var scanTask: Task<Void, Never>?
     /// Tests point this at a made-up home folder.
     @ObservationIgnored var homeOverride: URL?
+    /// And this at a made-up Applications folder, so a scan stays inside the test's files.
+    @ObservationIgnored var applicationsOverride: URL?
+    /// Tests: a wait before scanning, so a scan of a tiny made-up home is still running for "Stop".
+    @ObservationIgnored var scanStartDelay: Double = 0
 
     var home: URL {
         return homeOverride ?? FileManager.default.homeDirectoryForCurrentUser
@@ -201,7 +205,7 @@ final class SpaceModel {
             roots.append(DiskScanner.Root(name: inner, url: home.appendingPathComponent(inner), skip: relative))
         } else {
             roots.append(DiskScanner.Root(name: "Home", url: home, skip: DiskScanner.skippedInScan))
-            roots.append(DiskScanner.Root(name: "Applications", url: URL(fileURLWithPath: "/Applications"), skip: []))
+            roots.append(DiskScanner.Root(name: "Applications", url: applicationsOverride ?? URL(fileURLWithPath: "/Applications"), skip: []))
         }
         var checks: [AccessCheck] = []
         if subfolder == nil {
@@ -243,6 +247,10 @@ final class SpaceModel {
             scanRoots = roots
             let scanRootsNow = roots
             scanState = .running(DiskScanner.Progress())
+            if scanStartDelay > 0 {
+                try? await Task.sleep(nanoseconds: UInt64(scanStartDelay * 1_000_000_000))
+                if generation != scanGeneration { return }
+            }
             // 2. The scan itself.
             let result = await Task.detached(priority: .utility) { () -> DiskScanner.ScanResult? in
                 return DiskScanner.scan(roots: scanRootsNow, includeAppData: withAppData, stop: stop) { progress in
@@ -306,14 +314,14 @@ final class SpaceModel {
     // MARK: Files
 
     func reveal(_ url: URL) {
-        NSWorkspace.shared.activateFileViewerSelecting([url])
+        SystemActions.reveal([url])
     }
 
     /// Moves a file to the Trash, where it can still be put back.
     func moveToTrash(_ path: String) {
         confirmingFile = nil
         do {
-            try FileManager.default.trashItem(at: URL(fileURLWithPath: path), resultingItemURL: nil)
+            try SystemActions.trash(URL(fileURLWithPath: path))
             var kept: [TopFiles.File] = []
             var freed: Int64 = 0
             for file in topFiles {

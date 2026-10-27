@@ -67,6 +67,13 @@ picture toolbox-timezones 1220
 picture toolbox-testdata 1220
 picture onboarding-2 680
 picture settings 560
+# For docs/features.md.
+picture settings-permissions 560
+picture settings-bug-reports 560
+picture hud-drawing 720
+picture menu-space 360
+picture toolbox-jsondiff 1220
+picture feedback-problem 560
 cp "$WORK/screens/logo.png" "$OUT/logo.png"
 
 du -sh "$OUT"

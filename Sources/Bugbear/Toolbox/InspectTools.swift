@@ -34,12 +34,12 @@ struct JSONDiffTool: View {
         SplitPanes {
             VSplitView {
                 VStack(spacing: 0) {
-                    PaneHeader(title: "Before") { pasteButton { text in input = text } }
-                    CodeTextView(text: $input)
+                    PaneHeader(title: "Before") { pasteButton("before") { text in input = text } }
+                    CodeTextView(text: $input, label: "Before")
                 }
                 VStack(spacing: 0) {
-                    PaneHeader(title: "After") { pasteButton { text in other = text } }
-                    CodeTextView(text: $other)
+                    PaneHeader(title: "After") { pasteButton("after") { text in other = text } }
+                    CodeTextView(text: $other, label: "After")
                 }
             }
         } right: {
@@ -68,8 +68,9 @@ struct JSONDiffTool: View {
         }
     }
 
-    private func pasteButton(_ apply: @escaping (String) -> Void) -> some View {
+    private func pasteButton(_ side: String, _ apply: @escaping (String) -> Void) -> some View {
         Button("Paste") { apply(NSPasteboard.general.string(forType: .string) ?? "") }
+            .accessibilityLabel("Paste \(side)")
             .buttonStyle(.plain)
             .font(.system(size: 12))
             .foregroundStyle(Theme.link)
@@ -343,7 +344,7 @@ struct HTTPTool: View {
             HStack {
                 SectionLabel("\(title) · \(bytes) bytes")
                 Spacer()
-                CopyButton(text: text, title: "Copy", primary: false)
+                CopyButton(text: text, title: "Copy", primary: false, name: "Copy \(title.lowercased())")
             }
             Text(text)
                 .font(.system(size: 12, design: .monospaced))
@@ -403,12 +404,13 @@ struct LengthTool: View {
                             .frame(width: 100)
                             .tip("Exact length of the string to generate, in characters")
                         Stepper("", value: $length, in: 0...LengthString.maximum).labelsHidden()
+                            .accessibilityLabel("Change length")
                             .tip("Make the string one character longer or shorter")
                         PillPicker(options: LengthString.Style.allCases, selection: $style) { value in value.rawValue }
                             .frame(width: 380)
                             .tip("What to fill the string with: a counterstring shows where a field cuts it, Cyrillic and emoji test byte limits")
                         Spacer()
-                        CopyButton(text: generated, title: "Copy", primary: false)
+                        CopyButton(text: generated, title: "Copy", primary: false, name: "Copy string")
                     }
                     HStack(spacing: 8) {
                         ForEach(quickLengths, id: \.self) { value in

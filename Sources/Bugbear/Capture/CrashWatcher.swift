@@ -6,20 +6,17 @@ import BugbearCore
 @MainActor
 final class CrashWatcher {
     nonisolated static let defaultFolder = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Logs/DiagnosticReports", isDirectory: true)
-    /// An app counts as "worked with" if it was in front this recently.
-    static let recentSeconds: Double = 600
-    /// One clip per app in this window: a crash loop should not flood the history.
-    static let repeatSeconds: Double = 30
-
     var onCrash: ((CrashReport, URL) -> Void)?
     /// Automation: accept crashes from any app.
-    var acceptsAnyApp = false
+    var acceptsAnyApp: Bool {
+        get { filter.acceptsAnyApp }
+        set { filter.acceptsAnyApp = newValue }
+    }
+    private var filter = CrashClipFilter(ownName: ProcessInfo.processInfo.processName)
 
     private var source: DispatchSourceFileSystemObject?
     private var folder = CrashWatcher.defaultFolder
     private var seenFiles: Set<String> = []
-    private var recentApps: [(name: String, bundleId: String, time: Double)] = []
-    private var lastClipTimes: [String: Double] = [:]
     private var activationObserver: NSObjectProtocol?
 
     func start(folder watchedFolder: URL = CrashWatcher.defaultFolder) {
@@ -72,10 +69,7 @@ final class CrashWatcher {
         let name = app.localizedName ?? ""
         let bundleId = app.bundleIdentifier ?? ""
         if bundleId == Bundle.main.bundleIdentifier { return }
-        let now = CACurrentMediaTime()
-        recentApps.removeAll { entry in entry.bundleId == bundleId && entry.name == name }
-        recentApps.append((name: name, bundleId: bundleId, time: now))
-        recentApps.removeAll { entry in now - entry.time > CrashWatcher.recentSeconds }
+        filter.appActivated(name: name, bundleId: bundleId, at: CACurrentMediaTime())
     }
 
     private func listReports() -> [String] {
@@ -106,33 +100,23 @@ final class CrashWatcher {
         let text = String(decoding: head, as: UTF8.self)
         let firstLine = text.split(separator: "\n", maxSplits: 1).first.map(String.init) ?? ""
         guard let report = CrashReport.parse(headerLine: firstLine) else { return }
-        guard isRelevant(report) else {
+        var frontApp: (name: String, bundleId: String)?
+        if let front = NSWorkspace.shared.frontmostApplication {
+            frontApp = (name: front.localizedName ?? "", bundleId: front.bundleIdentifier ?? "")
+        }
+        switch filter.decide(report, frontApp: frontApp, now: CACurrentMediaTime()) {
+        case .clip:
+            break
+        case .ownApp:
+            return
+        case .notUsedRecently:
             Log.info("crash ignored: \(report.appName) was not used recently")
             return
-        }
-        let now = CACurrentMediaTime()
-        if let last = lastClipTimes[report.appName], now - last < CrashWatcher.repeatSeconds {
-            Log.info("crash ignored: another \(report.appName) crash within \(Int(CrashWatcher.repeatSeconds))s")
+        case .repeated:
+            Log.info("crash ignored: another \(report.appName) crash within \(Int(CrashClipFilter.repeatSeconds))s")
             return
         }
-        lastClipTimes[report.appName] = now
         Log.info("crash detected: \(report.appName) at \(report.date)")
         onCrash?(report, file)
-    }
-
-    private func isRelevant(_ report: CrashReport) -> Bool {
-        if acceptsAnyApp { return true }
-        if report.appName == ProcessInfo.processInfo.processName { return false }
-        let now = CACurrentMediaTime()
-        for entry in recentApps where now - entry.time <= CrashWatcher.recentSeconds {
-            if report.belongs(toAppNamed: entry.name, bundleId: entry.bundleId) {
-                return true
-            }
-        }
-        // The app in front right now counts too, even if it was activated before we started.
-        if let front = NSWorkspace.shared.frontmostApplication {
-            return report.belongs(toAppNamed: front.localizedName ?? "", bundleId: front.bundleIdentifier ?? "")
-        }
-        return false
     }
 }

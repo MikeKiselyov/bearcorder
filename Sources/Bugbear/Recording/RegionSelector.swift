@@ -32,6 +32,7 @@ final class RegionSelector {
         return await withCheckedContinuation { continuation in
             self.continuation = continuation
             let newPanel = KeyablePanel(contentRect: screen.frame, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
+            newPanel.identifier = NSUserInterfaceItemIdentifier("region-picker")
             newPanel.isOpaque = false
             newPanel.backgroundColor = .clear
             newPanel.level = .screenSaver
@@ -75,6 +76,36 @@ final class RegionSelector {
         continuation = nil
     }
 
+}
+
+/// A button drawn by hand that VoiceOver (and the tests) can still find and press. Its frame is
+/// read from the view each time, so it follows the selection when that moves.
+final class DrawnButton: NSAccessibilityElement {
+    private weak var view: NSView?
+    private let rect: () -> CGRect
+    private let action: () -> Void
+
+    /// `rect` gives the place in the view's own coordinates.
+    init(label: String, view: NSView, rect: @escaping () -> CGRect, action: @escaping () -> Void) {
+        self.view = view
+        self.rect = rect
+        self.action = action
+        super.init()
+        setAccessibilityRole(.button)
+        setAccessibilityLabel(label)
+        setAccessibilityParent(view)
+    }
+
+    override func accessibilityFrame() -> NSRect {
+        guard let view else { return .zero }
+        // Converts from the view's coordinates, flipped or not, to the screen.
+        return NSAccessibility.screenRect(fromView: view, rect: rect())
+    }
+
+    override func accessibilityPerformPress() -> Bool {
+        action()
+        return true
+    }
 }
 
 final class RegionSelectionView: NSView {
@@ -153,6 +184,7 @@ final class RegionSelectionView: NSView {
         case .fullScreen:
             selection = bounds
             needsDisplay = true
+            announceLayoutChange()
             return
         case .pixels(let pixels):
             size = CGSize(width: pixels.width / scale, height: pixels.height / scale)
@@ -173,6 +205,7 @@ final class RegionSelectionView: NSView {
         origin.y = max(0, min(bounds.height - size.height, origin.y))
         selection = CGRect(origin: origin, size: size)
         needsDisplay = true
+        announceLayoutChange()
     }
 
     override var isFlipped: Bool { true }
@@ -275,6 +308,60 @@ final class RegionSelectionView: NSView {
         (title as NSString).draw(at: CGPoint(x: rect.midX - size.width / 2, y: rect.midY - size.height / 2), withAttributes: attributes)
     }
 
+    /// The buttons for accessibility, kept while the picker looks the same: VoiceOver follows an
+    /// element by its identity, so a new one on every question would lose its place.
+    private var drawnButtons: [DrawnButton] = []
+    private var drawnButtonsLayout = ""
+
+    /// The buttons and size chips for VoiceOver and the tests, named without the key hint.
+    override func accessibilityChildren() -> [Any]? {
+        let layout = "\(showsSizes)|\(confirmTitle)"
+        if layout == drawnButtonsLayout {
+            return drawnButtons
+        }
+        var buttons: [DrawnButton] = []
+        if showsSizes {
+            for (index, preset) in presets.enumerated() {
+                let button = DrawnButton(label: "Size \(preset.title)", view: self, rect: { [weak self] in
+                    self?.presetRects[index] ?? .zero
+                }, action: { [weak self] in
+                    self?.apply(preset)
+                })
+                buttons.append(button)
+            }
+        }
+        buttons.append(DrawnButton(label: "Cancel", view: self, rect: { [weak self] in
+            self?.buttonRects.cancel ?? .zero
+        }, action: { [weak self] in
+            self?.onFinish?(nil)
+        }))
+        let confirmLabel = confirmTitle.components(separatedBy: "  ").first ?? confirmTitle
+        buttons.append(DrawnButton(label: confirmLabel, view: self, rect: { [weak self] in
+            self?.buttonRects.record ?? .zero
+        }, action: { [weak self] in
+            guard let view = self else { return }
+            view.onFinish?(view.selection)
+        }))
+        drawnButtons = buttons
+        drawnButtonsLayout = layout
+        return buttons
+    }
+
+    /// VoiceOver's pointer finds the drawn buttons under it.
+    override func accessibilityHitTest(_ point: NSPoint) -> Any? {
+        for button in accessibilityChildren() ?? [] {
+            if let drawn = button as? DrawnButton, drawn.accessibilityFrame().contains(point) {
+                return drawn
+            }
+        }
+        return super.accessibilityHitTest(point)
+    }
+
+    /// The buttons moved with the selection.
+    private func announceLayoutChange() {
+        NSAccessibility.post(element: self, notification: .layoutChanged)
+    }
+
     override func mouseDown(with event: NSEvent) {
         let point = convert(event.locationInWindow, from: nil)
         for (index, rect) in presetRects.enumerated() where showsSizes && rect.contains(point) {
@@ -329,6 +416,9 @@ final class RegionSelectionView: NSView {
     }
 
     override func mouseUp(with event: NSEvent) {
+        if dragMode != nil {
+            announceLayoutChange()
+        }
         dragMode = nil
     }
 

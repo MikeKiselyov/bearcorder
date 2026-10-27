@@ -1,16 +1,16 @@
 # Uninstall Bugbear
 
-Quit Bugbear from the panel (power button), then:
+One command removes everything: the app, captures, the screen buffer, logs, settings, caches,
+permissions (Screen Recording, Accessibility, Microphone, Camera), the login item, the signing
+certificate and the source kept for updates. It shows what it will remove and asks first.
 
 ```bash
-~/.bugbear/scripts/local-signing.sh remove                          # the signing certificate, if one was made
-rm -rf "/Applications/Bugbear.app" "$HOME/Applications/Bugbear.app"   # the app
-rm -rf ~/.bugbear                                                     # the source used for updates
-rm -rf "$HOME/Library/Application Support/Bugbear"                    # captures and buffer
-rm -rf "$HOME/Library/Logs/Bugbear"                                   # logs
+curl -fsSL https://raw.githubusercontent.com/MikeKiselyov/bugbear-app/main/scripts/uninstall.sh | bash
 ```
 
-Permissions can be removed in System Settings → Privacy & Security.
+From a clone: `scripts/uninstall.sh` (add `--yes` to skip the question).
+
+Screenshots and clips you saved or exported stay where you saved them (`~/Desktop/Bugbear` by default).
 
 ## Where Bugbear keeps things
 

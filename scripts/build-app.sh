@@ -14,6 +14,20 @@
 #                            permissions again after each rebuild).
 set -euo pipefail
 
+# Bugbear stops its screen capture before it quits (up to 2 s), so wait for it to be gone.
+wait_for_bugbear_to_quit() {
+    local tries=0
+    while pgrep -x Bugbear >/dev/null 2>&1 && [ "$tries" -lt 50 ]; do
+        sleep 0.1
+        tries=$((tries + 1))
+    done
+    # Still there (stuck in a modal alert): it must not keep running from a replaced app.
+    if pgrep -x Bugbear >/dev/null 2>&1; then
+        pkill -9 -x Bugbear 2>/dev/null || true
+        sleep 0.5
+    fi
+}
+
 cd "$(dirname "$0")/.."
 ROOT="$(pwd)"
 if [ -f "$ROOT/.env" ]; then
@@ -22,7 +36,8 @@ if [ -f "$ROOT/.env" ]; then
     source "$ROOT/.env"
     set +a
 fi
-APP_NAME="Bugbear"
+# shellcheck disable=SC1091
+source "$ROOT/scripts/app-name.sh"
 BUNDLE_ID="${BUGBEAR_BUNDLE_ID:-io.github.bugbear.app}"
 BUILD_DIR="$ROOT/build"
 APP_DIR="$BUILD_DIR/$APP_NAME.app"
@@ -47,6 +62,10 @@ echo "==> assembling $APP_DIR"
 rm -rf "$APP_DIR"
 mkdir -p "$APP_DIR/Contents/MacOS" "$APP_DIR/Contents/Resources"
 cp "$BINARY" "$APP_DIR/Contents/MacOS/Bugbear"
+# Pictures for "What's new".
+if [ -d "$ROOT/Resources/WhatsNew" ]; then
+    cp -R "$ROOT/Resources/WhatsNew" "$APP_DIR/Contents/Resources/WhatsNew"
+fi
 # Debug symbols are not needed to run the app; without them it is a few MB lighter.
 strip -x "$APP_DIR/Contents/MacOS/Bugbear" 2>/dev/null || true
 
@@ -76,13 +95,13 @@ cat > "$APP_DIR/Contents/Info.plist" <<PLIST
     <key>LSUIElement</key><true/>
     <key>LSApplicationCategoryType</key><string>public.app-category.developer-tools</string>
     <key>NSHighResolutionCapable</key><true/>
-    <key>NSCameraUsageDescription</key><string>Bugbear shows your webcam in a bubble on screen so it can be part of your recordings.</string>
-    <key>NSMicrophoneUsageDescription</key><string>Bugbear records your voice with screen recordings when the microphone is turned on.</string>
+    <key>NSCameraUsageDescription</key><string>$APP_NAME shows your webcam in a bubble on screen so it can be part of your recordings.</string>
+    <key>NSMicrophoneUsageDescription</key><string>$APP_NAME records your voice with screen recordings when the microphone is turned on.</string>
     <key>BugbearCommit</key><string>$COMMIT</string>
     <key>BugbearBranch</key><string>$BRANCH</string>
     <key>BugbearRepository</key><string>$REPOSITORY</string>
     <key>BugbearSourcePath</key><string>$ROOT</string>
-    <key>NSAppleEventsUsageDescription</key><string>Bugbear reads the current browser tab URL to add it to the bug environment.</string>
+    <key>NSAppleEventsUsageDescription</key><string>$APP_NAME reads the current browser tab URL to add it to the bug environment.</string>
 </dict>
 </plist>
 PLIST
@@ -126,16 +145,56 @@ for argument in "$@"; do
                 TARGET_DIR="$HOME/Applications"
                 mkdir -p "$TARGET_DIR"
             fi
+            installed_copies=("/Applications/$APP_NAME.app" "$HOME/Applications/$APP_NAME.app")
+            # e2e tests install into a folder of their own.
+            if [ -n "${BUGBEAR_INSTALL_DIR:-}" ]; then
+                TARGET_DIR="$BUGBEAR_INSTALL_DIR"
+                mkdir -p "$TARGET_DIR"
+                installed_copies=("$TARGET_DIR/$APP_NAME.app")
+            fi
+            # A copy under an earlier name (the app was renamed): same bundle id, other file name.
+            # It counts as installed (an update keeps the settings) and is replaced, not left beside.
+            renamed_copies=()
+            for copy in "$TARGET_DIR"/*.app; do
+                if [ "$copy" = "$TARGET_DIR/$APP_NAME.app" ] || [ ! -f "$copy/Contents/Info.plist" ]; then
+                    continue
+                fi
+                copy_id=$(/usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$copy/Contents/Info.plist" 2>/dev/null || true)
+                if [ "$copy_id" = "$BUNDLE_ID" ]; then
+                    renamed_copies+=("$copy")
+                    installed_copies+=("$copy")
+                fi
+            done
+            already_installed=false
+            for copy in "${installed_copies[@]}"; do
+                if [ -d "$copy" ]; then
+                    already_installed=true
+                fi
+            done
             pkill -x Bugbear 2>/dev/null || true
-            sleep 0.5
+            wait_for_bugbear_to_quit
+            # No Bugbear yet: a new person, or one who deleted the app. Settings outlive the app
+            # in ~/Library/Preferences, so the welcome guide is shown again. An update keeps them.
+            # After the quit, so a running copy cannot write them back.
+            if [ "$already_installed" = false ]; then
+                defaults delete "$BUNDLE_ID" onboardingCompleted 2>/dev/null || true
+                defaults delete "$BUNDLE_ID" onboardingPage 2>/dev/null || true
+                echo "==> new install: the welcome guide opens on launch"
+            fi
             rm -rf "$TARGET_DIR/$APP_NAME.app"
+            for copy in "${renamed_copies[@]+"${renamed_copies[@]}"}"; do
+                echo "==> replacing $(basename "$copy"), the same app under its earlier name"
+                rm -rf "$copy"
+            done
             cp -R "$APP_DIR" "$TARGET_DIR/"
             echo "==> installed to $TARGET_DIR/$APP_NAME.app"
-            open "$TARGET_DIR/$APP_NAME.app"
+            if [ -z "${BUGBEAR_NO_OPEN:-}" ]; then
+                open "$TARGET_DIR/$APP_NAME.app"
+            fi
             ;;
         --run)
             pkill -x Bugbear 2>/dev/null || true
-            sleep 0.5
+            wait_for_bugbear_to_quit
             open "$APP_DIR"
             ;;
     esac

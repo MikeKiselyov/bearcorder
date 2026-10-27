@@ -28,6 +28,8 @@ struct VideoCompositor {
         var blurs: [(rect: CGRect, span: TimeSpan)] = []
         var clicks: [(center: CGPoint, time: Double)] = []
         var keys: [(image: CIImage, time: Double)] = []
+        /// Step captions with the source time they show from and until.
+        var steps: [(image: CIImage, start: Double, end: Double)] = []
         var badge: CIImage?
         var slowBadge: CIImage?
         var ripple: CIImage?
@@ -119,8 +121,12 @@ struct VideoCompositor {
             case .arrow: annotation.tool = .arrow
             case .rectangle: annotation.tool = .rectangle
             case .text:
+                // Text not typed yet is not drawn, in the preview or the saved clip.
+                if overlay.text.trimmingCharacters(in: .whitespaces).isEmpty {
+                    continue
+                }
                 annotation.tool = .text
-                annotation.text = overlay.text.isEmpty ? "Text" : overlay.text
+                annotation.text = overlay.text
                 annotation.clearBackground = overlay.clearBackground
             case .blur: break
             }
@@ -150,6 +156,10 @@ struct VideoCompositor {
                 let placed = badge.transformed(by: CGAffineTransform(translationX: x, y: 40 * unit))
                 layers.keys.append((image: placed, time: event.time))
             }
+        }
+
+        if project.isShowingSteps {
+            layers.steps = stepCaptions(events: events, timeMap: TimeMap(pieces: pieces), renderSize: renderSize, unit: unit)
         }
 
         if project.showBadge {
@@ -196,6 +206,42 @@ struct VideoCompositor {
         context.strokeEllipse(in: rect.insetBy(dx: 2, dy: 2))
         guard let image = context.makeImage() else { return nil }
         return CIImage(cgImage: image)
+    }
+
+    /// How long a step caption stays when the next step is far away, and at least.
+    static let stepCaptionLongest: Double = 4
+    static let stepCaptionShortest: Double = 1.2
+
+    /// One caption per step, above the keystroke badge, from its time until the next step.
+    /// Steps in trimmed or cut parts are left out, so the numbers match the copied report; the
+    /// times stay in the source clip, which is what the frames are drawn by.
+    static func stepCaptions(events: [InputEvent], timeMap: TimeMap?, renderSize: CGSize, unit: CGFloat) -> [(image: CIImage, start: Double, end: Double)] {
+        var visible: [InputEvent] = []
+        for event in events {
+            if let map = timeMap, !map.isVisible(source: event.time) { continue }
+            visible.append(event)
+        }
+        let lines = BugReport.stepLines(from: BugReportBuilder.actions(for: visible, timeMap: nil))
+        var captions: [(image: CIImage, start: Double, end: Double)] = []
+        let maxWidth = renderSize.width * 0.9
+        for (index, line) in lines.enumerated() {
+            var end = line.time + stepCaptionLongest
+            if index + 1 < lines.count {
+                end = min(end, max(lines[index + 1].time, line.time + stepCaptionShortest))
+            }
+            var text = "\(index + 1). \(line.text)"
+            var image = keyBadgeImage(text, unit: unit)
+            // A long page address must not run off the frame.
+            while let wide = image, wide.extent.width > maxWidth, text.count > 12 {
+                text = String(text.prefix(text.count * 4 / 5)) + "…"
+                image = keyBadgeImage(text, unit: unit)
+            }
+            guard let caption = image else { continue }
+            let x = (renderSize.width - caption.extent.width) / 2
+            let placed = caption.transformed(by: CGAffineTransform(translationX: x, y: 100 * unit))
+            captions.append((image: placed, start: line.time, end: end))
+        }
+        return captions
     }
 
     private static func keyBadgeImage(_ label: String, unit: CGFloat, fill: NSColor = NSColor(hex: 0x1C1D20, alpha: 0.92), text: NSColor = NSColor(hex: 0xECEDEE)) -> CIImage? {
@@ -263,6 +309,15 @@ struct VideoCompositor {
         }
         if let key = latestKey {
             image = key.composited(over: image)
+        }
+
+        // The current step only; a later step replaces the one before.
+        var currentStep: CIImage? = nil
+        for step in layers.steps where sourceTime >= step.start && sourceTime < step.end {
+            currentStep = step.image
+        }
+        if let step = currentStep {
+            image = step.composited(over: image)
         }
 
         if let slow = layers.slowBadge {

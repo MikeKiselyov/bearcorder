@@ -21,7 +21,7 @@ final class StepGuideModel {
         // Oldest first: the order things happened in.
         let ordered = captures.sorted { first, second in first.createdAt < second.createdAt }
         for capture in ordered {
-            guard let document = ScreenshotDocument(capture: capture), let image = document.render() else { continue }
+            guard let document = ScreenshotDocument(capture: capture, forEditing: false), let image = document.render() else { continue }
             steps.append(Step(image: image, caption: ""))
         }
     }
@@ -53,16 +53,13 @@ final class StepGuideModel {
     }
 
     func save(asPDF: Bool) {
-        let panel = NSSavePanel()
+        var chosen: URL?
         if asPDF {
-            panel.allowedContentTypes = [.pdf]
-            panel.nameFieldStringValue = "steps.pdf"
+            chosen = SystemActions.chooseSaveLocation(name: "steps.pdf", type: .pdf, startingAt: AppSettings.shared.outputFolder)
         } else {
-            panel.allowedContentTypes = [.png]
-            panel.nameFieldStringValue = "steps.png"
+            chosen = SystemActions.chooseSaveLocation(name: "steps.png", type: .png, startingAt: AppSettings.shared.outputFolder)
         }
-        panel.directoryURL = AppSettings.shared.outputFolder
-        guard panel.runModal() == .OK, let url = panel.url else { return }
+        guard let url = chosen else { return }
         var saved = false
         if asPDF {
             saved = StepGuideRenderer.writePDF(title: title, steps: blocks, to: url)
@@ -72,7 +69,7 @@ final class StepGuideModel {
         }
         if saved {
             message = "Saved \(url.lastPathComponent)"
-            NSWorkspace.shared.activateFileViewerSelecting([url])
+            SystemActions.reveal([url])
         } else {
             message = "Could not save the guide"
         }
@@ -262,7 +259,7 @@ struct StepGuideView: View {
             }
         }
         .foregroundStyle(Theme.text)
-        .background(Theme.window)
+        .auroraBackground()
     }
 
     private func stepRow(index: Int, step: StepGuideModel.Step) -> some View {
@@ -288,15 +285,19 @@ struct StepGuideView: View {
                 }), axis: .vertical)
                 .textFieldStyle(.roundedBorder)
                 .lineLimit(1...4)
+                .accessibilityLabel("Caption of step \(index + 1)")
                 .tip("Caption for this step, shown under its number in the guide")
                 HStack(spacing: 10) {
                     Button { model.move(index, by: -1) } label: { Image(systemName: "arrow.up") }
                         .disabled(index == 0)
+                        .accessibilityLabel("Move step \(index + 1) up")
                         .tip("Move this step up in the guide")
                     Button { model.move(index, by: 1) } label: { Image(systemName: "arrow.down") }
                         .disabled(index == model.steps.count - 1)
+                        .accessibilityLabel("Move step \(index + 1) down")
                         .tip("Move this step down in the guide")
                     Button(role: .destructive) { model.remove(index) } label: { Image(systemName: "trash") }
+                        .accessibilityLabel("Remove step \(index + 1)")
                         .tip("Remove from the guide")
                 }
                 .buttonStyle(.plain)

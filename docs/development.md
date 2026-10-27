@@ -47,6 +47,21 @@ List your identities with `security find-identity -v -p codesigning`.
 - A fork updates from the fork: the repository comes from the clone's `origin`.
 - The same by hand: `~/.bugbear/scripts/update.sh`.
 
+## Renaming the app
+
+The name people see lives in `Sources/BugbearCore/Support/AppInfo.swift` (`AppInfo.name`); the app and
+the scripts read it from there. Markdown cannot, so rename with:
+
+```bash
+scripts/rename-app.sh "New Name"
+```
+
+It changes `AppInfo.name`, the installer's copy and the name in `README.md` and `docs/`. Folders with
+captures and logs (`AppInfo.storageName`), source folders and the executable keep the old name, so
+updates find people's captures. `swift test` fails while the docs show another name. The executable stays
+`Bugbear` too: write commands that call it with a path (`.build/debug/Bugbear --self-test`), or the
+script renames them.
+
 ## Project layout
 
 ```

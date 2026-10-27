@@ -34,13 +34,15 @@ enum TimelineItem: Equatable {
 @MainActor
 @Observable
 final class VideoEditorModel {
-    let capture: Capture
+    private(set) var capture: Capture
     let asset: AVURLAsset
     let player = AVPlayer()
 
     var project: VideoProject
     var tool: VideoTool = .select
     var selection: TimelineItem?
+    /// The text mark being typed right on the video.
+    var editingTextID: UUID?
     /// Range picked on the ruler, in source seconds.
     var range: TimeSpan?
     /// Playhead in source seconds.
@@ -51,7 +53,7 @@ final class VideoEditorModel {
     var message: String?
     var isBuilding = false
 
-    @ObservationIgnored private var output: VideoCompositor.Output?
+    @ObservationIgnored private(set) var output: VideoCompositor.Output?
     /// Changes with every rebuilt preview, so size estimates in the sidebar refresh.
     private(set) var outputVersion = 0
     /// How many bits per pixel per second the source clip needed; makes size estimates realistic.
@@ -63,14 +65,23 @@ final class VideoEditorModel {
 
     var duration: Double { project.timeline.sourceDuration }
 
+    /// Where the video frame is in the editor window (window points, top-left), for tests that
+    /// draw on it with the real mouse.
+    @ObservationIgnored var stageVideoRect: CGRect = .zero
+
+    /// The editor opened last, for tests that press its buttons.
+    static weak var newest: VideoEditorModel?
+
     init(capture: Capture) {
         self.capture = capture
         self.asset = AVURLAsset(url: capture.mediaURL)
-        var loaded = VideoProject(duration: max(capture.duration, 0.1))
+        var loaded = EditorMemory.newVideoProject(duration: max(capture.duration, 0.1))
         if let data = try? Data(contentsOf: capture.projectURL), let saved = try? JSONDecoder().decode(VideoProject.self, from: data) {
-            loaded = saved
+            loaded = saved.repairingMarks()
         }
         project = loaded
+        lastSaved = loaded
+        VideoEditorModel.newest = self
         player.actionAtItemEnd = .pause
         timeObserver = player.addPeriodicTimeObserver(forInterval: CMTime(value: 1, timescale: 30), queue: .main) { [weak self] time in
             MainActor.assumeIsolated {
@@ -175,19 +186,21 @@ final class VideoEditorModel {
         redoStack.append(project)
         project = previous
         selection = nil
-        projectChanged()
+        editingTextID = nil
+        projectChanged(remembering: false)
     }
 
     func redo() {
         guard let next = redoStack.popLast() else { return }
         undoStack.append(project)
         project = next
-        projectChanged()
+        projectChanged(remembering: false)
     }
 
-    /// Persists and rebuilds the preview shortly after the last change.
-    func projectChanged() {
-        save()
+    /// Persists and rebuilds the preview shortly after the last change. Undo and redo pass
+    /// `remembering: false`: going back is not a new choice for the next clip.
+    func projectChanged(remembering: Bool = true) {
+        save(remembering: remembering)
         rebuildTask?.cancel()
         rebuildTask = Task {
             try? await Task.sleep(nanoseconds: 180_000_000)
@@ -196,7 +209,14 @@ final class VideoEditorModel {
         }
     }
 
-    private func save() {
+    /// The project as last saved, to remember only the choices that changed since.
+    @ObservationIgnored private var lastSaved: VideoProject
+
+    private func save(remembering: Bool = true) {
+        if remembering {
+            EditorMemory.rememberVideoChanges(from: lastSaved, to: project)
+        }
+        lastSaved = project
         if let data = try? JSONEncoder().encode(project) {
             try? data.write(to: capture.projectURL)
         }
@@ -292,7 +312,7 @@ final class VideoEditorModel {
         if let selected = range, selected.duration > 0.05 {
             return selected
         }
-        return TimeSpan(start: playhead, end: min(duration, playhead + defaultLength))
+        return TimeSpan.mark(at: playhead, length: defaultLength, inside: project.timeline.trim)
     }
 
     func cutSelection() {
@@ -324,20 +344,24 @@ final class VideoEditorModel {
         var overlay = VideoOverlay(kind: kind, span: actionSpan(), start: start, end: end)
         overlay.scale = lastOverlayScale
         if kind == .text {
-            overlay.text = "Bug here"
+            overlay.text = ""
             overlay.end = start
             overlay.clearBackground = lastClearText
         }
         project.overlays.append(overlay)
         selection = .overlay(overlay.id)
         tool = .select
+        // Text is typed right where it was placed, not in the side panel.
+        if kind == .text {
+            editingTextID = overlay.id
+        }
         projectChanged()
     }
 
     /// New marks use the size picked last.
     @ObservationIgnored private var lastOverlayScale: Double = 1
     /// New text keeps the background choice made last.
-    @ObservationIgnored private var lastClearText = UserDefaults.standard.bool(forKey: "clearTextBackground")
+    @ObservationIgnored private var lastClearText = EditorMemory.clearTextBackground
 
     /// Switches the selected text between a colored label and outlined letters on a transparent background.
     func setSelectedTextClear(_ clear: Bool) {
@@ -345,7 +369,7 @@ final class VideoEditorModel {
         checkpoint()
         overlay.clearBackground = clear
         lastClearText = clear
-        UserDefaults.standard.set(clear, forKey: "clearTextBackground")
+        EditorMemory.clearTextBackground = clear
         updateOverlay(overlay)
     }
 
@@ -363,6 +387,37 @@ final class VideoEditorModel {
     func updateOverlay(_ overlay: VideoOverlay) {
         guard let index = project.overlays.firstIndex(where: { item in item.id == overlay.id }) else { return }
         project.overlays[index] = overlay
+        projectChanged()
+    }
+
+    /// Typing on the video ended (Return or a click elsewhere): text left empty is taken away.
+    func finishTextEditing(removingEmpty: Bool = true) {
+        guard let id = editingTextID else { return }
+        editingTextID = nil
+        guard removingEmpty, let overlay = project.overlays.first(where: { item in item.id == id }) else { return }
+        if overlay.text.trimmingCharacters(in: .whitespaces).isEmpty {
+            project.overlays.removeAll { item in item.id == id }
+            if selection == .overlay(id) {
+                selection = nil
+            }
+            projectChanged()
+        }
+    }
+
+    /// Types into a text mark again (a second click on picked text). The change can be undone at once.
+    func beginTextEditing(_ id: UUID) {
+        finishTextEditing()
+        guard project.overlays.contains(where: { item in item.id == id }) else { return }
+        checkpoint()
+        selection = .overlay(id)
+        editingTextID = id
+    }
+
+    /// Types into a text mark from the field on the video.
+    func setText(_ text: String, of id: UUID) {
+        guard let index = project.overlays.firstIndex(where: { item in item.id == id }) else { return }
+        if project.overlays[index].text == text { return }
+        project.overlays[index].text = text
         projectChanged()
     }
 
@@ -465,15 +520,24 @@ final class VideoEditorModel {
         }
     }
 
-    /// The file saved with "Save", listed in the bug report.
-    @ObservationIgnored private var savedFile: URL?
+    /// Shows the report fields as Settings → Bug reports has them now, and keeps that in the capture.
+    /// On opening only which fields show and their names follow; your fields keep the values they
+    /// had when the capture was taken, unless you change them while the editor is open.
+    func refreshEnvironmentFields(includingYourFields: Bool) {
+        var environment = capture.environment
+        EnvironmentCollector.applyFieldSettings(to: &environment, includingYourFields: includingYourFields)
+        if environment == capture.environment { return }
+        capture.environment = environment
+        try? CaptureStore.shared.replace(capture)
+    }
+
+    /// Steps the bug report has now: steps in cut parts are left out.
+    var reportStepCount: Int {
+        return BugReportBuilder.stepCount(for: capture, timeMap: output?.timeMap)
+    }
 
     func copyBugReport(format: BugReport.Format) {
-        var files: [URL] = []
-        if let saved = savedFile {
-            files.append(saved)
-        }
-        BugReportBuilder.copy(for: capture, timeMap: output?.timeMap, files: files, format: format)
+        BugReportBuilder.copy(for: capture, timeMap: output?.timeMap, format: format)
         message = "Bug report copied. Paste it into the ticket."
     }
 
@@ -481,9 +545,8 @@ final class VideoEditorModel {
         let ext = project.format == .gif ? "gif" : "mp4"
         let url = AppPaths.uniqueURL(in: AppSettings.shared.outputFolder, name: AppPaths.exportName(date: capture.createdAt), ext: ext)
         if let saved = await export(to: url) {
-            savedFile = saved
             message = "Saved \(saved.lastPathComponent)"
-            NSWorkspace.shared.activateFileViewerSelecting([saved])
+            SystemActions.reveal([saved])
         }
     }
 

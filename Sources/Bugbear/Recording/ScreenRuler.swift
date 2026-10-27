@@ -1,4 +1,5 @@
 import AppKit
+import BugbearCore
 
 /// Measure on screen: drag a box to read its size in points and pixels. Esc finishes, ⌘C copies the size.
 /// The ruler is our own window, so it is never in recordings.
@@ -176,7 +177,7 @@ final class RulerView: NSView {
             onFinish?()
             return
         }
-        let key = (event.charactersIgnoringModifiers ?? "").lowercased()
+        let key = LatinKeys.key(forKeyCode: event.keyCode, typed: event.charactersIgnoringModifiers ?? "")
         if event.modifierFlags.contains(.command) && key == "c" && box != nil {
             NSPasteboard.general.clearContents()
             NSPasteboard.general.setString(sizeText, forType: .string)

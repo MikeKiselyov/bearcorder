@@ -51,6 +51,20 @@ public struct UpdateInfo: Equatable {
         return URL(string: "https://raw.githubusercontent.com/\(repository)/\(branch)/\(catalogPath)")
     }
 
+    /// Updates always come from main: a copy built from a pull request branch would otherwise look
+    /// at a branch that is deleted once the pull request is merged (GitHub answers 404).
+    public static let updateBranch = "main"
+
+    /// The release catalog an installed copy compares its version with.
+    public static func updateCatalogURL(repository: String) -> URL? {
+        return catalogURL(repository: repository, branch: updateBranch)
+    }
+
+    /// What changed on main since the commit a copy was built from.
+    public static func updateCompareURL(repository: String, builtCommit: String) -> URL? {
+        return compareURL(repository: repository, commit: builtCommit, branch: updateBranch)
+    }
+
     public var isAvailable: Bool {
         return newCommitCount > 0
     }

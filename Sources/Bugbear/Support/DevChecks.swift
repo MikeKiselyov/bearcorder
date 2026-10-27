@@ -67,7 +67,17 @@ enum DevChecks {
     /// The five color slots: they start as the usual colors, dragging in the color panel changes the
     /// first slot, a new opening adds one on the left, and there are always five.
     private static func checkRecentColors() async {
-        let saved = UserDefaults.standard.stringArray(forKey: "recentAnnotationColors")
+        // On scratch defaults: the person's palette is never touched.
+        let domain = "bugbear.selftest.colors.\(UUID().uuidString)"
+        guard let scratch = UserDefaults(suiteName: domain) else {
+            check(false, "recent colors: scratch defaults")
+            return
+        }
+        EditorMemory.override = scratch
+        defer {
+            EditorMemory.override = nil
+            forgetScratchDefaults(scratch, domain: domain)
+        }
         RecentColors.clear()
         check(RecentColors.load() == RecentColors.defaults, "five usual colors to start with")
         var applied: [AnnotationColor] = []
@@ -103,11 +113,6 @@ enum DevChecks {
         let recent = RecentColors.load()
         check(recent.count == RecentColors.limit && recent.first == AnnotationColor(hex: 0x666666), "a new pick takes the left slot, always five", "\(recent)")
         check(applied.last == AnnotationColor(hex: 0x666666), "the picked color is applied")
-        if let previous = saved {
-            UserDefaults.standard.set(previous, forKey: "recentAnnotationColors")
-        } else {
-            UserDefaults.standard.removeObject(forKey: "recentAnnotationColors")
-        }
     }
 
     /// Two names of one file (how original.* points at a display's file) are recognized as one file,
@@ -125,6 +130,713 @@ enum DevChecks {
         try? files.linkItem(at: first, to: link)
         check(CaptureStore.isSameFile(first, link), "a hard link is the same file")
         check(!CaptureStore.isSameFile(first, other), "an equal copy is another file")
+    }
+
+    /// Every picture a release note names loads, so the card shows it instead of nothing.
+    private static func checkWhatsNewPictures() {
+        for release in WhatsNewCatalog.releases {
+            for item in release.items where !item.image.isEmpty {
+                let picture = WhatsNewView.image(named: item.image)
+                check(picture != nil && (picture?.size.width ?? 0) > 0, "what's new picture \(item.image) loads")
+            }
+        }
+        check(WhatsNewView.image(named: "") == nil, "an item without a picture shows none")
+    }
+
+    /// Earlier users keep their crash clips; a new install and someone who chose keep their choice.
+    /// The registered default of 7 days must not count as a choice, and someone who left the
+    /// guide's 7 days as they were is not an earlier user.
+    /// New marks start at line size 7 in the screenshot editor and when drawing on the screen.
+    /// Tests choose picker and menu items without opening the menu: the choice reaches the binding
+    /// and the menu's button runs, the same as a click in the open menu.
+    private static func checkPopUpChoices() async {
+        final class Choices {
+            var indent = 2
+            var pressed = ""
+        }
+        let choices = Choices()
+        let indent = Binding(get: { choices.indent }, set: { value in choices.indent = value })
+        let view = VStack {
+            Picker("Indent", selection: indent) {
+                Text("2 spaces").tag(2)
+                Text("4 spaces").tag(4)
+                Text("Tabs").tag(0)
+            }
+            .pickerStyle(.menu)
+            Menu("Copy as…") {
+                Button("Copy as YAML") { choices.pressed = "YAML" }
+                Divider()
+                Button("Copy as CSV") { choices.pressed = "CSV" }
+            }
+            .menuStyle(.borderlessButton)
+        }
+        .frame(width: 300, height: 120)
+        let window = NSWindow(contentRect: CGRect(x: -2000, y: -2000, width: 300, height: 120), styleMask: [.borderless], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.contentView = NSHostingView(rootView: view)
+        window.orderFrontRegardless()
+        defer { window.orderOut(nil) }
+        window.contentView?.layoutSubtreeIfNeeded()
+        try? await Task.sleep(nanoseconds: 300_000_000)
+        let buttons = PopUpMenus.all(in: window.contentView ?? NSView())
+        var listed: [String] = []
+        for button in buttons {
+            listed.append(PopUpMenus.items(of: button).joined(separator: ","))
+        }
+        check(buttons.count == 2, "a menu picker and a menu are pop-up buttons", "\(buttons.count): \(listed)")
+        guard buttons.count == 2 else { return }
+        let picker = buttons.first { button in !button.pullsDown } ?? buttons[0]
+        let menu = buttons.first { button in button.pullsDown } ?? buttons[1]
+        check(PopUpMenus.items(of: picker) == ["2 spaces", "4 spaces", "Tabs"], "a picker lists its choices", "\(listed)")
+        check(PopUpMenus.items(of: menu) == ["Copy as YAML", "Copy as CSV"], "a menu lists its items without the separator", "\(listed)")
+        let chose = PopUpMenus.choose("Tabs", in: picker)
+        try? await Task.sleep(nanoseconds: 100_000_000)
+        check(chose && choices.indent == 0, "choosing a picker item sets its value", "\(chose) \(choices.indent)")
+        let pressed = PopUpMenus.choose("Copy as CSV", in: menu)
+        try? await Task.sleep(nanoseconds: 100_000_000)
+        check(pressed && choices.pressed == "CSV", "choosing a menu item runs its button", "\(pressed) \(choices.pressed)")
+        check(!PopUpMenus.choose("Copy as PDF", in: menu), "a missing item is not chosen")
+    }
+
+    /// Tests type into fields without posting keys: the text reaches a SwiftUI binding, both for a
+    /// text field and for a tool's code view.
+    private static func checkTextInput() async {
+        final class Texts {
+            var search = ""
+            var code = ""
+        }
+        let texts = Texts()
+        let search = Binding(get: { texts.search }, set: { value in texts.search = value })
+        let code = Binding(get: { texts.code }, set: { value in texts.code = value })
+        let view = VStack {
+            TextField("Search tools", text: search)
+            CodeTextView(text: code)
+                .frame(height: 80)
+        }
+        .frame(width: 300, height: 140)
+        let window = NSWindow(contentRect: CGRect(x: -2000, y: -2000, width: 300, height: 140), styleMask: [.borderless], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.contentView = NSHostingView(rootView: view)
+        window.orderFrontRegardless()
+        defer { window.orderOut(nil) }
+        window.contentView?.layoutSubtreeIfNeeded()
+        try? await Task.sleep(nanoseconds: 300_000_000)
+        var field: NSTextField?
+        var textView: NSTextView?
+        var stack: [NSView] = [window.contentView ?? NSView()]
+        while let current = stack.popLast() {
+            if let found = current as? NSTextField, found.isEditable {
+                field = found
+            }
+            if let found = current as? NSTextView {
+                textView = found
+            }
+            for child in current.subviews {
+                stack.append(child)
+            }
+        }
+        guard let searchField = field, let codeView = textView else {
+            check(false, "a text field and a code view to type into", "\(String(describing: field)) \(String(describing: textView))")
+            return
+        }
+        let typedSearch = TextInput.type("cron", into: searchField)
+        let typedCode = TextInput.type("{\"a\": 1}\nline two", into: codeView)
+        try? await Task.sleep(nanoseconds: 100_000_000)
+        check(typedSearch && texts.search == "cron", "typing into a text field reaches its binding", texts.search)
+        check(typedCode && texts.code == "{\"a\": 1}\nline two", "typing into a code view reaches its binding", texts.code)
+        let center = window.convertToScreen(searchField.convert(searchField.bounds, to: nil))
+        let screenHeight = NSScreen.screens.first?.frame.maxY ?? 0
+        let found = TextInput.view(at: CGPoint(x: center.midX, y: screenHeight - center.midY), in: window)
+        check(found === searchField, "the text field under a point is found", "\(String(describing: found))")
+    }
+
+    /// The area picker draws its buttons by hand; VoiceOver and the tests still find them, at the
+    /// place they are drawn, and pressing them does what a click does.
+    /// A control being laid out can report a NaN frame; naming it must not stop the app (Int(NaN) traps).
+    /// Opening an old capture applies which fields show and their names, but keeps the values your
+    /// fields had then; a change made while the editor is open takes the new values too.
+    private static func checkFieldSettingsOnOldCaptures() {
+        var taken = EnvironmentSnapshot()
+        taken.extras = [EnvironmentSnapshot.Field(name: "Build", value: "1.42")]
+        let now = EnvironmentCollector.FieldSettings(extras: [EnvironmentSnapshot.Field(name: "Build", value: "1.50")], hidden: ["Locale"], renamed: ["Device": " Model "])
+        var opened = taken
+        EnvironmentCollector.applyFieldSettings(now, to: &opened, includingYourFields: false)
+        check(opened.extras == taken.extras, "opening an old capture keeps its own field values", "\(String(describing: opened.extras))")
+        check(opened.hiddenFields == ["Locale"] && opened.renamedFields == ["Device": "Model"], "opening an old capture applies the fields shown and their names")
+        var edited = taken
+        EnvironmentCollector.applyFieldSettings(now, to: &edited, includingYourFields: true)
+        check(edited.extras == now.extras, "a field changed while the editor is open takes the new value")
+    }
+
+    /// The note of an arrow with text sits at the arrow's tail, on the side the arrow comes from,
+    /// and a click on the note picks the mark.
+    /// The URL is asked of the browser process the person looked at, by raw Apple event codes from
+    /// Chromium's scripting dictionary; a wrong code would leave every URL empty.
+    /// The marks of a clip saved before the fix (off the frame, a few microseconds long at the end)
+    /// are put back on the frame and made visible when the clip opens.
+    /// The copy button with its longest title fits the video editor's side panel (270 pt less its
+    /// 16 pt padding); a wider one pushed the whole panel out of the window.
+    /// `--clip-frame`: the preview frame of a saved clip with its marks, as the video editor builds it.
+    static func clipFrame(folder: URL, seconds: Double, to output: URL) async -> Int32 {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        guard let captureData = try? Data(contentsOf: folder.appendingPathComponent("capture.json")), let capture = try? decoder.decode(Capture.self, from: captureData) else {
+            print("no capture.json in \(folder.path)")
+            return 1
+        }
+        var project = EditorMemory.newVideoProject(duration: capture.duration)
+        if let data = try? Data(contentsOf: folder.appendingPathComponent("project.json")), let saved = try? JSONDecoder().decode(VideoProject.self, from: data) {
+            project = saved.repairingMarks()
+        }
+        let asset = AVURLAsset(url: folder.appendingPathComponent("original.mp4"))
+        do {
+            let built = try await VideoCompositor.build(asset: asset, project: project, events: capture.events, environment: capture.environment)
+            let generator = AVAssetImageGenerator(asset: built.composition)
+            generator.videoComposition = built.videoComposition
+            generator.requestedTimeToleranceBefore = .zero
+            generator.requestedTimeToleranceAfter = .zero
+            let time = CMTime(seconds: built.timeMap.outputTime(forSource: seconds), preferredTimescale: 600)
+            let frame = try await generator.image(at: time).image
+            ImageFiles.write(frame, to: output, type: "public.png")
+            print("frame at \(seconds)s (output \(String(format: "%.2f", time.seconds))s), \(project.overlays.count) marks, render \(Int(built.renderSize.width))x\(Int(built.renderSize.height)) → \(output.path)")
+            return 0
+        } catch {
+            print("could not build: \(error.localizedDescription)")
+            return 1
+        }
+    }
+
+    private static func checkCopyReportButtonFits() {
+        let button = CopyReportButton(help: "", stepCount: 999) { _ in }
+        let hosting = NSHostingView(rootView: button.environment(AppState.shared))
+        let width = hosting.fittingSize.width
+        check(width > 0 && width <= 270 - 32, "copy bug report button fits the video side panel", "\(Int(width)) pt")
+    }
+
+    private static func checkVideoMarkRepair() {
+        var project = EditorMemory.newVideoProject(duration: 180)
+        project.timeline.trim = TimeSpan(start: 141.36, end: 180)
+        project.overlays = [
+            VideoOverlay(kind: .blur, span: TimeSpan(start: 179.99999, end: 180), start: CGPoint(x: 1.39, y: 1.68), end: CGPoint(x: 1.24, y: 1.90)),
+            VideoOverlay(kind: .arrow, span: TimeSpan(start: 179.99, end: 180), start: CGPoint(x: 0.73, y: 1.15), end: CGPoint(x: 0.55, y: 0.95)),
+        ]
+        let repaired = project.repairingMarks()
+        var allInside = true
+        var allLong = true
+        for overlay in repaired.overlays {
+            let box = overlay.rect
+            if box.minX < -0.0001 || box.minY < -0.0001 || box.maxX > 1.0001 || box.maxY > 1.0001 {
+                allInside = false
+            }
+            if overlay.span.duration < 2.9 || overlay.span.end > 180.0001 {
+                allLong = false
+            }
+        }
+        check(allInside, "video marks saved off the frame come back on it")
+        check(allLong, "video marks saved at the last frame last a few seconds")
+    }
+
+    private static func checkBrowserURLRequest() {
+        check(EnvironmentCollector.fourCharCode("cwin") == 0x6377_696E && EnvironmentCollector.fourCharCode("URL ") == 0x5552_4C20, "browser URL request codes")
+        // A process that is not there answers with an error, not a hang or a crash.
+        let started = Date()
+        let url = EnvironmentCollector.chromiumURL(pid: 999_999)
+        check(url.isEmpty && Date().timeIntervalSince(started) < EnvironmentCollector.urlTimeout + 1, "browser URL request to a closed browser gives up quietly")
+    }
+
+    private static func checkArrowWithText() {
+        var mark = Annotation(tool: .callout, start: CGPoint(x: 400, y: 300), end: CGPoint(x: 600, y: 320), color: .coral, lineWidth: 5)
+        mark.text = "Wrong total"
+        mark.fontSize = 19
+        let right = AnnotationRenderer.calloutLabelBox(mark)
+        check(abs(right.maxX - 400) < 0.5 && right.minY < 300 && right.maxY > 300, "arrow with text pointing right: the note ends at the tail", "\(right)")
+        mark.end = CGPoint(x: 200, y: 310)
+        let left = AnnotationRenderer.calloutLabelBox(mark)
+        check(abs(left.minX - 400) < 0.5, "arrow with text pointing left: the note starts at the tail", "\(left)")
+        mark.end = CGPoint(x: 410, y: 600)
+        let down = AnnotationRenderer.calloutLabelBox(mark)
+        check(abs(down.maxY - 300) < 0.5 && down.minX < 400 && down.maxX > 400, "arrow with text pointing down: the note sits above the tail", "\(down)")
+        check(mark.hitTest(CGPoint(x: down.midX, y: down.midY), tolerance: 4), "a click on the note picks the arrow with text")
+        check(mark.bounds.contains(down) && mark.bounds.contains(mark.end), "the selection outline holds the note and the arrow")
+        check(AnnotationTool.callout.hasLabel && AnnotationTool.text.hasLabel && !AnnotationTool.arrow.hasLabel, "arrow with text takes the text size and the label fill")
+        // At the picture's left edge pointing right, the note would start off the picture.
+        var atEdge = Annotation(tool: .callout, start: CGPoint(x: 10, y: 10), end: CGPoint(x: 300, y: 40), color: .coral, lineWidth: 5)
+        atEdge.text = "Wrong total"
+        atEdge.fontSize = 19
+        atEdge.labelArea = CGRect(x: 0, y: 0, width: 800, height: 600)
+        let kept = AnnotationRenderer.calloutLabelBox(atEdge)
+        check(kept.minX >= 0 && kept.minY >= 0, "arrow with text from the picture's edge keeps its note on the picture", "\(kept)")
+        // Nothing typed: the dimmed "Type…" shows only while typing, never in the saved picture.
+        if let blank = renderTextImage([" "]) {
+            let arrowOnly = Annotation(tool: .arrow, start: CGPoint(x: 220, y: 40), end: CGPoint(x: 340, y: 60), color: .coral, lineWidth: 5)
+            var emptyNote = arrowOnly
+            emptyNote.tool = .callout
+            let emptyText = Annotation(tool: .text, start: CGPoint(x: 30, y: 30), end: CGPoint(x: 30, y: 30), color: .coral, lineWidth: 5)
+            let expected = AnnotationRenderer.renderImage(base: blank, annotations: [arrowOnly], crop: nil, badgeLines: nil, badgeCorner: .topRight, badgeScale: 1)
+            let saved = AnnotationRenderer.renderImage(base: blank, annotations: [emptyNote, emptyText], crop: nil, badgeLines: nil, badgeCorner: .topRight, badgeScale: 1)
+            if let first = expected, let second = saved, let firstPixels = ScreenshotComparison.rgba(first, width: first.width, height: first.height), let secondPixels = ScreenshotComparison.rgba(second, width: first.width, height: first.height) {
+                let difference = PixelDiff.compare(width: first.width, height: first.height, first: firstPixels, second: secondPixels)
+                check(difference.changedPixels == 0, "an empty note or text leaves no placeholder in the saved picture", "\(difference.changedPixels) px")
+            } else {
+                check(false, "an empty note or text leaves no placeholder in the saved picture", "render failed")
+            }
+        }
+        let tools = AnnotationTool.screenshotEditorTools
+        if let arrowIndex = tools.firstIndex(of: .arrow), let calloutIndex = tools.firstIndex(of: .callout) {
+            check(calloutIndex == arrowIndex + 1, "arrow with text is right after the arrow in the toolbar")
+        } else {
+            check(false, "arrow with text has a toolbar button")
+        }
+    }
+
+    private static func checkControlTreeCoordinates() {
+        check(ControlTree.whole(12.7) == "12", "control tree: a coordinate is a whole number")
+        check(ControlTree.whole(-3.5) == "-3", "control tree: a negative coordinate")
+        check(ControlTree.whole(.nan) == "?", "control tree: a NaN coordinate shows as ?")
+        check(ControlTree.whole(.infinity) == "?", "control tree: an infinite coordinate shows as ?")
+        check(ControlTree.whole(1e300) == "?", "control tree: a coordinate too big for Int shows as ?")
+    }
+
+    private static func checkRegionPickerButtons() {
+        final class Finished {
+            var calls = 0
+            var rect: CGRect?
+        }
+        let finished = Finished()
+        let view = RegionSelectionView(frame: CGRect(x: 0, y: 0, width: 1200, height: 800))
+        view.selection = CGRect(x: 300, y: 200, width: 400, height: 300)
+        view.onFinish = { rect in
+            finished.calls += 1
+            finished.rect = rect
+        }
+        let window = NSWindow(contentRect: CGRect(x: -3000, y: -3000, width: 1200, height: 800), styleMask: [.borderless], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.contentView = view
+
+        var buttons: [String: DrawnButton] = [:]
+        var labels: [String] = []
+        for child in view.accessibilityChildren() ?? [] {
+            guard let button = child as? DrawnButton else { continue }
+            let label = button.accessibilityLabel() ?? ""
+            labels.append(label)
+            buttons[label] = button
+        }
+        let expected = ["Size 720p", "Size 1080p", "Size 1440×900", "Size 16:9", "Size 4:3", "Size 1:1", "Size Phone", "Size Full screen", "Cancel", "Record"]
+        check(labels == expected, "the area picker names its buttons and size chips", labels.joined(separator: ", "))
+
+        // Cancel is drawn 12 pt under the selection, left of its middle (flipped view, top-left origin).
+        if let cancel = buttons["Cancel"] {
+            let frame = cancel.accessibilityFrame()
+            let expectedFrame = CGRect(x: -3000 + 500 - 114, y: -3000 + 800 - (500 + 12) - 32, width: 110, height: 32)
+            check(frame == expectedFrame, "the picker's Cancel sits where it is drawn", "\(frame) vs \(expectedFrame)")
+        }
+
+        // VoiceOver keeps its place: asking again gives the same elements.
+        let askedAgain = view.accessibilityChildren() ?? []
+        var sameElements = askedAgain.count == labels.count
+        for child in askedAgain {
+            if let button = child as? DrawnButton, buttons[button.accessibilityLabel() ?? ""] !== button {
+                sameElements = false
+            }
+        }
+        check(sameElements, "the area picker keeps its accessibility elements between questions")
+        let cancelBefore = buttons["Cancel"]?.accessibilityFrame() ?? .zero
+        if let cancel = buttons["Cancel"] {
+            let found = view.accessibilityHitTest(CGPoint(x: cancelBefore.midX, y: cancelBefore.midY)) as? DrawnButton
+            check(found === cancel, "VoiceOver's pointer finds the picker's Cancel", "\(String(describing: found?.accessibilityLabel()))")
+        }
+
+        _ = buttons["Size Full screen"]?.accessibilityPerformPress()
+        check(view.selection == view.bounds && finished.calls == 0, "pressing a size chip resizes the area", "\(view.selection)")
+        // The selection grew, so Cancel moved down to the bottom edge; the same element says so.
+        let cancelAfter = buttons["Cancel"]?.accessibilityFrame() ?? .zero
+        let expectedAfter = CGRect(x: -3000 + 600 - 114, y: -3000 + 800 - (800 - 44) - 32, width: 110, height: 32)
+        check(cancelAfter == expectedAfter, "the picker's Cancel frame follows the selection", "\(cancelAfter) vs \(expectedAfter)")
+        _ = buttons["Record"]?.accessibilityPerformPress()
+        check(finished.calls == 1 && finished.rect == view.bounds, "pressing Record records the area", "\(finished.calls) \(String(describing: finished.rect))")
+        _ = buttons["Cancel"]?.accessibilityPerformPress()
+        check(finished.calls == 2 && finished.rect == nil, "pressing Cancel cancels", "\(finished.calls) \(String(describing: finished.rect))")
+
+        // The scrolling screenshot picker has no sizes and says Capture.
+        view.showsSizes = false
+        view.confirmTitle = "Capture  ↩"
+        var scrollingLabels: [String] = []
+        for child in view.accessibilityChildren() ?? [] {
+            if let button = child as? DrawnButton {
+                scrollingLabels.append(button.accessibilityLabel() ?? "")
+            }
+        }
+        check(scrollingLabels == ["Cancel", "Capture"], "the scrolling screenshot picker shows Cancel and Capture", scrollingLabels.joined(separator: ", "))
+    }
+
+    /// A new screenshot or clip opens the way the last one was left; an older capture keeps its own
+    /// badge and does not change what new ones get. Runs on scratch defaults and folders.
+    private static func checkEditorMemory() async {
+        let domain = "bugbear.selftest.memory.\(UUID().uuidString)"
+        guard let scratch = UserDefaults(suiteName: domain) else {
+            check(false, "editor memory: scratch defaults")
+            return
+        }
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent("bugbear-memory-\(UUID().uuidString)", isDirectory: true)
+        let savedOverride = AppPaths.supportOverride
+        EditorMemory.override = scratch
+        AppPaths.supportOverride = folder
+        defer {
+            EditorMemory.override = nil
+            AppPaths.supportOverride = savedOverride
+            forgetScratchDefaults(scratch, domain: domain)
+            try? FileManager.default.removeItem(at: folder)
+        }
+        guard let picture = renderTextImage(["Memory"]) else {
+            check(false, "editor memory: a picture")
+            return
+        }
+        func newScreenshot() -> ScreenshotDocument? {
+            let capture = Capture(id: UUID(), kind: .screenshot, createdAt: Date(), environment: EnvironmentSnapshot(), duration: 0, events: [])
+            try? FileManager.default.createDirectory(at: capture.folder, withIntermediateDirectories: true)
+            ImageFiles.write(picture, to: capture.mediaURL, type: "public.png")
+            return ScreenshotDocument(capture: capture)
+        }
+        guard let first = newScreenshot() else {
+            check(false, "editor memory: a screenshot document")
+            return
+        }
+        check(first.tool == .arrow && first.color == .coral && first.stroke == .thick && !first.showBadge, "a first screenshot starts with the usual tool, color and size")
+        first.tool = .rectangle
+        first.color = .blue
+        first.stroke = .huge
+        first.textPoints = 30
+        first.shapeFill = true
+        first.showBadge = true
+        first.badgeCorner = .bottomLeft
+        first.exportFormat = .jpegMedium
+        first.tool = .crop
+        first.tool = .select
+        guard let second = newScreenshot() else { return }
+        let same = second.tool == .rectangle && second.color == .blue && second.stroke == .huge && second.textPoints == 30 && second.shapeFill && second.showBadge && second.badgeCorner == .bottomLeft && second.exportFormat == .jpegMedium
+        check(same, "a new screenshot opens with the last tool, color, size, fill, badge and format", "\(second.tool) \(second.color.hex) \(second.stroke) \(second.textPoints) \(second.showBadge) \(second.badgeCorner)")
+
+        // An older screenshot saved without a badge keeps it off, and new ones still get one.
+        second.showBadge = false
+        second.badgeCorner = .topLeft
+        second.saveProject()
+        second.showBadge = true
+        second.badgeCorner = .bottomLeft
+        second.showBadge = false
+        second.saveProject()
+        first.showBadge = true
+        guard let reopened = ScreenshotDocument(capture: second.capture), let third = newScreenshot() else { return }
+        check(!reopened.showBadge && third.showBadge && third.badgeCorner == .bottomLeft, "opening an older screenshot keeps its badge and leaves the next one's alone", "\(reopened.showBadge) \(third.showBadge) \(third.badgeCorner)")
+
+        // A step guide or a comparison draws a never-edited screenshot without the remembered badge.
+        guard let plain = newScreenshot() else { return }
+        let drawn = ScreenshotDocument(capture: plain.capture, forEditing: false)
+        check(plain.showBadge && drawn?.showBadge == false, "a step guide or comparison draws an unedited screenshot without the remembered badge")
+
+        // + on a selected old mark resizes that mark, not the size new marks start with.
+        let strokeBefore = EditorMemory.screenshotStroke
+        var thin = Annotation(tool: .rectangle, start: CGPoint(x: 10, y: 10), end: CGPoint(x: 60, y: 40), color: .blue, lineWidth: 2)
+        thin.lineWidth = 2
+        plain.tool = .rectangle
+        plain.add(thin)
+        plain.tool = .select
+        plain.selectedId = thin.id
+        plain.changeSize(by: 1)
+        check(EditorMemory.screenshotStroke == strokeBefore, "+ on a selected mark leaves the size of new marks alone", "\(strokeBefore) → \(EditorMemory.screenshotStroke)")
+
+        // Video: changed choices carry over, untouched ones keep what was remembered before.
+        let fresh = EditorMemory.newVideoProject(duration: 10)
+        check(fresh.showClicks && fresh.format == .mp4 && fresh.quality == .p1080, "a first clip starts with the usual choices")
+        var changed = fresh
+        changed.format = .gif
+        changed.showKeys = false
+        changed.showSteps = true
+        changed.gifFramesPerSecond = 8
+        EditorMemory.rememberVideoChanges(from: fresh, to: changed)
+        var older = VideoProject(duration: 10)
+        older.quality = .original
+        var olderEdited = older
+        olderEdited.showClicks = false
+        EditorMemory.rememberVideoChanges(from: older, to: olderEdited)
+        let next = EditorMemory.newVideoProject(duration: 20)
+        let carried = next.format == .gif && !next.showKeys && next.isShowingSteps && next.gifFramesPerSecond == 8 && !next.showClicks && next.quality == .p1080 && next.timeline.sourceDuration == 20
+        check(carried, "a new clip opens with the last changed choices, an older clip's other settings are not copied", "\(next.format) keys=\(next.showKeys) clicks=\(next.showClicks) \(next.quality)")
+
+        // Undo brings back an edit; the format chosen after it stays the remembered one.
+        let clip = Capture(id: UUID(), kind: .video, createdAt: Date(), environment: EnvironmentSnapshot(), duration: 2, events: [])
+        try? FileManager.default.createDirectory(at: clip.folder, withIntermediateDirectories: true)
+        do {
+            try await writeSyntheticVideo(to: clip.mediaURL, seconds: 2, size: CGSize(width: 320, height: 200))
+        } catch {
+            check(false, "editor memory: a clip", "\(error)")
+            return
+        }
+        var asGIF = EditorMemory.newVideoProject(duration: 2)
+        asGIF.format = .gif
+        var asMP4 = asGIF
+        asMP4.format = .mp4
+        EditorMemory.rememberVideoChanges(from: asGIF, to: asMP4)
+        let model = VideoEditorModel(capture: clip)
+        // A cut (with a checkpoint), then GIF picked in the sidebar (no checkpoint), then undo:
+        // the project goes back to MP4, but the person's last choice was GIF.
+        model.checkpoint()
+        model.project.timeline.cuts = [TimeSpan(start: 0.5, end: 1)]
+        model.projectChanged()
+        model.project.format = .gif
+        model.projectChanged()
+        model.undo()
+        check(EditorMemory.newVideoProject(duration: 2).format == .gif, "undo in the video editor does not change the remembered format", "\(EditorMemory.newVideoProject(duration: 2).format)")
+    }
+
+    private static func checkDefaultMarkSize() {
+        check(StrokeSize.thick.width == 7 && LiveOverlay().stroke == .thick, "drawing on the screen starts at size 7")
+    }
+
+    /// While tests record, buttons that hand something to macOS only say what they would open.
+    private static func checkSystemActionsRecord() {
+        SystemActions.startRecording()
+        SystemActions.open(URL(fileURLWithPath: "/tmp/bugbear-captures"))
+        SystemActions.askPermission("Accessibility") {
+            check(false, "a recorded permission prompt is not shown")
+        }
+        let loginWorked = (try? SystemActions.setOpenAtLogin(true)) != nil
+        let chosen = SystemActions.chooseFolder(startingAt: URL(fileURLWithPath: "/tmp"))
+        let kept = FileManager.default.temporaryDirectory.appendingPathComponent("bugbear-trash-\(UUID().uuidString).bin")
+        FileManager.default.createFile(atPath: kept.path, contents: Data([1]))
+        defer { try? FileManager.default.removeItem(at: kept) }
+        let trashWorked = (try? SystemActions.trash(kept)) != nil
+        let recorded = SystemActions.recorded
+        SystemActions.stopRecording()
+        check(recorded == ["open /tmp/bugbear-captures", "ask Accessibility", "login true", "choose folder /tmp", "trash \(kept.path)"] && loginWorked && chosen == nil, "buttons that open macOS things are recorded in tests, not opened", recorded.joined(separator: " | "))
+        check(trashWorked && FileManager.default.fileExists(atPath: kept.path), "a file moved to the Trash in tests stays where it is")
+    }
+
+    /// A card's "More actions" menu offers the log and crash report only when they were saved.
+    private static func checkHistoryCardMenu() {
+        let capture = Capture(id: UUID(), kind: .video, createdAt: Date(), environment: EnvironmentSnapshot(), duration: 10, events: [])
+        defer { try? FileManager.default.removeItem(at: capture.folder) }
+        let plain = HistoryCardAction.available(for: capture)
+        check(plain == [.open, .reveal, .copyMarkdown, .copyJira, .copyEnvironment, .delete], "a capture card menu without a log or crash report", "\(plain)")
+        try? FileManager.default.createDirectory(at: capture.folder, withIntermediateDirectories: true)
+        FileManager.default.createFile(atPath: capture.systemLogURL.path, contents: Data("log".utf8))
+        FileManager.default.createFile(atPath: capture.crashReportURL.path, contents: Data("crash".utf8))
+        let crash = HistoryCardAction.available(for: capture)
+        check(crash == HistoryCardAction.allCases && crash.last == .delete, "a crash clip card menu opens its log and crash report, Delete stays last", "\(crash)")
+    }
+
+    /// A clip's system log is written seconds after its editor opens; the editor still has to show
+    /// the "System log" button once it is there.
+    private static func checkLateSystemLog() {
+        let capture = Capture(id: UUID(), kind: .video, createdAt: Date(), environment: EnvironmentSnapshot(), duration: 10, events: [])
+        defer { try? FileManager.default.removeItem(at: capture.folder) }
+        let store = CaptureStore.shared
+        final class Changed {
+            var value = false
+        }
+        let changed = Changed()
+        let before = withObservationTracking {
+            store.hasSystemLog(capture)
+        } onChange: {
+            changed.value = true
+        }
+        try? FileManager.default.createDirectory(at: capture.folder, withIntermediateDirectories: true)
+        FileManager.default.createFile(atPath: capture.systemLogURL.path, contents: Data("log".utf8))
+        store.systemLogSaved(for: capture.id)
+        check(!before && changed.value && store.hasSystemLog(capture), "an open editor learns about a system log saved after it opened", "before=\(before) changed=\(changed.value)")
+    }
+
+    /// Scratch settings domains this run made, to check they are gone at the end.
+    private static var scratchDomains: [String] = []
+
+    static func preferencesFile(_ domain: String) -> URL {
+        return URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent("Library/Preferences/\(domain).plist")
+    }
+
+    /// Empties a scratch settings domain; its file is deleted at the end of the run. Removing the
+    /// domain alone leaves an empty .plist in ~/Library/Preferences, one more after every run.
+    static func forgetScratchDefaults(_ defaults: UserDefaults, domain: String) {
+        defaults.removePersistentDomain(forName: domain)
+        if !scratchDomains.contains(domain) {
+            scratchDomains.append(domain)
+        }
+    }
+
+    private static func checkCrashClipMigration() {
+        let domain = "bugbear.selftest.\(UUID().uuidString)"
+        guard let defaults = UserDefaults(suiteName: domain) else {
+            check(false, "crash clip migration: scratch defaults")
+            return
+        }
+        defer { forgetScratchDefaults(defaults, domain: domain) }
+        defaults.register(defaults: ["keepCrashClipsDays": 7])
+        let days = { defaults.integer(forKey: "keepCrashClipsDays") }
+
+        // Used Bugbear up to 0.8.1, then updated.
+        defaults.set(true, forKey: "onboardingCompleted")
+        defaults.set(AppSettings.crashClipSettingReleaseID - 1, forKey: "whatsNewLastSeenID")
+        AppSettings.keepCrashClipsForEarlierUsers(defaults, domain: domain)
+        check(days() == 0, "an earlier user keeps all crash clips", "\(days())")
+
+        defaults.set(30, forKey: "keepCrashClipsDays")
+        AppSettings.keepCrashClipsForEarlierUsers(defaults, domain: domain)
+        check(days() == 30, "a chosen crash clip time stays", "\(days())")
+
+        // Went through the guide in 0.9.0 or later and left 7 days as they were.
+        defaults.removeObject(forKey: "keepCrashClipsDays")
+        defaults.set(AppSettings.crashClipSettingReleaseID, forKey: "whatsNewLastSeenID")
+        AppSettings.keepCrashClipsForEarlierUsers(defaults, domain: domain)
+        check(days() == 7, "someone who kept the guide's 7 days keeps 7 days", "\(days())")
+
+        // A new install before the guide is finished.
+        defaults.removeObject(forKey: "onboardingCompleted")
+        defaults.removeObject(forKey: "whatsNewLastSeenID")
+        AppSettings.keepCrashClipsForEarlierUsers(defaults, domain: domain)
+        check(days() == 7, "a new install starts at 7 days", "\(days())")
+
+        // No bundle id (a bare build): nothing is changed.
+        defaults.set(true, forKey: "onboardingCompleted")
+        defaults.set(1, forKey: "whatsNewLastSeenID")
+        AppSettings.keepCrashClipsForEarlierUsers(defaults, domain: "")
+        check(days() == 7, "without a bundle id the setting is left alone", "\(days())")
+    }
+
+    /// Typing never reaches a clip: letters, ⇧ letters and ⌥ characters are masked, shortcuts and
+    /// special keys are shown.
+    private static func checkKeyLabels() {
+        let typing = InputEventRecorder.typingLabel
+        let cases: [(keyCode: UInt16, flags: NSEvent.ModifierFlags, characters: String, expected: String)] = [
+            (keyCode: 0, flags: [], characters: "a", expected: typing),
+            (keyCode: 0, flags: [.shift], characters: "A", expected: typing),
+            (keyCode: 19, flags: [.option], characters: "2", expected: typing),
+            (keyCode: 19, flags: [.option, .shift], characters: "@", expected: typing),
+            (keyCode: 8, flags: [.command], characters: "c", expected: "⌘ C"),
+            // A Russian layout types "с" on the C key: the shortcut is still ⌘C.
+            (keyCode: 8, flags: [.command], characters: "с", expected: "⌘ C"),
+            (keyCode: 18, flags: [.option, .shift, .command], characters: "!", expected: "⌥⇧⌘ 1"),
+            (keyCode: 0, flags: [.control], characters: "a", expected: "⌃ A"),
+            (keyCode: 36, flags: [], characters: "\r", expected: "Enter"),
+            (keyCode: 48, flags: [.shift], characters: "\t", expected: "⇧ Tab"),
+            (keyCode: 53, flags: [], characters: "", expected: "Esc"),
+            // Moving by words is navigation, not typing.
+            (keyCode: 123, flags: [.option], characters: "", expected: "⌥ ←"),
+            (keyCode: 51, flags: [.option], characters: "", expected: "⌥ Delete"),
+        ]
+        for item in cases {
+            let label = InputEventRecorder.label(keyCode: item.keyCode, flags: item.flags, characters: item.characters)
+            check(label == item.expected, "key code \(item.keyCode) with flags \(item.flags.rawValue) shows \(item.expected)", label)
+        }
+    }
+
+    /// capture.json and project.json written by the first version still load. A new field that is
+    /// not optional breaks this: synthesized Codable ignores default values when decoding, so old
+    /// files would fail, the capture would vanish from History and the video edits would be lost.
+    private static func checkFirstVersionFiles() {
+        let capture = """
+        {"id": "7C1E3B5A-1D2E-4F60-9A7B-1C2D3E4F5A6B", "kind": "video", "createdAt": 783000000, "duration": 12.5,
+         "environment": {"osVersion": "14.5", "osBuild": "23F79", "deviceModel": "Mac14,2", "display": "1512x982 @2x",
+           "appName": "Safari", "appVersion": "17.5", "appBundleId": "com.apple.Safari", "url": "https://example.com",
+           "locale": "en_US", "timeZone": "Europe/Lisbon", "appearance": "Dark", "capturedAt": 783000000},
+         "events": [{"kind": "click", "time": 1.5, "x": 100, "y": 200, "label": "Click", "target": "Button Save", "app": "Safari"},
+                    {"kind": "key", "time": 2, "x": 0, "y": 0, "label": "⌘ C"}]}
+        """
+        let decodedCapture = try? JSONDecoder().decode(Capture.self, from: Data(capture.utf8))
+        check(decodedCapture?.events.count == 2 && decodedCapture?.screens == nil, "a capture.json from the first version loads")
+
+        let video = """
+        {"timeline": {"sourceDuration": 20, "trim": {"start": 1, "end": 19}, "cuts": [{"start": 5, "end": 6}],
+           "speeds": [{"span": {"start": 8, "end": 10}, "factor": 0.5}], "freezes": [{"at": 12, "duration": 2}], "frameDuration": 0.0333},
+         "overlays": [{"id": "1C2D3E4F-5A6B-4C7D-8E9F-0A1B2C3D4E5F", "kind": "arrow", "span": {"start": 2, "end": 4},
+           "start": [10, 20], "end": [30, 40], "text": "", "color": "coral"}],
+         "showClicks": true, "showKeys": false, "showBadge": true, "badgeCorner": "bottomLeft",
+         "format": "GIF", "quality": "720p", "gifFramesPerSecond": 10}
+        """
+        let decodedVideo = try? JSONDecoder().decode(VideoProject.self, from: Data(video.utf8))
+        check(decodedVideo?.timeline.cuts.count == 1 && decodedVideo?.format == .gif && decodedVideo?.overlays.count == 1 && decodedVideo?.sizeLimitMB == nil, "a video project.json from the first version keeps its edits")
+
+        let screenshot = """
+        {"annotations": [{"id": "2C2D3E4F-5A6B-4C7D-8E9F-0A1B2C3D4E5F", "tool": "rectangle", "start": [10, 10], "end": [90, 60],
+           "points": [], "text": "", "number": 0, "color": "blue", "lineWidth": 4, "fontSize": 24},
+          {"id": "3C2D3E4F-5A6B-4C7D-8E9F-0A1B2C3D4E5F", "tool": "text", "start": [20, 20], "end": [20, 20],
+           "points": [], "text": "Bug here", "number": 0, "color": "coral", "lineWidth": 4, "fontSize": 28}],
+         "crop": [[0, 0], [400, 300]], "showBadge": false, "badgeCorner": "topRight", "hasCombinedBase": false}
+        """
+        let decodedScreenshot = try? JSONDecoder().decode(ScreenshotDocument.Project.self, from: Data(screenshot.utf8))
+        let marks = decodedScreenshot?.annotations ?? []
+        check(marks.count == 2 && marks.first?.isFilled == false && marks.last?.hasClearBackground == false, "a screenshot project.json from the first version keeps its marks")
+    }
+
+    /// A report copied from the video editor lists what is still in the edited video, at the
+    /// edited times: actions in a cut part are dropped and later ones move up.
+    private static func checkReportFollowsEdits() {
+        var events: [InputEvent] = []
+        events.append(InputEvent(kind: .click, time: 1, x: 0.5, y: 0.5, label: "", target: "\"Before\" button", app: "Chrome"))
+        events.append(InputEvent(kind: .click, time: 5.5, x: 0.5, y: 0.5, label: "", target: "\"Cut\" button", app: "Chrome"))
+        events.append(InputEvent(kind: .click, time: 9, x: 0.5, y: 0.5, label: "", target: "\"After\" button", app: "Chrome"))
+        let capture = Capture(id: UUID(), kind: .video, createdAt: Date(), environment: EnvironmentSnapshot(), duration: 10, events: events)
+        var timeline = EditTimeline(sourceDuration: 10)
+        timeline.cuts = [TimeSpan(start: 5, end: 6)]
+        let map = TimeMap(pieces: timeline.pieces())
+        let report = BugReportBuilder.markdown(for: capture, timeMap: map)
+        check(report.contains("Before") && report.contains("After"), "the report keeps actions outside the cut", report)
+        check(!report.contains("\"Cut\""), "the report drops actions in a cut part", report)
+        // Steps carry no times in the text; the times still follow the edit for the video captions.
+        let edited = BugReportBuilder.actions(for: events, timeMap: map)
+        check(edited.count == 2 && abs((edited.last?.time ?? 0) - 8) < 0.01, "later actions move up by the cut length", "\(edited.count)")
+        let unedited = BugReportBuilder.markdown(for: capture, timeMap: nil)
+        check(unedited.contains("\"Cut\""), "without edits every action stays", unedited)
+    }
+
+    /// Saving never overwrites a file, and a shortcut turned off stays off after a restart.
+    private static func checkSavedNamesAndShortcuts() {
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent("bugbear-names-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let first = AppPaths.uniqueURL(in: folder, name: "Bugbear shot", ext: "png")
+        FileManager.default.createFile(atPath: first.path, contents: Data([1]))
+        let second = AppPaths.uniqueURL(in: folder, name: "Bugbear shot", ext: "png")
+        FileManager.default.createFile(atPath: second.path, contents: Data([2]))
+        let third = AppPaths.uniqueURL(in: folder, name: "Bugbear shot", ext: "png")
+        check(first.lastPathComponent == "Bugbear shot.png" && second.lastPathComponent == "Bugbear shot 2.png" && third.lastPathComponent == "Bugbear shot 3.png", "a saved file never overwrites another", "\(first.lastPathComponent) \(second.lastPathComponent) \(third.lastPathComponent)")
+
+        let custom = Shortcut(keyCode: 46, modifiers: 2560, key: "M")
+        var overrides: [String: Shortcut?] = [:]
+        overrides[HotKeyAction.saveShort.rawValue] = .some(nil)
+        overrides[HotKeyAction.saveMinute.rawValue] = .some(custom)
+        let restored = HotKeySettings.decode(HotKeySettings.encode(overrides) ?? Data())
+        let turnedOff = restored[HotKeyAction.saveShort.rawValue]
+        check(turnedOff != nil && turnedOff! == nil, "a shortcut turned off stays off after a restart")
+        check(restored[HotKeyAction.saveMinute.rawValue] == .some(custom), "a changed shortcut survives a restart")
+        check(restored[HotKeyAction.saveBuffer.rawValue] == nil, "an untouched shortcut keeps its default")
+    }
+
+    /// Video captions follow the report steps: one per step, shown until the next step, never wider
+    /// than the frame. The playhead can be grabbed a little around its line.
+    private static func checkStepCaptions() {
+        var events: [InputEvent] = []
+        events.append(InputEvent(kind: .click, time: 1, x: 0.5, y: 0.5, label: "", target: "\"Email\" text field", app: "Chrome", url: "https://shop.test/login"))
+        var typing = InputEvent(kind: .key, time: 3, x: 0, y: 0, label: InputEventRecorder.typingLabel, target: "\"Email\" text field", app: "Chrome")
+        typing.text = "john@test.com"
+        events.append(typing)
+        let longPage = "https://shop.test/" + String(repeating: "very-long-path/", count: 30)
+        events.append(InputEvent(kind: .click, time: 10, x: 0.5, y: 0.5, label: "", target: "\"Pay\" button", app: "Chrome", url: longPage))
+        let size = CGSize(width: 1280, height: 720)
+        let captions = VideoCompositor.stepCaptions(events: events, timeMap: nil, renderSize: size, unit: 1)
+        // Open shop.test/login, Click Email, Type, Open long page, Click Pay.
+        check(captions.count == 5, "one caption per step, pages included", "\(captions.count)")
+        if captions.count == 5 {
+            check(captions[1].start == 1 && captions[1].end == 3, "a caption stays until the next step", "\(captions[1].start)-\(captions[1].end)")
+            check(captions[2].end == 3 + VideoCompositor.stepCaptionLongest, "a caption leaves after a while when nothing follows soon", "\(captions[2].end)")
+            var fits = true
+            for caption in captions where caption.image.extent.maxX > size.width || caption.image.extent.minX < 0 {
+                fits = false
+            }
+            check(fits, "a long page address does not run off the frame")
+        }
+        // With the first click cut out, the video numbers its steps like the copied report.
+        var timeline = EditTimeline(sourceDuration: 12)
+        timeline.cuts = [TimeSpan(start: 0.5, end: 1.5)]
+        let edited = VideoCompositor.stepCaptions(events: events, timeMap: TimeMap(pieces: timeline.pieces()), renderSize: size, unit: 1)
+        let report = BugReport.stepLines(from: BugReportBuilder.actions(for: events, timeMap: TimeMap(pieces: timeline.pieces())))
+        check(edited.count == report.count && edited.count == 3, "captions leave out steps in a cut, like the report", "\(edited.count) vs \(report.count)")
     }
 
     /// The recording bar's clock shows the state and time, and redraws only when they change: a
@@ -249,7 +961,7 @@ enum DevChecks {
         check(scrubbed == "{\"crashReporterKey\":\"<hidden>\",\"userID\":\"<hidden>\",\"name\":\"Bugbear\"}", "crash reports in the zip hide the Mac's ids", scrubbed)
         let registered = UserDefaults.standard.volatileDomain(forName: UserDefaults.registrationDomain)["offerCrashReports"] as? Bool
         check(registered == true, "crash reports are offered by default")
-        defaults.removePersistentDomain(forName: "bugbear-feedback-check")
+        forgetScratchDefaults(defaults, domain: "bugbear-feedback-check")
     }
 
     /// A picture placed on a screenshot is drawn in its frame, on top of the screenshot.
@@ -362,6 +1074,27 @@ enum DevChecks {
         checkSameFile(folder: folder)
         checkFeedback(folder: folder)
         checkRecordingClock()
+        checkWhatsNewPictures()
+        checkCrashClipMigration()
+        checkDefaultMarkSize()
+        checkSystemActionsRecord()
+        checkHistoryCardMenu()
+        checkLateSystemLog()
+        await checkPopUpChoices()
+        await checkTextInput()
+        checkRegionPickerButtons()
+        checkControlTreeCoordinates()
+        checkFieldSettingsOnOldCaptures()
+        checkArrowWithText()
+        checkBrowserURLRequest()
+        checkVideoMarkRepair()
+        checkCopyReportButtonFits()
+        await checkEditorMemory()
+        checkKeyLabels()
+        checkFirstVersionFiles()
+        checkReportFollowsEdits()
+        checkSavedNamesAndShortcuts()
+        checkStepCaptions()
 
         // 1. Synthetic 6 s clip with a moving box and a 440 Hz tone.
         let video = folder.appendingPathComponent("synthetic-video.mov")
@@ -646,6 +1379,19 @@ enum DevChecks {
             check(false, "QR code renders")
         }
 
+        // Scratch settings leave no file behind. macOS writes an empty file a moment after a domain
+        // is removed, so the files go once every check is done and that write has happened.
+        try? await Task.sleep(nanoseconds: 1_000_000_000)
+        for domain in scratchDomains {
+            try? FileManager.default.removeItem(at: preferencesFile(domain))
+        }
+        try? await Task.sleep(nanoseconds: 500_000_000)
+        var leftovers: [String] = []
+        for domain in scratchDomains where FileManager.default.fileExists(atPath: preferencesFile(domain).path) {
+            leftovers.append(domain)
+        }
+        check(!scratchDomains.isEmpty && leftovers.isEmpty, "self-test leaves no settings files behind", leftovers.joined(separator: ", "))
+
         print(failures.isEmpty ? "\nALL CHECKS PASSED" : "\n\(failures.count) CHECK(S) FAILED: \(failures.joined(separator: ", "))")
         return failures.isEmpty ? 0 : 1
     }
@@ -912,13 +1658,13 @@ enum DevChecks {
             UpdateInfo.Change(title: "Pick screenshot and video quality with the file size (0.8.0)", shortSHA: "3333333", pullRequest: 9),
             UpdateInfo.Change(title: "Space: clear delete confirmation in the menu panel (0.8.1)", shortSHA: "2222222", pullRequest: 11),
         ]))
-        render(UpdateBadge(detailsOnly: true).padding(16).background(Theme.window).environment(app).preferredColorScheme(.dark), size: CGSize(width: 360, height: 260), to: folder.appendingPathComponent("update-badge.png"))
+        render(UpdateBadge(detailsOnly: true).padding(16).auroraBackground().environment(app).preferredColorScheme(.dark), size: CGSize(width: 360, height: 260), to: folder.appendingPathComponent("update-badge.png"))
 
         // Clean asks on its own line, with full button names, in the narrow menu panel.
         if let category = CleanupCategory.all.first(where: { item in item.action == .deleteContents }) {
             let space = SpaceModel.shared
             space.confirmingID = category.id
-            render(CleanupRow(model: space, category: category, compact: true).padding(.horizontal, 16).background(Theme.window).environment(app).preferredColorScheme(.dark), size: CGSize(width: 360, height: 150), to: folder.appendingPathComponent("space-confirm.png"))
+            render(CleanupRow(model: space, category: category, compact: true).padding(.horizontal, 16).auroraBackground().environment(app).preferredColorScheme(.dark), size: CGSize(width: 360, height: 150), to: folder.appendingPathComponent("space-confirm.png"))
             space.confirmingID = nil
         }
 
@@ -984,7 +1730,17 @@ enum DevChecks {
             render(view, size: CGSize(width: 1220, height: 760), to: folder.appendingPathComponent("toolbox-\(tool.id.lowercased().filter { character in character.isLetter }).png"))
         }
 
-        render(SettingsView().environment(app).preferredColorScheme(.dark), size: CGSize(width: 560, height: 900), to: folder.appendingPathComponent("settings.png"))
+        // One picture per Settings page; "settings.png" is the first, as before.
+        let shownPage = SettingsNavigation.shared.page
+        for page in SettingsPage.allCases {
+            SettingsNavigation.shared.page = page
+            var name = "settings-\(page.rawValue.lowercased().replacingOccurrences(of: " ", with: "-")).png"
+            if page == .general {
+                name = "settings.png"
+            }
+            render(SettingsView().environment(app).preferredColorScheme(.dark), size: CGSize(width: 780, height: 900), to: folder.appendingPathComponent(name))
+        }
+        SettingsNavigation.shared.page = shownPage
         render(HistoryView().environment(app).preferredColorScheme(.dark), size: CGSize(width: 980, height: 680), to: folder.appendingPathComponent("history.png"))
         render(RecordingHUDView().environment(app).preferredColorScheme(.dark), size: CGSize(width: 700, height: 44), to: folder.appendingPathComponent("hud.png"))
         app.overlay.isDrawing = true
@@ -1015,7 +1771,7 @@ enum DevChecks {
     }
 
     static func render<Content: View>(_ view: Content, size: CGSize, to url: URL) {
-        let hosting = NSHostingView(rootView: view.frame(width: size.width, height: size.height).background(Theme.window))
+        let hosting = NSHostingView(rootView: view.frame(width: size.width, height: size.height).auroraBackground())
         hosting.frame = CGRect(origin: .zero, size: size)
         hosting.appearance = NSAppearance(named: .darkAqua)
         let window = NSWindow(contentRect: hosting.frame, styleMask: [.borderless], backing: .buffered, defer: false)
