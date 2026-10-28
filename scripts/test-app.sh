@@ -1,3 +1,4 @@
+# shellcheck shell=bash
 # Sourced by the scripts that test the real app (e2e.sh, e2e-features.sh, perf.sh).
 # A test run uses the build in build/, so an installed Bugbear has to step aside: it is quit before
 # the run and started again afterwards, and the test copy never stays behind in the menu bar.
@@ -8,6 +9,8 @@
 # shellcheck disable=SC1091
 source "$ROOT/scripts/app-name.sh"
 TEST_APP="$ROOT/build/$APP_NAME.app"
+# The tests drive the app through its automation hook, which only this build has (build-app.sh).
+export BUGBEAR_AUTOMATION=1
 INSTALLED_APP=""
 
 # Bugbear stops its screen capture before it quits (up to 2 s), so wait for it to be gone.

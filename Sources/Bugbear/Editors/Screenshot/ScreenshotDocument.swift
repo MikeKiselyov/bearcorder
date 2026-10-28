@@ -67,13 +67,24 @@ final class ScreenshotDocument {
             }
         }
 
+        /// The name in the file type menu.
+        var title: String {
+            switch self {
+            case .png: return L("screenshot.format.png")
+            case .pngHalf: return L("screenshot.format.pngHalf")
+            case .jpegHigh: return L("screenshot.format.jpegHigh")
+            case .jpegMedium: return L("screenshot.format.jpegMedium")
+            case .jpegSmall: return L("screenshot.format.jpegSmall")
+            }
+        }
+
         var detail: String {
             switch self {
-            case .png: return "Sharp, every pixel kept"
-            case .pngHalf: return "Sharp, half the width and height"
-            case .jpegHigh: return "Looks the same, smaller file"
-            case .jpegMedium: return "Small file, fine for chats"
-            case .jpegSmall: return "Smallest: half size, more compression"
+            case .png: return L("screenshot.format.png.detail")
+            case .pngHalf: return L("screenshot.format.pngHalf.detail")
+            case .jpegHigh: return L("screenshot.format.jpegHigh.detail")
+            case .jpegMedium: return L("screenshot.format.jpegMedium.detail")
+            case .jpegSmall: return L("screenshot.format.jpegSmall.detail")
             }
         }
     }
@@ -348,7 +359,7 @@ final class ScreenshotDocument {
     func insertImage(_ image: CGImage, at point: CGPoint? = nil) -> Annotation? {
         let file = capture.folder.appendingPathComponent("placed-\(UUID().uuidString).png")
         guard let data = ImageFiles.pngData(image), (try? data.write(to: file)) != nil else {
-            message = "Could not add the image"
+            message = L("screenshot.message.imageFailed")
             return nil
         }
         let area = crop ?? CGRect(origin: .zero, size: imageSize)
@@ -364,7 +375,7 @@ final class ScreenshotDocument {
         add(annotation)
         tool = .select
         selectedId = annotation.id
-        message = "Image added: drag to move, corners to resize"
+        message = L("screenshot.message.imageAdded")
         return annotation
     }
 
@@ -574,7 +585,7 @@ final class ScreenshotDocument {
         }
         pasteboard.writeObjects([item])
         updateThumbnail(image)
-        message = "Copied to clipboard"
+        message = L("screenshot.message.copied")
     }
 
     func saveToFolder() -> URL? {
@@ -585,24 +596,24 @@ final class ScreenshotDocument {
             if let image = render() {
                 updateThumbnail(image)
             }
-            message = "Saved to \(url.deletingLastPathComponent().lastPathComponent)"
+            message = L("screenshot.message.saved", url.deletingLastPathComponent().lastPathComponent)
             return url
         } catch {
-            message = "Could not save: \(error.localizedDescription)"
+            message = L("screenshot.message.saveFailed", error.localizedDescription)
             return nil
         }
     }
 
     func copyBugReport(format: BugReport.Format) {
         BugReportBuilder.copy(for: capture, timeMap: nil, format: format)
-        message = "Bug report copied. Paste it into the ticket."
+        message = L("editors.message.reportCopied")
     }
 
     func copyEnvironment() {
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
         pasteboard.setString(capture.environment.markdown(), forType: .string)
-        message = "Environment copied"
+        message = L("editors.message.environmentCopied")
     }
 
     private func updateThumbnail(_ image: CGImage) {

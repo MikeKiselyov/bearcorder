@@ -1,0 +1,47 @@
+/* Controls shared by the screenshot and the video editor (Editors/). */
+
+/* Undo and redo. */
+"editors.undo.tip" = "Undo the last change (⌘Z)";
+"editors.redo.tip" = "Redo what was undone (⇧⌘Z)";
+
+/* Colors. swatch.tip: the color's name ("coral") or "#RRGGBB". */
+"editors.color.any" = "Pick any color";
+"editors.color.any.tip" = "Any color: opens the color panel. The picked color takes the first slot, the others move right";
+"editors.color.swatch.tip" = "Color %@: for new marks and the selected one";
+
+/* Fill. disabled.tip: the tip of the fill option it is added to. */
+"editors.fill.none" = "No fill";
+"editors.fill.none.tip" = "No fill: text without a label behind it, shapes as outlines only";
+"editors.fill.filled" = "Fill";
+"editors.fill.filled.tip" = "Fill: text on a colored label, shapes with a see-through fill";
+"editors.fill.disabled.tip" = "%@. Pick Text, Rectangle or Ellipse to use it";
+
+/* Size stepper. %@ is what the size is of ("text size", "line width"). value.tip: that name capitalized, then the value. */
+"editors.size.smaller" = "Smaller %@";
+"editors.size.smaller.tip" = "Smaller %@ (-)";
+"editors.size.bigger" = "Bigger %@";
+"editors.size.bigger.tip" = "Bigger %@ (+)";
+"editors.size.value.tip" = "%1$@: %2$@";
+
+/* The selected mark. title: the mark's kind. */
+"editors.selected.title" = "Selected · %@";
+"editors.selected.text" = "Text";
+
+/* Environment panel. */
+"editors.environment.title" = "Environment";
+"editors.environment.edit" = "Edit";
+"editors.environment.edit.tip" = "Choose the fields, their names and your own fields in Settings → Bug reports";
+"editors.environment.copy" = "Copy";
+"editors.badge.corner" = "Corner";
+
+/* Screens of a capture from several displays. option: the screen's name. switchFailed: the error. */
+"editors.screen.option" = "Screen: %@";
+"editors.screen.switchFailed" = "Could not switch the screen: %@";
+
+/* Bottom bar. */
+"editors.drag" = "Drag";
+"editors.save" = "Save to folder";
+
+/* Messages after an action. */
+"editors.message.reportCopied" = "Bug report copied. Paste it into the ticket.";
+"editors.message.environmentCopied" = "Environment copied";

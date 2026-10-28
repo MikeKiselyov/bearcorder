@@ -28,7 +28,7 @@ final class RegionSelector {
     }
     private var continuation: CheckedContinuation<Selection?, Never>?
 
-    func pick(on screen: NSScreen, initial: CGRect?, confirmTitle: String = "Record  ↩", showsSizes: Bool = true) async -> Selection? {
+    func pick(on screen: NSScreen, initial: CGRect?, confirmTitle: String = L("recording.areaPicker.record"), showsSizes: Bool = true) async -> Selection? {
         return await withCheckedContinuation { continuation in
             self.continuation = continuation
             let newPanel = KeyablePanel(contentRect: screen.frame, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
@@ -111,7 +111,7 @@ final class DrawnButton: NSAccessibilityElement {
 final class RegionSelectionView: NSView {
     var selection: CGRect = .zero
     var onFinish: ((CGRect?) -> Void)?
-    var confirmTitle = "Record  ↩"
+    var confirmTitle = L("recording.areaPicker.record")
     /// The ready-made size bar; off where sizes make no sense (scrolling screenshots).
     var showsSizes = true
 
@@ -144,8 +144,8 @@ final class RegionSelectionView: NSView {
         SizePreset(title: "16:9", kind: .aspect(CGSize(width: 16, height: 9))),
         SizePreset(title: "4:3", kind: .aspect(CGSize(width: 4, height: 3))),
         SizePreset(title: "1:1", kind: .aspect(CGSize(width: 1, height: 1))),
-        SizePreset(title: "Phone", kind: .points(CGSize(width: 390, height: 844))),
-        SizePreset(title: "Full screen", kind: .fullScreen),
+        SizePreset(title: L("recording.areaPicker.size.phone"), kind: .points(CGSize(width: 390, height: 844))),
+        SizePreset(title: L("recording.areaPicker.size.fullScreen"), kind: .fullScreen),
     ]
 
     private let presetFont = NSFont.systemFont(ofSize: 12, weight: .medium)
@@ -264,7 +264,7 @@ final class RegionSelectionView: NSView {
         if showsSizes {
             drawPresetBar()
         }
-        drawButton(buttonRects.cancel, title: "Cancel  esc", fill: NSColor(hex: 0x2B2D31), text: .white)
+        drawButton(buttonRects.cancel, title: L("recording.areaPicker.cancel.withKey"), fill: NSColor(hex: 0x2B2D31), text: .white)
         drawButton(buttonRects.record, title: confirmTitle, fill: NSColor(hex: 0xFF6B4A), text: NSColor(hex: 0x1A0B06))
     }
 
@@ -275,7 +275,7 @@ final class RegionSelectionView: NSView {
         NSColor(hex: 0x1C1D20, alpha: 0.92).setFill()
         NSBezierPath(roundedRect: bar, xRadius: 9, yRadius: 9).fill()
         let labelAttributes: [NSAttributedString.Key: Any] = [.font: presetFont, .foregroundColor: NSColor(white: 1, alpha: 0.6)]
-        ("Size" as NSString).draw(at: CGPoint(x: bar.minX + 12, y: first.midY - 8), withAttributes: labelAttributes)
+        (L("recording.areaPicker.size") as NSString).draw(at: CGPoint(x: bar.minX + 12, y: first.midY - 8), withAttributes: labelAttributes)
         let scale = window?.backingScaleFactor ?? 2
         for (index, preset) in presets.enumerated() {
             var isCurrent = false
@@ -322,7 +322,7 @@ final class RegionSelectionView: NSView {
         var buttons: [DrawnButton] = []
         if showsSizes {
             for (index, preset) in presets.enumerated() {
-                let button = DrawnButton(label: "Size \(preset.title)", view: self, rect: { [weak self] in
+                let button = DrawnButton(label: L("recording.areaPicker.size.button", preset.title), view: self, rect: { [weak self] in
                     self?.presetRects[index] ?? .zero
                 }, action: { [weak self] in
                     self?.apply(preset)
@@ -330,7 +330,7 @@ final class RegionSelectionView: NSView {
                 buttons.append(button)
             }
         }
-        buttons.append(DrawnButton(label: "Cancel", view: self, rect: { [weak self] in
+        buttons.append(DrawnButton(label: L("recording.areaPicker.cancel"), view: self, rect: { [weak self] in
             self?.buttonRects.cancel ?? .zero
         }, action: { [weak self] in
             self?.onFinish?(nil)

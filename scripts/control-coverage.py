@@ -13,7 +13,7 @@ ROOT = Path(__file__).resolve().parent.parent
 TEST_FILES = [
     ROOT / "scripts" / "e2e.sh",
     ROOT / "scripts" / "e2e-features.sh",
-    ROOT / "Sources" / "Bugbear" / "Support" / "DevChecks.swift",
+    ROOT / "Sources" / "Bugbear" / "DevTools" / "DevChecks.swift",
 ]
 
 

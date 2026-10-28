@@ -115,15 +115,15 @@ final class RulerView: NSView {
         let pixelsWide = Int((rect.width * pixelScale).rounded())
         let pixelsHigh = Int((rect.height * pixelScale).rounded())
         let distance = Int(hypot(to.x - from.x, to.y - from.y).rounded())
-        var lines = [sizeText, "\(pixelsWide) × \(pixelsHigh) px · diagonal \(distance) pt"]
+        var lines = [sizeText, L("recording.ruler.pixelsAndDiagonal", pixelsWide, pixelsHigh, distance)]
         if copied {
-            lines.append("Copied")
+            lines.append(L("recording.ruler.copied"))
         }
         drawLabel(lines, near: CGPoint(x: rect.maxX + 10, y: rect.maxY + 10))
     }
 
     private func drawHint() {
-        let text = "Drag to measure  ·  ⌘C copies the size  ·  Esc to finish" as NSString
+        let text = L("recording.ruler.hint") as NSString
         let attributes: [NSAttributedString.Key: Any] = [.font: NSFont.systemFont(ofSize: 13, weight: .medium), .foregroundColor: NSColor.white]
         let size = text.size(withAttributes: attributes)
         let rect = CGRect(x: bounds.midX - size.width / 2 - 14, y: 48, width: size.width + 28, height: size.height + 14)

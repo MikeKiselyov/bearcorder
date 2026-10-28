@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Texts with a count: the word changes with the number (one/other in English; other languages add few, many...). -->
+<plist version="1.0">
+<dict>
+    <key>settings.buffer.length.minutes</key>
+    <dict>
+        <key>NSStringLocalizedFormatKey</key>
+        <string>%#@minutes@</string>
+        <key>minutes</key>
+        <dict>
+            <key>NSStringFormatSpecTypeKey</key>
+            <string>NSStringPluralRuleType</string>
+            <key>NSStringFormatValueTypeKey</key>
+            <string>ld</string>
+            <key>one</key>
+            <string>%ld minute</string>
+            <key>other</key>
+            <string>%ld minutes</string>
+        </dict>
+    </dict>
+    <key>settings.storage.cleanUp.deleted</key>
+    <dict>
+        <key>NSStringLocalizedFormatKey</key>
+        <string>Deleted %#@captures@</string>
+        <key>captures</key>
+        <dict>
+            <key>NSStringFormatSpecTypeKey</key>
+            <string>NSStringPluralRuleType</string>
+            <key>NSStringFormatValueTypeKey</key>
+            <string>ld</string>
+            <key>one</key>
+            <string>%ld capture</string>
+            <key>other</key>
+            <string>%ld captures</string>
+        </dict>
+    </dict>
+    <key>settings.storage.days</key>
+    <dict>
+        <key>NSStringLocalizedFormatKey</key>
+        <string>%#@days@</string>
+        <key>days</key>
+        <dict>
+            <key>NSStringFormatSpecTypeKey</key>
+            <string>NSStringPluralRuleType</string>
+            <key>NSStringFormatValueTypeKey</key>
+            <string>ld</string>
+            <key>one</key>
+            <string>%ld day</string>
+            <key>other</key>
+            <string>%ld days</string>
+        </dict>
+    </dict>
+    <key>settings.storage.usedValue</key>
+    <dict>
+        <key>NSStringLocalizedFormatKey</key>
+        <string>%1$@ · %2$#@captures@</string>
+        <key>captures</key>
+        <dict>
+            <key>NSStringFormatSpecTypeKey</key>
+            <string>NSStringPluralRuleType</string>
+            <key>NSStringFormatValueTypeKey</key>
+            <string>ld</string>
+            <key>one</key>
+            <string>%ld capture</string>
+            <key>other</key>
+            <string>%ld captures</string>
+        </dict>
+    </dict>
+</dict>
+</plist>

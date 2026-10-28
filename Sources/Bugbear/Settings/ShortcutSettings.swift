@@ -9,7 +9,7 @@ struct ShortcutSettingsSection: View {
     @State private var monitor: Any?
 
     var body: some View {
-        Section("Shortcuts") {
+        Section(L("settings.shortcuts.section")) {
             ForEach(HotKeyAction.allCases) { action in
                 HStack {
                     Text(action.title)
@@ -21,25 +21,25 @@ struct ShortcutSettingsSection: View {
                             .font(.system(size: 12, weight: .medium, design: .monospaced))
                             .frame(minWidth: 96)
                     }
-                    .accessibilityLabel("\(action.title): \(label(for: action))")
-                    .tip("Click, then press the new keys. Esc cancels, Delete removes the shortcut.")
+                    .accessibilityLabel(L("settings.shortcuts.row.label", action.title, label(for: action)))
+                    .tip(L("settings.shortcuts.row.tip"))
                 }
             }
             if let message = problem {
                 Text(message).font(.system(size: 12)).foregroundStyle(Theme.warning)
             }
             HStack {
-                Text("Shortcuts need ⌘, ⌥ or ⌃ so they don't get in the way of typing.")
+                Text(L("settings.shortcuts.note"))
                     .font(.system(size: 12))
                     .foregroundStyle(Theme.textSecondary)
                 Spacer()
-                Button("Reset to defaults") {
+                Button(L("settings.shortcuts.reset")) {
                     stopRecording()
                     hotKeys.resetAll()
                     problem = nil
                 }
                 .disabled(!hotKeys.isCustomized)
-                .tip("Restore every shortcut to its default keys")
+                .tip(L("settings.shortcuts.reset.tip"))
             }
         }
         .onDisappear { stopRecording() }
@@ -47,11 +47,11 @@ struct ShortcutSettingsSection: View {
 
     private func label(for action: HotKeyAction) -> String {
         if recording == action {
-            return "Press keys…"
+            return L("settings.shortcuts.recording")
         }
         let text = hotKeys.text(for: action)
         if text.isEmpty {
-            return "None"
+            return L("settings.shortcuts.none")
         }
         return text
     }
@@ -81,11 +81,11 @@ struct ShortcutSettingsSection: View {
             return
         }
         guard let shortcut = Shortcut.from(event) else {
-            problem = "Add ⌘, ⌥ or ⌃ to the key."
+            problem = L("settings.shortcuts.error.noModifier")
             return
         }
         if let owner = hotKeys.owner(of: shortcut, except: action) {
-            problem = "\(shortcut.display) is already \"\(owner.title)\". Pick another or change that one first."
+            problem = L("settings.shortcuts.error.taken", shortcut.display, owner.title)
             return
         }
         stopRecording()

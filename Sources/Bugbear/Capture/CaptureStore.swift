@@ -65,7 +65,10 @@ struct Capture: Codable, Identifiable, Equatable {
 
     var title: String {
         if !environment.appName.isEmpty { return environment.appName }
-        return kind == .screenshot ? "Screenshot" : "Clip"
+        if kind == .screenshot {
+            return L("capture.title.screenshot")
+        }
+        return L("capture.title.clip")
     }
 
     var searchText: String {

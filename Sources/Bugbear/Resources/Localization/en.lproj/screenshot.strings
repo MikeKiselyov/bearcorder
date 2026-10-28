@@ -1,0 +1,56 @@
+/* The screenshot editor (Editors/Screenshot/). */
+
+"screenshot.openFailed" = "Could not open this screenshot";
+
+/* Toolbar. tool.tip: the tool's name, its key, then what it is for. */
+"screenshot.tool.tip" = "%1$@ (%2$@): %3$@";
+"screenshot.insertImage.tip" = "Insert an image on top of this one: pick a file, paste one with ⌘V (Command + V) or drop it here";
+"screenshot.insertImage.choose" = "Pick a screenshot or picture to place on this one";
+"screenshot.combine.tip" = "Combine with another screenshot: places other images to the right";
+"screenshot.combine.choose" = "Pick screenshots to place to the right";
+"screenshot.size.text" = "text size";
+"screenshot.size.line" = "line width";
+
+/* Crop. */
+"screenshot.crop.hint" = "Drag the edges or corners · drag inside to move · Enter to apply · Esc to leave";
+"screenshot.crop.reset" = "Reset crop";
+
+/* Sidebar. step.number: the step's number. layers.delete: the layer's name. */
+"screenshot.report.tip" = "Steps from your clicks and keys in the last minute, environment and the saved file";
+"screenshot.badge.toggle" = "Overlay on image";
+"screenshot.step.number" = "Number %ld";
+"screenshot.selected.delete" = "Delete";
+"screenshot.layers.title" = "Layers";
+"screenshot.layers.empty" = "Pick a tool above and draw on the screenshot.";
+"screenshot.layers.delete" = "Delete %@";
+
+/* Bottom bar. */
+"screenshot.zoom.out" = "Zoom out";
+"screenshot.zoom.in" = "Zoom in";
+"screenshot.zoom.fit" = "Fit";
+"screenshot.screen.tip" = "Which screen is in the screenshot. Each one keeps its own marks.";
+"screenshot.copy" = "Copy  ⌘C";
+"screenshot.drag.tip" = "Drag the edited image into another app";
+
+/* File type menu. format.tip: the chosen type's detail. option: the type's name, then the file size. */
+"screenshot.export.format" = "File type";
+"screenshot.export.format.tip" = "File type and quality for Save, Drag and the file in Copy, with the size it comes out at. %@";
+"screenshot.export.option" = "%1$@ · %2$@";
+"screenshot.format.png" = "PNG";
+"screenshot.format.png.detail" = "Sharp, every pixel kept";
+"screenshot.format.pngHalf" = "PNG, half size";
+"screenshot.format.pngHalf.detail" = "Sharp, half the width and height";
+"screenshot.format.jpegHigh" = "JPEG, high";
+"screenshot.format.jpegHigh.detail" = "Looks the same, smaller file";
+"screenshot.format.jpegMedium" = "JPEG, medium";
+"screenshot.format.jpegMedium.detail" = "Small file, fine for chats";
+"screenshot.format.jpegSmall" = "JPEG, small";
+"screenshot.format.jpegSmall.detail" = "Smallest: half size, more compression";
+
+/* Messages after an action. saved: the folder's name. saveFailed: the error. */
+"screenshot.message.copiedOnCapture" = "Copied to the clipboard · ⌘V to paste";
+"screenshot.message.copied" = "Copied to clipboard";
+"screenshot.message.saved" = "Saved to %@";
+"screenshot.message.saveFailed" = "Could not save: %@";
+"screenshot.message.imageFailed" = "Could not add the image";
+"screenshot.message.imageAdded" = "Image added: drag to move, corners to resize";

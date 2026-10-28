@@ -7,7 +7,8 @@
 # Changes only to docs (*.md, docs/) or CI (.github/) need no release.
 set -euo pipefail
 
-cd "$(dirname "$0")/.."
+# shellcheck source=lib/common.sh
+source "$(dirname "$0")/lib/common.sh"
 BASE="${1:?usage: scripts/check-release.sh <base ref>}"
 CATALOG="Sources/BugbearCore/Support/WhatsNewCatalog.swift"
 
@@ -35,7 +36,9 @@ highest=$(printf '%s\n%s\n' "$old_version" "$new_version" | sort -t. -k1,1n -k2,
 if [ "$new_version" = "$old_version" ] || [ "$highest" != "$new_version" ]; then
     echo
     echo "This branch changes the app but has no new release. Files:"
-    echo "$app_changes" | sed 's/^/  /'
+    while IFS= read -r changed_file; do
+        echo "  $changed_file"
+    done <<< "$app_changes"
     echo
     echo "Add a release on top of $CATALOG with the next id and a version above $old_version:"
     echo "a patch (x.y.Z) for fixes, a minor (x.Y.0) for new features. Write it for people, not as a commit list."

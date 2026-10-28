@@ -9,6 +9,8 @@ enum VideoTool: String, CaseIterable, Identifiable {
     case arrow
     case rectangle
     case blur
+    /// Picks the part of the frame that ends up in the video.
+    case crop
 
     var id: String { rawValue }
 
@@ -18,7 +20,7 @@ enum VideoTool: String, CaseIterable, Identifiable {
         case .arrow: return .arrow
         case .rectangle: return .rectangle
         case .blur: return .blur
-        case .select: return nil
+        case .select, .crop: return nil
         }
     }
 }
@@ -39,7 +41,25 @@ final class VideoEditorModel {
     let player = AVPlayer()
 
     var project: VideoProject
-    var tool: VideoTool = .select
+    /// Crop shows the whole frame to pick from; leaving it shows the cropped video again.
+    var tool: VideoTool = .select {
+        didSet {
+            if (oldValue == .crop) != (tool == .crop) {
+                rebuildTask?.cancel()
+                rebuildTask = Task {
+                    // Export cancels it and builds the cropped video itself.
+                    if Task.isCancelled { return }
+                    await rebuild(keepPosition: true)
+                }
+            }
+        }
+    }
+    /// The part of the frame the preview shows (0…1): the crop, or all of it while cropping.
+    private(set) var previewCrop = VideoCrop.whole
+    /// Width over height of the preview picture.
+    private(set) var previewAspect: CGFloat = 16.0 / 9.0
+    /// Pixel size of the whole frame, for the size shown while cropping.
+    private(set) var sourceSize: CGSize = .zero
     var selection: TimelineItem?
     /// The text mark being typed right on the video.
     var editingTextID: UUID?
@@ -60,6 +80,9 @@ final class VideoEditorModel {
     @ObservationIgnored private var sourceBitsPerPixelSecond: Double?
     @ObservationIgnored private var timeObserver: Any?
     @ObservationIgnored private var rebuildTask: Task<Void, Never>?
+    /// Counts preview builds: a build that finishes after a newer one started is dropped, so a slow
+    /// whole-frame build for Crop never replaces the cropped one.
+    @ObservationIgnored private var buildGeneration = 0
     @ObservationIgnored private var undoStack: [VideoProject] = []
     @ObservationIgnored private var redoStack: [VideoProject] = []
 
@@ -199,8 +222,9 @@ final class VideoEditorModel {
 
     /// Persists and rebuilds the preview shortly after the last change. Undo and redo pass
     /// `remembering: false`: going back is not a new choice for the next clip.
-    func projectChanged(remembering: Bool = true) {
+    func projectChanged(remembering: Bool = true, rebuilding: Bool = true) {
         save(remembering: remembering)
+        if !rebuilding { return }
         rebuildTask?.cancel()
         rebuildTask = Task {
             try? await Task.sleep(nanoseconds: 180_000_000)
@@ -225,13 +249,25 @@ final class VideoEditorModel {
     // MARK: Preview
 
     private func rebuild(keepPosition: Bool) async {
+        buildGeneration += 1
+        let generation = buildGeneration
         isBuilding = true
-        defer { isBuilding = false }
+        defer {
+            if generation == buildGeneration {
+                isBuilding = false
+            }
+        }
         let sourcePosition = playhead
         do {
-            let built = try await VideoCompositor.build(asset: asset, project: project, events: capture.events, environment: capture.environment)
+            let built = try await VideoCompositor.build(asset: asset, project: project, events: capture.events, environment: capture.environment, showsWholeFrame: tool == .crop)
+            if generation != buildGeneration { return }
             output = built
             outputVersion += 1
+            previewCrop = built.crop
+            sourceSize = built.sourceSize
+            if built.renderSize.height > 0 {
+                previewAspect = built.renderSize.width / built.renderSize.height
+            }
             let item = AVPlayerItem(asset: built.composition)
             item.videoComposition = built.videoComposition
             let wasPlaying = isPlaying
@@ -295,6 +331,17 @@ final class VideoEditorModel {
 
     // MARK: Edits
 
+    /// The part of the frame in the video, nil for all of it.
+    func setCrop(_ crop: CGRect?) {
+        let picked = VideoCrop.normalized(crop)
+        if picked == project.crop { return }
+        checkpoint()
+        project.crop = picked
+        // While cropping the preview shows the whole frame anyway: only the size changes.
+        projectChanged(rebuilding: tool != .crop)
+        outputVersion += 1
+    }
+
     func setTrimStart(_ value: Double) {
         let end = project.timeline.trim.end
         project.timeline.trim = TimeSpan(start: max(0, min(value, end - 0.2)), end: end)
@@ -317,7 +364,7 @@ final class VideoEditorModel {
 
     func cutSelection() {
         guard let selected = range, selected.duration > 0.05 else {
-            message = "Drag on the ruler to choose what to cut"
+            message = L("video.message.chooseCut")
             return
         }
         checkpoint()
@@ -452,9 +499,9 @@ final class VideoEditorModel {
             bytes = seconds * Double(project.gifFramesPerSecond) * 90_000
         } else if let limit = project.sizeLimitMB {
             if SizeBudget.cannotFit(limitMB: limit, duration: seconds, hasAudio: true) {
-                return "too long for \(limit) MB"
+                return L("video.export.size.tooLong", limit)
             }
-            return "≤ \(limit) MB"
+            return L("video.export.size.limit", limit)
         } else if let estimate = estimatedBytes(for: project.quality) {
             bytes = estimate
         }
@@ -465,26 +512,49 @@ final class VideoEditorModel {
     /// preview is built.
     func estimatedBytes(for quality: VideoQuality) -> Double? {
         _ = outputVersion
-        guard let built = output else { return nil }
-        let preset = SizeBudget.preset(sourceWidth: built.renderSize.width, sourceHeight: built.renderSize.height, maxHeight: quality.maxHeight)
+        guard let built = output, let size = exportSize else { return nil }
+        let preset = SizeBudget.preset(sourceWidth: size.width, sourceHeight: size.height, maxHeight: quality.maxHeight)
         let hasAudio = !built.composition.tracks(withMediaType: .audio).isEmpty
         let bitrate = SizeBudget.expectedVideoBitrate(presetBitrate: preset.videoBitrate, sourceBitsPerPixelSecond: sourceBitsPerPixelSecond, width: preset.width, height: preset.height)
         return SizeBudget.estimatedBytes(videoBitrate: bitrate, duration: outputDuration, hasAudio: hasAudio)
     }
 
+    /// The size of the saved video before scaling: the crop's, also while the whole frame shows.
+    var exportSize: CGSize? {
+        _ = outputVersion
+        guard let built = output else { return nil }
+        if tool != .crop {
+            return built.renderSize
+        }
+        guard let crop = VideoCrop.normalized(project.crop) else { return built.sourceSize }
+        return VideoCrop.pixelRect(crop, width: Int(built.sourceSize.width), height: Int(built.sourceSize.height)).size
+    }
+
     /// "1080p · ≈ 12 MB" for the quality menu.
     func qualityLabel(_ quality: VideoQuality) -> String {
-        guard let bytes = estimatedBytes(for: quality) else { return quality.rawValue }
-        var label = quality.rawValue
-        if let built = output, let height = quality.maxHeight, built.renderSize.height <= height {
-            label += " (same as original)"
+        guard let bytes = estimatedBytes(for: quality) else { return quality.title }
+        var label = quality.title
+        if let size = exportSize, let height = quality.maxHeight, size.height <= height {
+            label = L("video.quality.sameAsOriginal", label)
         }
         return label + " · ≈ " + DataSizeConverter.describe(bytes).decimal
     }
 
     /// Exports to `url`, or to a temp file when nil. Returns the file.
     func export(to url: URL? = nil) async -> URL? {
-        guard let built = output else { return nil }
+        // The preview shows the whole frame while cropping; the file gets the crop.
+        if tool == .crop {
+            tool = .select
+        }
+        let expectedCrop = VideoCrop.normalized(project.crop) ?? VideoCrop.whole
+        if output?.crop != expectedCrop.pixelAligned(to: output?.sourceSize) {
+            rebuildTask?.cancel()
+            await rebuild(keepPosition: true)
+        }
+        guard let built = output, built.crop == expectedCrop.pixelAligned(to: built.sourceSize) else {
+            message = L("video.message.previewNotReady")
+            return nil
+        }
         let ext = project.format == .gif ? "gif" : "mp4"
         let target = url ?? AppPaths.temporary.appendingPathComponent(UUID().uuidString, isDirectory: true).appendingPathComponent(AppPaths.exportName(date: capture.createdAt)).appendingPathExtension(ext)
         try? FileManager.default.createDirectory(at: target.deletingLastPathComponent(), withIntermediateDirectories: true)
@@ -516,7 +586,7 @@ final class VideoEditorModel {
         let attributes = try? FileManager.default.attributesOfItem(atPath: file.path)
         let bytes = (attributes?[.size] as? NSNumber)?.doubleValue ?? 0
         if bytes > Double(limit) * 1_000_000 {
-            message = "The file is \(DataSizeConverter.describe(bytes).decimal), over the \(limit) MB limit. Trim the clip."
+            message = L("video.message.overLimit", DataSizeConverter.describe(bytes).decimal, limit)
         }
     }
 
@@ -538,14 +608,14 @@ final class VideoEditorModel {
 
     func copyBugReport(format: BugReport.Format) {
         BugReportBuilder.copy(for: capture, timeMap: output?.timeMap, format: format)
-        message = "Bug report copied. Paste it into the ticket."
+        message = L("editors.message.reportCopied")
     }
 
     func saveToFolder() async {
         let ext = project.format == .gif ? "gif" : "mp4"
         let url = AppPaths.uniqueURL(in: AppSettings.shared.outputFolder, name: AppPaths.exportName(date: capture.createdAt), ext: ext)
         if let saved = await export(to: url) {
-            message = "Saved \(saved.lastPathComponent)"
+            message = L("video.message.saved", saved.lastPathComponent)
             SystemActions.reveal([saved])
         }
     }
@@ -556,6 +626,6 @@ final class VideoEditorModel {
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
         pasteboard.writeObjects([file as NSURL])
-        message = "Copied \(project.format.rawValue) to clipboard"
+        message = L("video.message.copied", project.format.rawValue)
     }
 }

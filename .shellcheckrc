@@ -1,0 +1,6 @@
+# shellcheck finds sourced files next to the script that sources them (scripts/lib/common.sh).
+source-path=SCRIPTDIR
+external-sources=true
+# The tests list folders the app and the tests themselves fill (capture ids, exported clips):
+# no odd names, so ls | head is fine there.
+disable=SC2012

@@ -1,0 +1,115 @@
+/* The captures history (History/): the window with every capture, the step guide and before/after compare. */
+
+/* Sidebar filters and their tips. */
+"history.filter.all" = "All";
+"history.filter.screenshots" = "Screenshots";
+"history.filter.videos" = "Videos";
+"history.filter.all.tip" = "Show every capture";
+"history.filter.screenshots.tip" = "Show only screenshots";
+"history.filter.videos.tip" = "Show only videos";
+
+/* Apps in the sidebar. %@ is the app's name. */
+"history.sidebar.apps" = "Apps";
+"history.sidebar.app" = "App: %@";
+"history.sidebar.app.tip" = "Show only captures of %@";
+
+/* Day headers above the captures. */
+"history.day.today" = "Today";
+"history.day.yesterday" = "Yesterday";
+
+/* Empty states. hint: the shortcut for a screenshot, then the shortcut that saves the last minute. */
+"history.empty.noCaptures" = "No captures yet";
+"history.empty.noMatches" = "Nothing matches";
+"history.empty.hint" = "%1$@ takes a screenshot, %2$@ saves the last minute of the screen.";
+
+/* Toolbar. count: how many captures are shown. */
+"history.search.placeholder" = "Search by app, URL…";
+"history.search.tip" = "Filter captures by app name, URL, title or other environment details";
+"history.select" = "Select";
+"history.select.tip" = "Select captures for a step guide or a before/after comparison";
+"history.openFolder" = "Open folder";
+"history.openFolder.tip" = "Open the folder with all captures in Finder";
+
+/* The bar at the bottom while selecting. count: how many captures are picked. */
+"history.selection.count" = "%ld selected";
+"history.selection.stepGuide" = "Step guide";
+"history.selection.stepGuide.tip" = "Put the selected screenshots into one numbered guide (PNG or PDF)";
+"history.selection.compare" = "Compare";
+"history.selection.compare.tip" = "Pick two screenshots or two clips: before and after";
+"history.selection.done" = "Done";
+"history.selection.done.tip" = "Finish selecting and clear the selection";
+
+/* A capture card. label: the app's name, then the date and time it was taken. */
+"history.card.kind.screenshot" = "Screenshot";
+"history.card.kind.clip" = "Clip";
+"history.card.label.screenshot" = "Screenshot: %1$@, %2$@";
+"history.card.label.clip" = "Clip: %1$@, %2$@";
+"history.card.tip" = "Double-click to open in the editor, drag to drop the file into another app";
+"history.card.moreActions" = "More actions";
+"history.card.moreActions.tip" = "More actions: open, show in Finder, copy a bug report or the environment, delete";
+
+/* The card's "More actions" menu. */
+"history.card.action.open" = "Open";
+"history.card.action.reveal" = "Show original in Finder";
+"history.card.action.copyMarkdown" = "Copy bug report (Markdown)";
+"history.card.action.copyJira" = "Copy bug report (Jira wiki)";
+"history.card.action.copyEnvironment" = "Copy environment";
+"history.card.action.systemLog" = "Open system log";
+"history.card.action.crashReport" = "Open crash report";
+"history.card.action.delete" = "Delete…";
+
+/* Deleting a capture. */
+"history.delete.question" = "Delete this capture?";
+"history.delete.confirm" = "Delete";
+"history.delete.message" = "The original and all edits are removed. Exported files stay where you saved them.";
+
+/* Before/after compare. before and after also label the copied image. */
+"history.compare.mode.sideBySide" = "Side by side";
+"history.compare.mode.slider" = "Slider";
+"history.compare.mode.changes" = "Changes";
+"history.compare.mode.tip" = "How to compare: side by side, a before/after slider, or only the changed areas highlighted";
+"history.compare.copyImage" = "Copy image";
+"history.compare.copyImage.tip" = "Copy the comparison as an image to paste into a bug report";
+"history.compare.copied" = "Copied Before | After";
+"history.compare.loading" = "Loading…";
+"history.compare.before" = "Before";
+"history.compare.after" = "After";
+"history.compare.afterBoxed" = "After · changes boxed";
+"history.compare.slider.hint" = "Drag: before on the left, after on the right";
+
+/* Compare summary. one: the share of changed pixels, like 1.5. many: the number of areas, then the share of pixels. */
+"history.compare.summary.none" = "No visible differences";
+
+/* Comparing two clips. */
+"history.compare.video.play" = "Play both";
+"history.compare.video.pause" = "Pause both";
+"history.compare.video.play.tip" = "Play or pause both clips together (Space)";
+"history.compare.video.position" = "Position";
+"history.compare.video.position.tip" = "Scrub both clips to the same moment";
+
+/* Step guide. defaultTitle and step (a step without a caption, %ld is its number) go into the saved guide. */
+"history.guide.defaultTitle" = "How to reproduce";
+"history.guide.step" = "Step %ld";
+"history.guide.title" = "Title";
+"history.guide.title.tip" = "Title shown at the top of the guide";
+"history.guide.copyImage" = "Copy image";
+"history.guide.copyImage.tip" = "Copy the whole guide as one image to paste anywhere";
+"history.guide.savePDF" = "Save PDF…";
+"history.guide.savePDF.tip" = "Save the guide as a PDF file";
+"history.guide.savePNG" = "Save PNG…";
+"history.guide.savePNG.tip" = "Save the guide as one tall PNG image";
+"history.guide.empty" = "No screenshots to put in the guide.";
+"history.guide.copied" = "Copied the guide as one image";
+"history.guide.saved" = "Saved %@";
+"history.guide.saveFailed" = "Could not save the guide";
+
+/* A step row. %ld is the step's number. */
+"history.guide.caption" = "Caption of step %ld";
+"history.guide.caption.placeholder" = "What to do in this step, e.g. Open Settings → Billing";
+"history.guide.caption.tip" = "Caption for this step, shown under its number in the guide";
+"history.guide.moveUp" = "Move step %ld up";
+"history.guide.moveUp.tip" = "Move this step up in the guide";
+"history.guide.moveDown" = "Move step %ld down";
+"history.guide.moveDown.tip" = "Move this step down in the guide";
+"history.guide.remove" = "Remove step %ld";
+"history.guide.remove.tip" = "Remove from the guide";

@@ -1,0 +1,47 @@
+/* Marks drawn on screenshots and in the live overlay (Annotations/). */
+
+/* Tool names. */
+"annotations.tool.select" = "Select";
+"annotations.tool.arrow" = "Arrow";
+"annotations.tool.callout" = "Arrow with text";
+"annotations.tool.rectangle" = "Rectangle";
+"annotations.tool.ellipse" = "Ellipse";
+"annotations.tool.line" = "Line";
+"annotations.tool.highlighter" = "Highlighter";
+"annotations.tool.pen" = "Pen";
+"annotations.tool.text" = "Text";
+"annotations.tool.step" = "Numbered step";
+"annotations.tool.blur" = "Blur";
+"annotations.tool.magnifier" = "Magnifier";
+"annotations.tool.crop" = "Crop";
+"annotations.tool.image" = "Image";
+
+/* What each tool is for, after the tool name in its tooltip ("Arrow (A): point at something"). */
+"annotations.tool.select.purpose" = "pick, move and resize marks";
+"annotations.tool.arrow.purpose" = "point at something";
+"annotations.tool.callout.purpose" = "point at something and type the note right at the arrow";
+"annotations.tool.rectangle.purpose" = "frame an area";
+"annotations.tool.ellipse.purpose" = "circle an area";
+"annotations.tool.line.purpose" = "draw a straight line";
+"annotations.tool.highlighter.purpose" = "mark text like a marker pen";
+"annotations.tool.pen.purpose" = "draw freehand";
+"annotations.tool.text.purpose" = "write a note on the image";
+"annotations.tool.step.purpose" = "number the steps to reproduce";
+"annotations.tool.blur.purpose" = "hide private data";
+"annotations.tool.magnifier.purpose" = "show a small detail bigger";
+"annotations.tool.crop.purpose" = "cut the image down to the part that matters";
+"annotations.tool.image.purpose" = "show another screenshot or picture on this one";
+
+/* Names in the layers list. text, callout: the start of the mark's text. step: the step's number. */
+"annotations.layer.text" = "Text · %@";
+"annotations.layer.callout" = "Arrow · %@";
+"annotations.layer.step" = "Step %ld";
+
+/* Where the environment badge goes. */
+"annotations.corner.topRight" = "Top right";
+"annotations.corner.topLeft" = "Top left";
+"annotations.corner.bottomRight" = "Bottom right";
+"annotations.corner.bottomLeft" = "Bottom left";
+
+/* Shown, dimmed, where the text of a mark goes while nothing is typed yet. */
+"annotations.text.placeholder" = "Type…";

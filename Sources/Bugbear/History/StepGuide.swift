@@ -13,7 +13,7 @@ final class StepGuideModel {
         var caption: String
     }
 
-    var title = "How to reproduce"
+    var title = L("history.guide.defaultTitle")
     var steps: [Step] = []
     var message: String?
 
@@ -49,7 +49,7 @@ final class StepGuideModel {
         let picture = NSImage(cgImage: image, size: CGSize(width: image.width, height: image.height))
         NSPasteboard.general.clearContents()
         NSPasteboard.general.writeObjects([picture])
-        message = "Copied the guide as one image"
+        message = L("history.guide.copied")
     }
 
     func save(asPDF: Bool) {
@@ -68,10 +68,10 @@ final class StepGuideModel {
             saved = true
         }
         if saved {
-            message = "Saved \(url.lastPathComponent)"
+            message = L("history.guide.saved", url.lastPathComponent)
             SystemActions.reveal([url])
         } else {
-            message = "Could not save the guide"
+            message = L("history.guide.saveFailed")
         }
     }
 }
@@ -112,7 +112,7 @@ enum StepGuideRenderer {
     static func captionText(_ caption: String, number: Int) -> String {
         let trimmed = caption.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.isEmpty {
-            return "Step \(number)"
+            return L("history.guide.step", number)
         }
         return trimmed
     }
@@ -223,24 +223,24 @@ struct StepGuideView: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 12) {
-                TextField("Title", text: $model.title)
+                TextField(L("history.guide.title"), text: $model.title)
                     .textFieldStyle(.roundedBorder)
                     .font(.system(size: 15, weight: .semibold))
                     .frame(maxWidth: 420)
-                    .tip("Title shown at the top of the guide")
+                    .tip(L("history.guide.title.tip"))
                 Spacer()
                 if let message = model.message {
                     Text(message).font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
                 }
-                Button("Copy image") { model.copyImage() }
+                Button(L("history.guide.copyImage")) { model.copyImage() }
                     .buttonStyle(SecondaryButtonStyle())
-                    .tip("Copy the whole guide as one image to paste anywhere")
-                Button("Save PDF…") { model.save(asPDF: true) }
+                    .tip(L("history.guide.copyImage.tip"))
+                Button(L("history.guide.savePDF")) { model.save(asPDF: true) }
                     .buttonStyle(SecondaryButtonStyle())
-                    .tip("Save the guide as a PDF file")
-                Button("Save PNG…") { model.save(asPDF: false) }
+                    .tip(L("history.guide.savePDF.tip"))
+                Button(L("history.guide.savePNG")) { model.save(asPDF: false) }
                     .buttonStyle(AccentButtonStyle())
-                    .tip("Save the guide as one tall PNG image")
+                    .tip(L("history.guide.savePNG.tip"))
             }
             .padding(.horizontal, 16)
             .padding(.top, 36)
@@ -252,7 +252,7 @@ struct StepGuideView: View {
                         stepRow(index: index, step: step)
                     }
                     if model.steps.isEmpty {
-                        Text("No screenshots to put in the guide.").foregroundStyle(Theme.textSecondary)
+                        Text(L("history.guide.empty")).foregroundStyle(Theme.textSecondary)
                     }
                 }
                 .padding(16)
@@ -277,7 +277,7 @@ struct StepGuideView: View {
                 .background(Theme.canvas)
                 .clipShape(RoundedRectangle(cornerRadius: 6))
             VStack(alignment: .leading, spacing: 8) {
-                TextField("What to do in this step, e.g. Open Settings → Billing", text: Binding(get: {
+                TextField(L("history.guide.caption.placeholder"), text: Binding(get: {
                     if index < model.steps.count { return model.steps[index].caption }
                     return ""
                 }, set: { text in
@@ -285,20 +285,20 @@ struct StepGuideView: View {
                 }), axis: .vertical)
                 .textFieldStyle(.roundedBorder)
                 .lineLimit(1...4)
-                .accessibilityLabel("Caption of step \(index + 1)")
-                .tip("Caption for this step, shown under its number in the guide")
+                .accessibilityLabel(L("history.guide.caption", index + 1))
+                .tip(L("history.guide.caption.tip"))
                 HStack(spacing: 10) {
                     Button { model.move(index, by: -1) } label: { Image(systemName: "arrow.up") }
                         .disabled(index == 0)
-                        .accessibilityLabel("Move step \(index + 1) up")
-                        .tip("Move this step up in the guide")
+                        .accessibilityLabel(L("history.guide.moveUp", index + 1))
+                        .tip(L("history.guide.moveUp.tip"))
                     Button { model.move(index, by: 1) } label: { Image(systemName: "arrow.down") }
                         .disabled(index == model.steps.count - 1)
-                        .accessibilityLabel("Move step \(index + 1) down")
-                        .tip("Move this step down in the guide")
+                        .accessibilityLabel(L("history.guide.moveDown", index + 1))
+                        .tip(L("history.guide.moveDown.tip"))
                     Button(role: .destructive) { model.remove(index) } label: { Image(systemName: "trash") }
-                        .accessibilityLabel("Remove step \(index + 1)")
-                        .tip("Remove from the guide")
+                        .accessibilityLabel(L("history.guide.remove", index + 1))
+                        .tip(L("history.guide.remove.tip"))
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(Theme.textSecondary)

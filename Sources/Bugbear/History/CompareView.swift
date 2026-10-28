@@ -19,11 +19,19 @@ struct CompareView: View {
 }
 
 enum CompareMode: String, CaseIterable, Identifiable {
-    case sideBySide = "Side by side"
-    case slider = "Slider"
-    case changes = "Changes"
+    case sideBySide
+    case slider
+    case changes
 
     var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .sideBySide: return L("history.compare.mode.sideBySide")
+        case .slider: return L("history.compare.mode.slider")
+        case .changes: return L("history.compare.mode.changes")
+        }
+    }
 }
 
 /// Renders both images at the same size and finds what changed.
@@ -102,8 +110,8 @@ enum ScreenshotComparison {
         let previous = NSGraphicsContext.current
         NSGraphicsContext.current = NSGraphicsContext(cgContext: context, flipped: false)
         let attributes: [NSAttributedString.Key: Any] = [.font: NSFont.systemFont(ofSize: 40, weight: .bold), .foregroundColor: NSColor(hex: 0x1C1D20)]
-        ("Before" as NSString).draw(at: CGPoint(x: gap, y: height + gap + 10), withAttributes: attributes)
-        ("After" as NSString).draw(at: CGPoint(x: gap * 2 + output.before.width, y: height + gap + 10), withAttributes: attributes)
+        (L("history.compare.before") as NSString).draw(at: CGPoint(x: gap, y: height + gap + 10), withAttributes: attributes)
+        (L("history.compare.after") as NSString).draw(at: CGPoint(x: gap * 2 + output.before.width, y: height + gap + 10), withAttributes: attributes)
         NSGraphicsContext.current = previous
         return context.makeImage()
     }
@@ -121,9 +129,9 @@ struct ScreenshotCompareView: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 12) {
-                PillPicker(options: CompareMode.allCases, selection: $mode) { value in value.rawValue }
+                PillPicker(options: CompareMode.allCases, selection: $mode) { value in value.title }
                     .frame(width: 360)
-                    .tip("How to compare: side by side, a before/after slider, or only the changed areas highlighted")
+                    .tip(L("history.compare.mode.tip"))
                 if let current = output {
                     Text(summary(current.result)).font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
                 }
@@ -131,10 +139,10 @@ struct ScreenshotCompareView: View {
                 if let text = message {
                     Text(text).font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
                 }
-                Button("Copy image") { copy() }
+                Button(L("history.compare.copyImage")) { copy() }
                     .buttonStyle(AccentButtonStyle(isEnabled: output != nil))
                     .disabled(output == nil)
-                    .tip("Copy the comparison as an image to paste into a bug report")
+                    .tip(L("history.compare.copyImage.tip"))
             }
             .padding(.horizontal, 16)
             .padding(.top, 36)
@@ -146,7 +154,7 @@ struct ScreenshotCompareView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .background(Theme.canvas)
             } else {
-                Text("Loading…").foregroundStyle(Theme.textSecondary).frame(maxWidth: .infinity, maxHeight: .infinity)
+                Text(L("history.compare.loading")).foregroundStyle(Theme.textSecondary).frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
         .foregroundStyle(Theme.text)
@@ -162,13 +170,10 @@ struct ScreenshotCompareView: View {
 
     private func summary(_ result: PixelDiff.Result) -> String {
         if result.regions.isEmpty {
-            return "No visible differences"
+            return L("history.compare.summary.none")
         }
         let percent = String(format: "%.1f", result.changedShare * 100)
-        if result.regions.count == 1 {
-            return "1 changed area · \(percent)% of pixels"
-        }
-        return "\(result.regions.count) changed areas · \(percent)% of pixels"
+        return L("history.compare.summary", result.regions.count, percent)
     }
 
     @ViewBuilder
@@ -176,8 +181,8 @@ struct ScreenshotCompareView: View {
         switch mode {
         case .sideBySide:
             HStack(spacing: 16) {
-                labeled("Before", current.before)
-                labeled("After", current.after)
+                labeled(L("history.compare.before"), current.before)
+                labeled(L("history.compare.after"), current.after)
             }
         case .slider:
             GeometryReader { geometry in
@@ -197,7 +202,7 @@ struct ScreenshotCompareView: View {
                     split = max(0, min(1, value.location.x / geometry.size.width))
                 })
                 .overlay(alignment: .top) {
-                    Text("Drag: before on the left, after on the right")
+                    Text(L("history.compare.slider.hint"))
                         .font(.system(size: 11))
                         .padding(6)
                         .background(Color.black.opacity(0.65))
@@ -207,9 +212,9 @@ struct ScreenshotCompareView: View {
             }
         case .changes:
             HStack(spacing: 16) {
-                labeled("Before", current.before)
+                labeled(L("history.compare.before"), current.before)
                 if let boxed = changes {
-                    labeled("After · changes boxed", boxed)
+                    labeled(L("history.compare.afterBoxed"), boxed)
                 }
             }
         }
@@ -238,7 +243,7 @@ struct ScreenshotCompareView: View {
         guard let image = ScreenshotComparison.sideBySideImage(current, changes: boxed) else { return }
         NSPasteboard.general.clearContents()
         NSPasteboard.general.writeObjects([NSImage(cgImage: image, size: CGSize(width: image.width, height: image.height))])
-        message = "Copied Before | After"
+        message = L("history.compare.copied")
     }
 }
 
@@ -258,8 +263,8 @@ struct VideoCompareView: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 16) {
-                clip("Before", firstPlayer)
-                clip("After", secondPlayer)
+                clip(L("history.compare.before"), firstPlayer)
+                clip(L("history.compare.after"), secondPlayer)
             }
             .padding(16)
             .padding(.top, 20)
@@ -273,11 +278,11 @@ struct VideoCompareView: View {
                 }
                 .buttonStyle(.plain)
                 .keyboardShortcut(.space, modifiers: [])
-                .accessibilityLabel(isPlaying ? "Pause both" : "Play both")
-                .tip("Play or pause both clips together (Space)")
+                .accessibilityLabel(isPlaying ? L("history.compare.video.pause") : L("history.compare.video.play"))
+                .tip(L("history.compare.video.play.tip"))
                 Slider(value: Binding(get: { position }, set: { value in seek(value) }), in: 0...longest)
-                    .accessibilityLabel("Position")
-                    .tip("Scrub both clips to the same moment")
+                    .accessibilityLabel(L("history.compare.video.position"))
+                    .tip(L("history.compare.video.position.tip"))
                 Text("\(TimeFormat.clock(position)) / \(TimeFormat.clock(longest))")
                     .font(.system(size: 12, design: .monospaced))
                     .foregroundStyle(Theme.textSecondary)

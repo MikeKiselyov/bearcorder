@@ -9,7 +9,7 @@ public struct WhatsNewRelease: Equatable {
         public var text: String
         /// Keyboard shortcut or where to find it, e.g. "⌥⇧M" or "Toolbox → Regex". Empty for none.
         public var shortcut: String
-        /// A picture of the change: a PNG or animated GIF in `Resources/WhatsNew` without the
+        /// A picture of the change: a PNG, JPEG or animated GIF in `Sources/Bugbear/Resources/WhatsNew` without the
         /// extension. Empty for none.
         public var image: String
 
@@ -39,7 +39,7 @@ public struct WhatsNewRelease: Equatable {
 
 public enum WhatsNew {
     /// Where the pictures live in the repository and, copied by scripts/build-app.sh, in the app.
-    public static let imageFolder = "Resources/WhatsNew"
+    public static let imageFolder = "Sources/Bugbear/Resources/WhatsNew"
 
     /// Releases the user has not seen yet, newest first.
     public static func unseen(_ releases: [WhatsNewRelease], lastSeenID: Int) -> [WhatsNewRelease] {

@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Info.plist of the app. scripts/build-app.sh copies it into the .app and fills in the empty
+  values: the bundle id, the name (AppInfo.name), the version and build number, where the source
+  came from (for updates) and the permission texts, which name the app.
+-->
+<plist version="1.0">
+<dict>
+    <key>CFBundleDevelopmentRegion</key><string>en</string>
+    <key>CFBundleAllowMixedLocalizations</key><true/>
+    <key>CFBundleExecutable</key><string>Bugbear</string>
+    <key>CFBundleIconFile</key><string>AppIcon</string>
+    <key>CFBundleIdentifier</key><string></string>
+    <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
+    <key>CFBundleName</key><string></string>
+    <key>CFBundleDisplayName</key><string></string>
+    <key>CFBundlePackageType</key><string>APPL</string>
+    <key>CFBundleShortVersionString</key><string></string>
+    <key>CFBundleVersion</key><string></string>
+    <key>LSMinimumSystemVersion</key><string>14.0</string>
+    <key>LSUIElement</key><true/>
+    <key>LSApplicationCategoryType</key><string>public.app-category.developer-tools</string>
+    <key>NSHighResolutionCapable</key><true/>
+    <key>NSCameraUsageDescription</key><string></string>
+    <key>NSMicrophoneUsageDescription</key><string></string>
+    <key>NSAppleEventsUsageDescription</key><string></string>
+    <key>BugbearCommit</key><string></string>
+    <key>BugbearBranch</key><string></string>
+    <key>BugbearRepository</key><string></string>
+    <key>BugbearSourcePath</key><string></string>
+</dict>
+</plist>

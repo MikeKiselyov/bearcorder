@@ -8,8 +8,8 @@
 # The microphone and camera are skipped: they would show permission prompts.
 set -uo pipefail
 
-cd "$(dirname "$0")/.."
-ROOT="$(pwd)"
+# shellcheck source=lib/common.sh
+source "$(dirname "$0")/lib/common.sh"
 if [ -f "$ROOT/.env" ]; then
     set -a
     # shellcheck disable=SC1091
@@ -245,7 +245,7 @@ for _ in $(seq 1 60); do
     sleep 1
 done
 if [ -n "$saved" ]; then
-    capture_id=$(echo "$saved" | sed 's/.*→ //')
+    capture_id="${saved##*→ }"
     capture_folder=$(find "$HOME/Library/Application Support/Bugbear" -type d -name "$capture_id" 2>/dev/null | head -1)
     duration=$(media_duration "$capture_folder/original.mp4")
     if at_least "${duration:-0}" 30; then pass "crash saves the time before it (${duration}s clip)"; else fail "crash clip length" "got $duration"; fi
@@ -294,8 +294,50 @@ rm -rf "$FEED_DIR"
 result=$(run "copy-text-file:$ROOT/docs/images/settings.png" 60)
 if echo "$result" | grep -q "toast=true" && echo "$result" | grep -q "copied=.*[A-Za-z]"; then pass "copy text: clipboard and a 'paste with ⌘V' message"; else fail "copy text" "$result"; fi
 
-# 12. Errors in the log.
-errors=$(grep -c "ERROR" "$LOG" || true)
+# 11c. The buffer comes back by itself after the displays go away (issue #17). It used to try
+# once after 2 s, find no display and stay on "Buffer error" with the displays back.
+NO_DISPLAY_ERROR="startBuffer failed: No display available for capture"
+no_display_errors() { grep -c "$NO_DISPLAY_ERROR" "$LOG" || true; }
+back_lines() { grep -c "buffer is back after" "$LOG" || true; }
+# Waits up to about $2 seconds for at least $1 "no display" failures in the log.
+wait_for_no_display_errors() {
+    local waited=0
+    while [ "$waited" -lt "$2" ]; do
+        if [ "$(no_display_errors)" -ge "$1" ]; then return 0; fi
+        sleep 1
+        waited=$((waited + 1))
+    done
+    return 1
+}
+# Polls the status about $1 times (each poll takes a second or two).
+wait_for_running() {
+    local polls=0
+    while [ "$polls" -lt "$1" ]; do
+        if run status 10 | grep -q "^running"; then return 0; fi
+        sleep 1
+        polls=$((polls + 1))
+    done
+    return 1
+}
+errors_before=$(no_display_errors)
+back_before=$(back_lines)
+result=$(run buffer-lose:1 10)
+if echo "$result" | grep -q "waiting=true"; then pass "a lost buffer waits to come back"; else fail "a lost buffer waits to come back" "$result"; fi
+# Tries at 2 s (no display) and 5 s after it (starts).
+if wait_for_running 20; then pass "the buffer starts again after a try that found no display"; else fail "the buffer starts again after a failed try" "$(run status 10)"; fi
+# Two tries fail (2 s and 5 s); the next one is 15 s away, so waking up must start it at once.
+run buffer-lose:2 10 >/dev/null
+if wait_for_no_display_errors $((errors_before + 3)) 20; then
+    run screens-woke 10 >/dev/null
+    if wait_for_running 3; then pass "waking up starts a waiting buffer at once"; else fail "waking up starts a waiting buffer at once" "$(run status 10)"; fi
+else
+    fail "two tries found no display" "$(no_display_errors) errors"
+fi
+if [ "$(back_lines)" = "$((back_before + 2))" ]; then pass "the log says the buffer is back, both times"; else fail "the log says the buffer is back" "$(back_lines) lines"; fi
+if [ "$(no_display_errors)" = "$((errors_before + 3))" ]; then pass "three tries found no display"; else fail "three tries found no display" "$(no_display_errors)"; fi
+
+# 12. Errors in the log (the tries in 11c that found no display are expected).
+errors=$(grep "ERROR" "$LOG" | grep -vc "$NO_DISPLAY_ERROR" || true)
 if [ "$errors" = "0" ]; then pass "no errors in the log"; else fail "no errors in the log" "$errors errors"; grep "ERROR" "$LOG" | tail -5; fi
 
 defaults write "$BUNDLE_ID" automationEnabled -bool false

@@ -1,0 +1,73 @@
+/* Alerts, toasts, errors and window titles shown by AppState and WindowManager (App/, Support/). %@ is the app's name unless noted. */
+
+/* Menu bar item. hiddenBehindNotch.shortcut: the shortcut, then the app's name. */
+"app.menuBar.hiddenBehindNotch" = "The menu bar is full, so macOS hides the bear behind the notch.";
+"app.menuBar.hiddenBehindNotch.shortcut" = "Press %1$@ to open %2$@.";
+"app.menuBar.accessibility.recording" = "%@, recording";
+"app.menuBar.accessibility.buffering" = "%@, buffer running";
+
+/* Screen buffer. stoppedAlert.message: the app's name, then the length of the saved clip (like 1:30). */
+"app.buffer.microphoneDenied" = "Microphone access was denied; recording without it.";
+"app.buffer.captureStopped" = "Capture stopped";
+"app.buffer.stoppedToast" = "Screen buffer stopped. Turn it on again in the menu bar.";
+"app.buffer.stoppedAlert.title" = "The screen buffer stopped";
+"app.buffer.stoppedAlert.message" = "%1$@ saved the last %2$@ as a clip in All captures. The buffer is off now; turn it on again from the bear in the menu bar.";
+"app.buffer.stoppedAlert.openInEditor" = "Open in editor";
+"app.buffer.stoppedAlert.later" = "Later";
+"app.buffer.notRecording" = "The buffer is not recording. Start it from the menu bar first.";
+
+/* Clips. crashSaved: the name of the app that crashed. */
+"app.clip.momentMarked" = "Moment marked. Save the clip when you're ready.";
+"app.clip.crashSaved" = "%@ crashed. The minute before is saved in Recent.";
+
+/* Names of the displays in the display switch. numbered: the display's number. */
+"app.display.sideBySide" = "Side by side";
+"app.display.builtIn" = "Built-in";
+"app.display.numbered" = "Display %ld";
+
+/* Recording. */
+"app.recording.screenUnavailable" = "Screen recording is not available. Grant Screen Recording access and try again.";
+"app.recording.cameraUnavailable" = "Camera is not available. Allow camera access for %@ in System Settings › Privacy & Security › Camera.";
+
+/* Screenshots. */
+"app.screenshot.saved" = "Screenshot saved in Recent";
+"app.screenshot.copied" = "Screenshot copied";
+"app.screenshot.copied.alsoSaved" = "also saved in Recent";
+"app.screenshot.failed" = "Could not take a screenshot of the displays.";
+
+/* Copying text from the screen. failed: the error. */
+"app.copyText.qrCopied" = "QR code copied";
+"app.copyText.noText" = "No text found in that area";
+"app.copyText.copied" = "Text copied";
+"app.copyText.failed" = "Text recognition failed: %@";
+
+/* Scrolling screenshot. captureButton keeps the two spaces before the key. done: the height in pixels. failed: the error. */
+"app.scrolling.needsAccessibility" = "Allow Accessibility for %@ so it can scroll, then try again";
+"app.scrolling.captureButton" = "Capture  ↩";
+"app.scrolling.done" = "Long screenshot: %ld px";
+"app.scrolling.failed" = "Scrolling screenshot failed: %@";
+
+/* Resizing the front window. result: the app's name, the width, the height. needsResponsiveMode: the width in points. */
+"app.resize.window" = "Window";
+"app.resize.result" = "%1$@: %2$ld × %3$ld";
+"app.resize.needsResponsiveMode" = "Narrower than %ld pt needs the browser's responsive mode: ⌥⌘R in Safari, ⇧⌘M in Chrome DevTools";
+"app.resize.minimumWidth" = "(the app's minimum width)";
+"app.resize.limitedByScreen" = "(limited by the screen)";
+"app.resize.needsAccessibility" = "Allow Accessibility for %@, then try again";
+"app.resize.noWindow" = "No window to resize: click the app first";
+"app.resize.notResizable" = "That window cannot be resized";
+
+/* Clipboard. */
+"app.clipboard.noImage" = "No image on the clipboard";
+
+/* Window titles. screenshot, clip: the capture's title. */
+"app.window.screenshot" = "Screenshot · %@";
+"app.window.clip" = "Clip · %@";
+"app.window.space" = "Disk Space";
+"app.window.toolbox" = "Dev Toolbox";
+"app.window.history" = "All captures";
+"app.window.onboarding" = "Welcome to %@";
+"app.window.stepGuide" = "Step guide";
+"app.window.compare" = "Before and after";
+"app.window.feedback" = "Feedback";
+"app.window.settings" = "%@ Settings";

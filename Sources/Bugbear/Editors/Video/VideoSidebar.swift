@@ -37,20 +37,20 @@ struct VideoSidebar: View {
 
     private var overlaysPanel: some View {
         VStack(alignment: .leading, spacing: 12) {
-            SectionLabel("Overlays")
-            SettingToggle(title: "Highlight clicks", isOn: binding(\.showClicks))
-            SettingToggle(title: "Show keystrokes", isOn: binding(\.showKeys))
-            SettingToggle(title: "Show steps", isOn: Binding(get: {
+            SectionLabel(L("video.overlays.title"))
+            SettingToggle(title: L("video.overlays.clicks"), isOn: binding(\.showClicks))
+            SettingToggle(title: L("video.overlays.keys"), isOn: binding(\.showKeys))
+            SettingToggle(title: L("video.overlays.steps"), isOn: Binding(get: {
                 model.project.isShowingSteps
             }, set: { value in
                 model.checkpoint()
                 model.project.showSteps = value
                 model.projectChanged()
             }))
-            .tip("Caption each step at the bottom: clicks, typing and pages opened, like in the bug report")
-            SettingToggle(title: "Environment badge", isOn: binding(\.showBadge))
+            .tip(L("video.overlays.steps.tip"))
+            SettingToggle(title: L("video.overlays.badge"), isOn: binding(\.showBadge))
             if model.project.showBadge {
-                Picker("Corner", selection: Binding(get: { model.project.badgeCorner }, set: { value in
+                Picker(L("editors.badge.corner"), selection: Binding(get: { model.project.badgeCorner }, set: { value in
                     model.project.badgeCorner = value
                     model.projectChanged()
                 })) {
@@ -62,7 +62,7 @@ struct VideoSidebar: View {
                 .font(.system(size: 12))
             }
             if model.capture.events.isEmpty {
-                Text("No clicks or keys were recorded for this clip.")
+                Text(L("video.overlays.noEvents"))
                     .font(.system(size: 11))
                     .foregroundStyle(Theme.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -75,9 +75,9 @@ struct VideoSidebar: View {
     private var selectionPanel: some View {
         VStack(alignment: .leading, spacing: 10) {
             if let overlay = model.selectedOverlay {
-                SectionLabel("Selected · \(overlay.kind.title)")
+                SectionLabel(L("editors.selected.title", overlay.kind.title))
                 if overlay.kind == .text {
-                    TextField("Text", text: Binding(get: {
+                    TextField(L("editors.selected.text"), text: Binding(get: {
                         model.selectedOverlay?.text ?? ""
                     }, set: { value in
                         var updated = overlay
@@ -85,13 +85,13 @@ struct VideoSidebar: View {
                         model.updateOverlay(updated)
                     }))
                     .textFieldStyle(.roundedBorder)
-                    Picker("Background", selection: Binding(get: {
+                    Picker(L("video.selected.background"), selection: Binding(get: {
                         model.selectedOverlay?.clearBackground ?? false
                     }, set: { clear in
                         model.setSelectedTextClear(clear)
                     })) {
-                        Text("Label").tag(false)
-                        Text("Transparent").tag(true)
+                        Text(L("video.selected.background.label")).tag(false)
+                        Text(L("video.selected.background.transparent")).tag(true)
                     }
                     .pickerStyle(.segmented)
                     .font(.system(size: 12))
@@ -106,7 +106,7 @@ struct VideoSidebar: View {
                 }
                 if overlay.kind != .blur {
                     HStack(spacing: 8) {
-                        Text("Size").font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
+                        Text(L("video.selected.size")).font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
                         Spacer()
                         Button {
                             model.changeSelectedOverlaySize(by: -1)
@@ -114,8 +114,8 @@ struct VideoSidebar: View {
                             Image(systemName: "minus").frame(width: 24, height: 22).contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
-                        .accessibilityLabel("Smaller mark")
-                        .tip("Smaller (-)")
+                        .accessibilityLabel(L("video.selected.smaller"))
+                        .tip(L("video.selected.smaller.tip"))
                         Text("\(Int(overlay.effectiveScale * 100))%")
                             .font(.system(size: 12, design: .monospaced))
                             .frame(width: 46)
@@ -125,8 +125,8 @@ struct VideoSidebar: View {
                             Image(systemName: "plus").frame(width: 24, height: 22).contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
-                        .accessibilityLabel("Bigger mark")
-                        .tip("Bigger (+)")
+                        .accessibilityLabel(L("video.selected.bigger"))
+                        .tip(L("video.selected.bigger.tip"))
                     }
                     .padding(.horizontal, 8)
                     .padding(.vertical, 2)
@@ -141,14 +141,15 @@ struct VideoSidebar: View {
                 SectionLabel(selectionTitle(item))
                 deleteButton
             } else {
-                SectionLabel("How to edit")
+                SectionLabel(L("video.help.title"))
                 VStack(alignment: .leading, spacing: 6) {
-                    hint("Drag on the ruler to select a range")
-                    hint("Cut, Slow-mo and marks use that range")
-                    hint("Pick Text, Arrow, Box or Blur, then drag on the video")
-                    hint("Drag bars to move, edges to resize")
-                    hint("Space plays, I / O trim, Delete removes")
-                    hint("+ and - resize the selected text, arrow or box")
+                    hint(L("video.help.selectRange"))
+                    hint(L("video.help.useRange"))
+                    hint(L("video.help.marks"))
+                    hint(L("video.help.bars"))
+                    hint(L("video.help.crop"))
+                    hint(L("video.help.keys"))
+                    hint(L("video.help.resize"))
                 }
             }
         }
@@ -164,10 +165,10 @@ struct VideoSidebar: View {
 
     private func selectionTitle(_ item: TimelineItem) -> String {
         switch item {
-        case .overlay: return "Selected"
-        case .cut: return "Selected · Cut"
-        case .speed: return "Selected · Slow motion"
-        case .freeze: return "Selected · Freeze frame"
+        case .overlay: return L("video.selected.title")
+        case .cut: return L("video.selected.cut")
+        case .speed: return L("video.selected.slowMotion")
+        case .freeze: return L("video.selected.freeze")
         }
     }
 
@@ -175,7 +176,7 @@ struct VideoSidebar: View {
         Button(role: .destructive) {
             model.deleteSelection()
         } label: {
-            Label("Remove", systemImage: "trash").font(.system(size: 12))
+            Label(L("video.selected.remove"), systemImage: "trash").font(.system(size: 12))
         }
         .buttonStyle(.plain)
         .foregroundStyle(Theme.accentSoft)
@@ -184,34 +185,34 @@ struct VideoSidebar: View {
     private var environmentPanel: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                SectionLabel("Environment")
+                SectionLabel(L("editors.environment.title"))
                 Spacer()
-                Button("Edit") {
+                Button(L("editors.environment.edit")) {
                     WindowManager.shared.openSettings(page: .reports)
                 }
                 .buttonStyle(.plain)
                 .font(.system(size: 12))
                 .foregroundStyle(Theme.link)
-                .tip("Choose the fields, their names and your own fields in Settings → Bug reports")
-                Button("Copy") {
+                .tip(L("editors.environment.edit.tip"))
+                Button(L("editors.environment.copy")) {
                     NSPasteboard.general.clearContents()
                     NSPasteboard.general.setString(model.capture.environment.markdown(), forType: .string)
-                    model.message = "Environment copied"
+                    model.message = L("editors.message.environmentCopied")
                 }
                 .buttonStyle(.plain)
                 .font(.system(size: 12))
                 .foregroundStyle(Theme.link)
             }
-            CopyReportButton(help: "Steps from your clicks and keys, environment and the saved file", stepCount: model.reportStepCount) { format in
+            CopyReportButton(help: L("video.report.tip"), stepCount: model.reportStepCount) { format in
                 model.copyBugReport(format: format)
             }
             .frame(maxWidth: .infinity)
             HStack(spacing: 14) {
                 if CaptureStore.shared.hasSystemLog(model.capture) {
-                    Button("System log") { SystemActions.open(model.capture.systemLogURL) }
+                    Button(L("video.environment.systemLog")) { SystemActions.open(model.capture.systemLogURL) }
                 }
                 if FileManager.default.fileExists(atPath: model.capture.crashReportURL.path) {
-                    Button("Crash report") { SystemActions.open(model.capture.crashReportURL) }
+                    Button(L("video.environment.crashReport")) { SystemActions.open(model.capture.crashReportURL) }
                 }
             }
             .buttonStyle(.plain)
@@ -232,13 +233,13 @@ struct VideoSidebar: View {
 
     private var exportPanel: some View {
         VStack(alignment: .leading, spacing: 12) {
-            SectionLabel("Export")
+            SectionLabel(L("video.export.title"))
             PillPicker(options: VideoExportFormat.allCases, selection: Binding(get: { model.project.format }, set: { value in
                 model.project.format = value
                 model.projectChanged()
             })) { format in format.rawValue }
             if model.project.format == .mp4 {
-                row("Quality") {
+                row(L("video.export.quality")) {
                     Picker("", selection: Binding(get: { model.project.quality }, set: { value in
                         model.project.quality = value
                         model.projectChanged()
@@ -250,10 +251,10 @@ struct VideoSidebar: View {
                     .labelsHidden()
                     .pickerStyle(.menu)
                     .frame(width: 170)
-                    .accessibilityLabel("Quality")
-                    .tip("Picture size of the MP4 and about how big the file comes out. Lower quality makes a smaller file")
+                    .accessibilityLabel(L("video.export.quality"))
+                    .tip(L("video.export.quality.tip"))
                 }
-                row("Size limit") {
+                row(L("video.export.sizeLimit")) {
                     Picker("", selection: Binding(get: { model.project.sizeLimitMB ?? 0 }, set: { value in
                         if value == 0 {
                             model.project.sizeLimitMB = nil
@@ -262,41 +263,41 @@ struct VideoSidebar: View {
                         }
                         model.projectChanged()
                     })) {
-                        Text("Off").tag(0)
-                        Text("10 MB").tag(10)
-                        Text("25 MB").tag(25)
-                        Text("50 MB").tag(50)
-                        Text("100 MB").tag(100)
+                        Text(L("video.export.sizeLimit.off")).tag(0)
+                        Text(L("video.export.megabytes", 10)).tag(10)
+                        Text(L("video.export.megabytes", 25)).tag(25)
+                        Text(L("video.export.megabytes", 50)).tag(50)
+                        Text(L("video.export.megabytes", 100)).tag(100)
                     }
                     .labelsHidden()
-                    .accessibilityLabel("Size limit")
+                    .accessibilityLabel(L("video.export.sizeLimit"))
                     .pickerStyle(.menu)
                     .frame(width: 110)
                 }
             } else {
-                row("Frame rate") {
+                row(L("video.export.frameRate")) {
                     Picker("", selection: Binding(get: { model.project.gifFramesPerSecond }, set: { value in
                         model.project.gifFramesPerSecond = value
                         model.projectChanged()
                     })) {
-                        Text("8 fps").tag(8)
-                        Text("12 fps").tag(12)
-                        Text("15 fps").tag(15)
+                        Text(L("video.export.fps", 8)).tag(8)
+                        Text(L("video.export.fps", 12)).tag(12)
+                        Text(L("video.export.fps", 15)).tag(15)
                     }
                     .labelsHidden()
-                    .accessibilityLabel("GIF frame rate")
+                    .accessibilityLabel(L("video.export.frameRate.gif"))
                     .pickerStyle(.menu)
                     .frame(width: 110)
                 }
             }
-            row("Length") {
-                Text("\(TimeFormat.clock(model.outputDuration)) of \(TimeFormat.clock(model.duration))")
+            row(L("video.export.length")) {
+                Text(L("video.export.length.value", TimeFormat.clock(model.outputDuration), TimeFormat.clock(model.duration)))
             }
-            row("Est. size") {
+            row(L("video.export.estimatedSize")) {
                 Text(model.estimatedSizeText)
             }
             if model.project.format == .gif && model.outputDuration > 20 {
-                Text("GIFs longer than ~20 s get large. Trim or use MP4.")
+                Text(L("video.export.gifTooLong"))
                     .font(.system(size: 11))
                     .foregroundStyle(Theme.warning)
                     .fixedSize(horizontal: false, vertical: true)

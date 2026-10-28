@@ -130,7 +130,8 @@ area on any display.
 | Screenshot, all displays | every display; opens side by side | the same |
 
 While recording, displays that are not in the video are dimmed and say "Not recorded". Connecting or
-disconnecting a display restarts the buffer with the new set. The first-start guide asks whether to keep
+disconnecting a display restarts the buffer with the new set; when every display goes away (a closed lid,
+a sleeping Mac), the buffer starts again by itself once one is back. The first-start guide asks whether to keep
 all displays when more than one is connected.
 
 ### Video editor
@@ -145,6 +146,7 @@ all displays when more than one is connected.
   resize marks. Text sits on a colored label or, with Background → Transparent, is drawn as outlined
   letters.
 - Highlight clicks, show keystrokes, environment badge.
+- Crop the video to the part of the screen that matters.
 - Export MP4 or GIF with a size limit (10-100 MB) for trackers that cap attachments.
 
 ### Recording
@@ -157,8 +159,8 @@ all displays when more than one is connected.
   phone) or your own. The frame can be moved and resized before you start.
 - While recording, a frame shows what is in the video and everything else is dimmed. The frame and
   the dimming are not in the video. Pauses are cut out of the result.
-- Draw on the screen while recording (`⌥⇧A`): arrows, boxes, ellipses, pen, highlighter, numbered
-  steps. The marks are part of the video and fade out after a few seconds unless pinned.
+- Draw on the screen while recording (`⌥⇧A`): arrows, text, boxes, ellipses, pen, highlighter,
+  numbered steps. The marks are part of the video and fade out after a few seconds unless pinned.
 - Webcam in a round bubble (`⌥⇧C`): drag it anywhere, scroll to resize.
 
 ### Screenshots and the screenshot editor

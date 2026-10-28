@@ -15,6 +15,10 @@ struct VideoCompositor {
         var renderSize: CGSize
         var timeMap: TimeMap
         var duration: Double
+        /// The part of the frame shown (0…1, origin top-left); the whole frame without a crop.
+        var crop: CGRect
+        /// The clip's own frame size, before the crop.
+        var sourceSize: CGSize
     }
 
     /// Pre-rendered pieces the frame handler composites. Immutable, shared with the render thread.
@@ -35,20 +39,34 @@ struct VideoCompositor {
         var ripple: CIImage?
         var pieces: [TimelinePiece] = []
         var renderSize: CGSize = .zero
+        /// The crop in the source frame, Core Image coordinates; nil keeps the whole frame.
+        var crop: CGRect?
     }
 
-    static func build(asset: AVAsset, project: VideoProject, events: [InputEvent], environment: EnvironmentSnapshot) async throws -> Output {
+    /// `showsWholeFrame` leaves the crop out, for picking it in the editor.
+    static func build(asset: AVAsset, project: VideoProject, events: [InputEvent], environment: EnvironmentSnapshot, showsWholeFrame: Bool = false) async throws -> Output {
         guard let videoTrack = try await asset.loadTracks(withMediaType: .video).first else {
-            throw BufferError.exportFailed("Clip has no video")
+            throw BufferError.exportFailed(L("video.export.error.noVideo"))
         }
         let audioTracks = try await asset.loadTracks(withMediaType: .audio)
         let naturalSize = try await videoTrack.load(.naturalSize)
-        let renderSize = CGSize(width: Int(naturalSize.width / 2) * 2, height: Int(naturalSize.height / 2) * 2)
+        let sourceSize = CGSize(width: Int(naturalSize.width / 2) * 2, height: Int(naturalSize.height / 2) * 2)
+        var renderSize = sourceSize
+        var crop = VideoCrop.whole
+        var cropPixels: CGRect? = nil
+        if !showsWholeFrame, let picked = VideoCrop.normalized(project.crop) {
+            let pixels = VideoCrop.pixelRect(picked, width: Int(sourceSize.width), height: Int(sourceSize.height))
+            // The crop as it is rendered, on even pixels, so the editor maps marks exactly.
+            crop = picked.pixelAligned(to: sourceSize)
+            renderSize = pixels.size
+            // Core Image counts from the bottom.
+            cropPixels = CGRect(x: pixels.minX, y: sourceSize.height - pixels.maxY, width: pixels.width, height: pixels.height)
+        }
 
         let pieces = project.timeline.pieces()
         let composition = AVMutableComposition()
         guard let compositionVideo = composition.addMutableTrack(withMediaType: .video, preferredTrackID: kCMPersistentTrackID_Invalid) else {
-            throw BufferError.exportFailed("Cannot create video track")
+            throw BufferError.exportFailed(L("video.export.error.noTrack"))
         }
         var compositionAudio: AVMutableCompositionTrack? = nil
         if !audioTracks.isEmpty {
@@ -80,7 +98,8 @@ struct VideoCompositor {
             cursor = CMTimeAdd(cursor, outputDuration)
         }
 
-        let layers = makeLayers(project: project, events: events, environment: environment, renderSize: renderSize, pieces: pieces)
+        let layers = makeLayers(project: project, events: events, environment: environment, sourceSize: sourceSize, renderSize: renderSize, pieces: pieces)
+        layers.crop = cropPixels
         let timeMap = TimeMap(pieces: pieces)
 
         let videoComposition = AVMutableVideoComposition(asset: composition) { request in
@@ -93,30 +112,34 @@ struct VideoCompositor {
 
         // The composition's own duration is exact; summing Doubles can overshoot it by a few
         // microseconds, and an export range past the end fails with -11841.
-        return Output(composition: composition, videoComposition: videoComposition, renderSize: renderSize, timeMap: timeMap, duration: composition.duration.seconds)
+        return Output(composition: composition, videoComposition: videoComposition, renderSize: renderSize, timeMap: timeMap, duration: composition.duration.seconds, crop: crop, sourceSize: sourceSize)
     }
 
     // MARK: Pre-rendering
 
-    private static func makeLayers(project: VideoProject, events: [InputEvent], environment: EnvironmentSnapshot, renderSize: CGSize, pieces: [TimelinePiece]) -> Layers {
+    /// Marks, blur and clicks belong to the picture and are drawn on the whole frame
+    /// (`sourceSize`); keys, steps and badges belong to the video and are drawn on what is left
+    /// after the crop (`renderSize`).
+    private static func makeLayers(project: VideoProject, events: [InputEvent], environment: EnvironmentSnapshot, sourceSize: CGSize, renderSize: CGSize, pieces: [TimelinePiece]) -> Layers {
         let layers = Layers()
         layers.renderSize = renderSize
         layers.pieces = pieces
+        let markUnit = max(1, sourceSize.height / 900)
         let unit = max(1, renderSize.height / 900)
 
         for overlay in project.overlays {
-            let pixelStart = CGPoint(x: overlay.start.x * renderSize.width, y: overlay.start.y * renderSize.height)
-            let pixelEnd = CGPoint(x: overlay.end.x * renderSize.width, y: overlay.end.y * renderSize.height)
+            let pixelStart = CGPoint(x: overlay.start.x * sourceSize.width, y: overlay.start.y * sourceSize.height)
+            let pixelEnd = CGPoint(x: overlay.end.x * sourceSize.width, y: overlay.end.y * sourceSize.height)
             if overlay.kind == .blur {
                 let rect = CGRect(x: min(pixelStart.x, pixelEnd.x), y: min(pixelStart.y, pixelEnd.y), width: abs(pixelEnd.x - pixelStart.x), height: abs(pixelEnd.y - pixelStart.y))
                 // Convert to Core Image coordinates (origin bottom-left).
-                let ciRect = CGRect(x: rect.minX, y: renderSize.height - rect.maxY, width: rect.width, height: rect.height)
+                let ciRect = CGRect(x: rect.minX, y: sourceSize.height - rect.maxY, width: rect.width, height: rect.height)
                 layers.blurs.append((rect: ciRect, span: overlay.span))
                 continue
             }
             let scale = CGFloat(overlay.effectiveScale)
-            var annotation = Annotation(tool: .arrow, start: pixelStart, end: pixelEnd, color: overlay.color, lineWidth: 5 * unit * scale)
-            annotation.fontSize = 24 * unit * scale
+            var annotation = Annotation(tool: .arrow, start: pixelStart, end: pixelEnd, color: overlay.color, lineWidth: 5 * markUnit * scale)
+            annotation.fontSize = 24 * markUnit * scale
             switch overlay.kind {
             case .arrow: annotation.tool = .arrow
             case .rectangle: annotation.tool = .rectangle
@@ -130,17 +153,17 @@ struct VideoCompositor {
                 annotation.clearBackground = overlay.clearBackground
             case .blur: break
             }
-            if let image = renderAnnotation(annotation, canvas: renderSize) {
+            if let image = renderAnnotation(annotation, canvas: sourceSize) {
                 layers.overlays.append(Layers.Placed(image: image, span: overlay.span))
             }
         }
 
         if project.showClicks {
             for event in events where event.kind == .click {
-                let center = CGPoint(x: event.x * renderSize.width, y: renderSize.height - event.y * renderSize.height)
+                let center = CGPoint(x: event.x * sourceSize.width, y: sourceSize.height - event.y * sourceSize.height)
                 layers.clicks.append((center: center, time: event.time))
             }
-            layers.ripple = rippleImage(diameter: 70 * unit)
+            layers.ripple = rippleImage(diameter: 70 * markUnit)
         }
 
         if project.showKeys {
@@ -302,6 +325,11 @@ struct VideoCompositor {
             }
         }
 
+        // What is left after the crop, moved to the corner; keys, steps and badges go on it.
+        if let crop = layers.crop {
+            image = image.cropped(to: crop).transformed(by: CGAffineTransform(translationX: -crop.minX, y: -crop.minY))
+        }
+
         // Only the latest keystroke within its display window.
         var latestKey: CIImage? = nil
         for key in layers.keys where sourceTime >= key.time && sourceTime - key.time < 1.4 {
@@ -372,7 +400,7 @@ struct VideoCompositor {
 
         let frameCount = max(1, Int(output.duration * Double(framesPerSecond)))
         guard let destination = CGImageDestinationCreateWithURL(url as CFURL, UTType.gif.identifier as CFString, frameCount, nil) else {
-            throw BufferError.exportFailed("Cannot create GIF")
+            throw BufferError.exportFailed(L("video.export.error.gifCreate"))
         }
         let fileProperties: [CFString: Any] = [kCGImagePropertyGIFDictionary: [kCGImagePropertyGIFLoopCount: 0]]
         CGImageDestinationSetProperties(destination, fileProperties as CFDictionary)
@@ -385,7 +413,7 @@ struct VideoCompositor {
             progress?(0.6 + 0.4 * Double(index + 1) / Double(frameCount))
         }
         if !CGImageDestinationFinalize(destination) {
-            throw BufferError.exportFailed("Could not write GIF")
+            throw BufferError.exportFailed(L("video.export.error.gifWrite"))
         }
     }
 }

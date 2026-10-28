@@ -13,11 +13,11 @@ struct ToolboxView: View {
     @State private var detectedNote: String?
 
     private let sections: [(title: String, tools: [ToolKind])] = [
-        (title: "Format", tools: [.json, .xml, .yaml, .html, .sql, .graphql]),
-        (title: "Decode · Encode", tools: [.jwt, .base64, .url, .htmlEntities]),
-        (title: "Convert", tools: [.time, .timeZones, .dataConvert, .quick]),
-        (title: "Generate", tools: [.generate, .testData, .length, .qr]),
-        (title: "Inspect", tools: [.jsonDiff, .jsonPath, .http, .regex, .cron, .contrast]),
+        (title: L("toolbox.section.format"), tools: [.json, .xml, .yaml, .html, .sql, .graphql]),
+        (title: L("toolbox.section.decodeEncode"), tools: [.jwt, .base64, .url, .htmlEntities]),
+        (title: L("toolbox.section.convert"), tools: [.time, .timeZones, .dataConvert, .quick]),
+        (title: L("toolbox.section.generate"), tools: [.generate, .testData, .length, .qr]),
+        (title: L("toolbox.section.inspect"), tools: [.jsonDiff, .jsonPath, .http, .regex, .cron, .contrast]),
     ]
 
     var body: some View {
@@ -35,7 +35,7 @@ struct ToolboxView: View {
                 inputs[initialTool] = initialInput
             }
             if detectedFromClipboard {
-                detectedNote = "Detected from clipboard"
+                detectedNote = L("toolbox.note.detected")
             }
         }
         .onChange(of: selected, initial: true) { _, tool in
@@ -46,7 +46,7 @@ struct ToolboxView: View {
             selected = tool
             if let input = notification.userInfo?["input"] as? String, !input.isEmpty {
                 inputs[tool] = input
-                detectedNote = "Detected from clipboard"
+                detectedNote = L("toolbox.note.detected")
             }
         }
     }
@@ -61,7 +61,7 @@ struct ToolboxView: View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 8) {
                 Image(systemName: "magnifyingglass").font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
-                TextField("Search tools", text: $search)
+                TextField(L("toolbox.search.placeholder"), text: $search)
                     .textFieldStyle(.plain)
                     .font(.system(size: 12))
                     .onSubmit {
@@ -69,7 +69,7 @@ struct ToolboxView: View {
                             selected = first
                         }
                     }
-                    .tip("Find a tool by name or keyword, Return opens the first match")
+                    .tip(L("toolbox.search.tip"))
             }
             .padding(.horizontal, 10)
             .frame(height: 32)
@@ -99,19 +99,19 @@ struct ToolboxView: View {
                     if let tool = ContentDetector.detect(clipboard) {
                         selected = tool
                         inputs[tool] = clipboard
-                        detectedNote = "Detected from clipboard"
+                        detectedNote = L("toolbox.note.detected")
                     } else {
                         inputs[selected] = clipboard
-                        detectedNote = "Pasted from clipboard"
+                        detectedNote = L("toolbox.note.pasted")
                     }
                 }
             } label: {
-                Label("Paste & detect", systemImage: "doc.on.clipboard")
+                Label(L("toolbox.pasteDetect"), systemImage: "doc.on.clipboard")
                     .font(.system(size: 12))
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(SecondaryButtonStyle())
-            .tip("Paste the clipboard and open the tool that fits its content, like JSON, JWT or a timestamp")
+            .tip(L("toolbox.pasteDetect.tip"))
             .padding(12)
         }
         .frame(width: 230)
@@ -124,7 +124,7 @@ struct ToolboxView: View {
         var result: [(title: String, tools: [ToolKind])] = []
         for section in sections {
             let matching = section.tools.filter { tool in
-                tool.rawValue.lowercased().contains(query) || keywords(tool).contains(query)
+                tool.rawValue.lowercased().contains(query) || name(tool).lowercased().contains(query) || keywords(tool).contains(query)
             }
             if !matching.isEmpty {
                 result.append((title: section.title, tools: matching))
@@ -152,6 +152,25 @@ struct ToolboxView: View {
         case .url: return "percent query"
         case .jwt: return "token bearer"
         default: return ""
+        }
+    }
+
+    /// The tool's name in the sidebar. Format names like JSON are the same in every language.
+    private func name(_ tool: ToolKind) -> String {
+        switch tool {
+        case .url: return L("toolbox.tool.url")
+        case .htmlEntities: return L("toolbox.tool.htmlEntities")
+        case .time: return L("toolbox.tool.time")
+        case .timeZones: return L("toolbox.tool.timeZones")
+        case .quick: return L("toolbox.tool.quick")
+        case .generate: return L("toolbox.tool.generate")
+        case .testData: return L("toolbox.tool.testData")
+        case .qr: return L("toolbox.tool.qr")
+        case .jsonDiff: return L("toolbox.tool.jsonDiff")
+        case .http: return L("toolbox.tool.http")
+        case .length: return L("toolbox.tool.length")
+        case .contrast: return L("toolbox.tool.contrast")
+        default: return tool.rawValue
         }
     }
 
@@ -195,7 +214,7 @@ struct ToolboxView: View {
                     .font(.system(size: 11, design: .monospaced))
                     .foregroundStyle(isSelected ? Theme.accentSoft : Theme.textSecondary)
                     .frame(width: 26, alignment: .leading)
-                Text(tool.rawValue).font(.system(size: 13)).lineLimit(1)
+                Text(name(tool)).font(.system(size: 13)).lineLimit(1)
                 Spacer()
             }
             .padding(.horizontal, 8)
@@ -205,31 +224,31 @@ struct ToolboxView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(tool.rawValue)
+        .accessibilityLabel(name(tool))
         .tip(purpose(tool))
     }
 
     private func purpose(_ tool: ToolKind) -> String {
         switch tool {
-        case .json, .xml, .yaml, .html, .sql, .graphql: return "Format, validate and minify \(tool.rawValue)"
-        case .jwt: return "Decode a JWT to read its header, claims and expiry"
-        case .base64: return "Encode or decode Base64 text"
-        case .url: return "Percent-encode or decode URLs and query strings"
-        case .htmlEntities: return "Escape or unescape HTML entities like &amp;"
-        case .time: return "Convert Unix timestamps and dates between formats and time zones"
-        case .timeZones: return "Compare your time with other cities, for example to plan a call"
-        case .dataConvert: return "Convert data between JSON, YAML, XML and CSV"
-        case .quick: return "Convert numbers, colors, text case, sizes and durations"
-        case .generate: return "Generate UUIDs and hashes like MD5 and SHA"
-        case .testData: return "Generate fake names, emails, cards and tricky edge-case strings for testing"
-        case .qr: return "Make a QR code from text or a link, or read one from an image"
-        case .regex: return "Test a regular expression against text and see the matches"
-        case .jsonDiff: return "Compare two JSON documents and see what changed"
-        case .jsonPath: return "Query JSON with a JSONPath expression"
-        case .http: return "Parse a raw HTTP request or response, headers, cookies and query"
-        case .cron: return "Explain a cron expression and show the next run times"
-        case .length: return "Count characters and bytes, and make strings of an exact length to test field limits"
-        case .contrast: return "Check text and background color contrast against WCAG"
+        case .json, .xml, .yaml, .html, .sql, .graphql: return L("toolbox.purpose.formatter", name(tool))
+        case .jwt: return L("toolbox.purpose.jwt")
+        case .base64: return L("toolbox.purpose.base64")
+        case .url: return L("toolbox.purpose.url")
+        case .htmlEntities: return L("toolbox.purpose.htmlEntities")
+        case .time: return L("toolbox.purpose.time")
+        case .timeZones: return L("toolbox.purpose.timeZones")
+        case .dataConvert: return L("toolbox.purpose.dataConvert")
+        case .quick: return L("toolbox.purpose.quick")
+        case .generate: return L("toolbox.purpose.generate")
+        case .testData: return L("toolbox.purpose.testData")
+        case .qr: return L("toolbox.purpose.qr")
+        case .regex: return L("toolbox.purpose.regex")
+        case .jsonDiff: return L("toolbox.purpose.jsonDiff")
+        case .jsonPath: return L("toolbox.purpose.jsonPath")
+        case .http: return L("toolbox.purpose.http")
+        case .cron: return L("toolbox.purpose.cron")
+        case .length: return L("toolbox.purpose.length")
+        case .contrast: return L("toolbox.purpose.contrast")
         }
     }
 
@@ -261,25 +280,25 @@ struct ToolboxView: View {
 
     private func title(_ tool: ToolKind) -> String {
         switch tool {
-        case .json, .xml, .yaml, .html, .sql, .graphql: return "\(tool.rawValue) formatter"
-        case .jwt: return "JWT decoder"
-        case .base64: return "Base64"
-        case .url: return "URL encode / decode"
-        case .htmlEntities: return "HTML entities"
-        case .time: return "Time & date converter"
-        case .timeZones: return "Time zones · you vs the world"
-        case .dataConvert: return "Data converter"
-        case .quick: return "Quick converters"
-        case .generate: return "UUID & hash generator"
-        case .testData: return "Test data generator"
-        case .qr: return "QR code: make and read"
-        case .regex: return "Regex tester"
-        case .jsonDiff: return "JSON diff · what changed"
-        case .jsonPath: return "JSONPath query"
-        case .http: return "HTTP request / response"
-        case .cron: return "Cron explainer"
-        case .length: return "String length · field limits"
-        case .contrast: return "Color & contrast (WCAG)"
+        case .json, .xml, .yaml, .html, .sql, .graphql: return L("toolbox.title.formatter", name(tool))
+        case .jwt: return L("toolbox.title.jwt")
+        case .base64: return L("toolbox.title.base64")
+        case .url: return L("toolbox.title.url")
+        case .htmlEntities: return L("toolbox.title.htmlEntities")
+        case .time: return L("toolbox.title.time")
+        case .timeZones: return L("toolbox.title.timeZones")
+        case .dataConvert: return L("toolbox.title.dataConvert")
+        case .quick: return L("toolbox.title.quick")
+        case .generate: return L("toolbox.title.generate")
+        case .testData: return L("toolbox.title.testData")
+        case .qr: return L("toolbox.title.qr")
+        case .regex: return L("toolbox.title.regex")
+        case .jsonDiff: return L("toolbox.title.jsonDiff")
+        case .jsonPath: return L("toolbox.title.jsonPath")
+        case .http: return L("toolbox.title.http")
+        case .cron: return L("toolbox.title.cron")
+        case .length: return L("toolbox.title.length")
+        case .contrast: return L("toolbox.title.contrast")
         }
     }
 
@@ -386,14 +405,14 @@ struct ToolFooter<Content: View>: View {
 
 struct CopyButton: View {
     let text: String
-    var title = "Copy  ⇧⌘C"
+    var title = L("toolbox.copy.primary")
     var primary = true
     /// What VoiceOver (and tests) call it when the title alone is not unique, e.g. "Copy header".
     var name: String? = nil
     @State private var copied = false
 
     var body: some View {
-        Button(copied ? "Copied" : title) {
+        Button(copied ? L("toolbox.copy.copied") : title) {
             copyToClipboard(text)
             copied = true
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
@@ -404,7 +423,7 @@ struct CopyButton: View {
         .disabled(text.isEmpty)
         .keyboardShortcut(primary ? KeyboardShortcut("c", modifiers: [.command, .shift]) : nil)
         .accessibilityLabel(name ?? title)
-        .tip(primary ? "Copy the result to the clipboard (⇧⌘C)" : "Copy to the clipboard")
+        .tip(primary ? L("toolbox.copy.primary.tip") : L("toolbox.copy.tip"))
     }
 }
 
@@ -431,8 +450,8 @@ struct ValueRow: View {
             }
             .buttonStyle(.plain)
             .foregroundStyle(Theme.textSecondary)
-            .tip("Copy \(label) to the clipboard")
-            .accessibilityLabel("Copy \(label)")
+            .tip(L("toolbox.copy.named.tip", label))
+            .accessibilityLabel(L("toolbox.copy.named", label))
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)

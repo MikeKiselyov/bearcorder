@@ -37,6 +37,8 @@ if arguments.contains("--release-notes") {
     exit(0)
 }
 
+// Developer flags, only in builds with AUTOMATION (see DevTools/).
+#if AUTOMATION
 // `--clip-frame <capture folder> <seconds> <out.png>`: the video editor's preview frame of a saved
 // clip, with its marks, at a time of the source clip. For working out what the editor shows.
 if let flagIndex = arguments.firstIndex(of: "--clip-frame"), flagIndex + 3 < arguments.count {
@@ -93,6 +95,13 @@ for flag in ["--self-test", "--snapshot", "--readme-media", "--whats-new-media"]
     }
     RunLoop.main.run()
 }
+#else
+// A release has no developer tools: say so instead of starting the app.
+for flag in ["--self-test", "--snapshot", "--readme-media", "--whats-new-media", "--clip-frame", "--perf-core", "--export-check"] where arguments.contains(flag) {
+    FileHandle.standardError.write(Data("\(flag) needs a build with the developer tools (swift build, or BUGBEAR_AUTOMATION=1 scripts/build-app.sh)\n".utf8))
+    exit(2)
+}
+#endif
 
 BugbearApp.main()
 
@@ -262,10 +271,10 @@ struct MenuBarLabel: View {
         if app.recording != nil {
             // No running time here: a label that changes every second redraws the menu bar item,
             // and every redraw is a new frame for the capture to encode.
-            return "\(AppInfo.name), recording"
+            return L("app.menuBar.accessibility.recording", AppInfo.name)
         }
         if app.bufferState == .running {
-            return "\(AppInfo.name), buffer running"
+            return L("app.menuBar.accessibility.buffering", AppInfo.name)
         }
         return AppInfo.name
     }

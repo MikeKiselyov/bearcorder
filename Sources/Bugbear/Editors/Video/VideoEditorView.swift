@@ -36,7 +36,7 @@ struct VideoEditorView: View {
                 current.tearDown()
                 model = VideoEditorModel(capture: updated)
             } catch {
-                AppState.shared.showError("Could not switch the screen: \(error.localizedDescription)")
+                AppState.shared.showError(L("editors.screen.switchFailed", error.localizedDescription))
             }
             switchingScreen = false
         }
@@ -160,37 +160,40 @@ private struct VideoEditorContent: View {
 
     private func toolGroup(showTitles: Bool) -> some View {
         HStack(spacing: 4) {
-            ToolButton(systemImage: "arrow.uturn.backward", help: "Undo the last change (⌘Z)") { model.undo() }
+            ToolButton(systemImage: "arrow.uturn.backward", help: L("editors.undo.tip")) { model.undo() }
                 .disabled(!model.canUndo)
-            ToolButton(systemImage: "arrow.uturn.forward", help: "Redo what was undone (⇧⌘Z)") { model.redo() }
+            ToolButton(systemImage: "arrow.uturn.forward", help: L("editors.redo.tip")) { model.redo() }
             Rectangle().fill(Theme.borderStrong).frame(width: 1, height: 22).padding(.horizontal, 6)
-            ToolbarTextButton(showsTitle: showTitles, systemImage: "scissors", title: "Cut", help: "Cut the selected range (drag on the ruler first)") {
+            ToolbarTextButton(showsTitle: showTitles, systemImage: "scissors", title: L("video.tool.cut"), help: L("video.tool.cut.tip")) {
                 model.cutSelection()
             }
-            ToolbarTextButton(showsTitle: showTitles, systemImage: "arrow.right.to.line", title: "In", help: "Trim start at playhead (I)") {
+            ToolbarTextButton(showsTitle: showTitles, systemImage: "arrow.right.to.line", title: L("video.tool.in"), help: L("video.tool.in.tip")) {
                 model.setTrimStart(model.playhead)
             }
-            ToolbarTextButton(showsTitle: showTitles, systemImage: "arrow.left.to.line", title: "Out", help: "Trim end at playhead (O)") {
+            ToolbarTextButton(showsTitle: showTitles, systemImage: "arrow.left.to.line", title: L("video.tool.out"), help: L("video.tool.out.tip")) {
                 model.setTrimEnd(model.playhead)
             }
             Rectangle().fill(Theme.borderStrong).frame(width: 1, height: 22).padding(.horizontal, 6)
-            ToolbarTextButton(showsTitle: showTitles, systemImage: "textformat", title: "Text", help: "Drag on the video to place text", isSelected: model.tool == .text) {
+            ToolbarTextButton(showsTitle: showTitles, systemImage: "textformat", title: L("video.overlay.text"), help: L("video.tool.text.tip"), isSelected: model.tool == .text) {
                 model.tool = model.tool == .text ? .select : .text
             }
-            ToolbarTextButton(showsTitle: showTitles, systemImage: "arrow.up.right", title: "Arrow", help: "Drag on the video to draw an arrow", isSelected: model.tool == .arrow) {
+            ToolbarTextButton(showsTitle: showTitles, systemImage: "arrow.up.right", title: L("video.overlay.arrow"), help: L("video.tool.arrow.tip"), isSelected: model.tool == .arrow) {
                 model.tool = model.tool == .arrow ? .select : .arrow
             }
-            ToolbarTextButton(showsTitle: showTitles, systemImage: "rectangle", title: "Box", help: "Drag on the video to draw a box", isSelected: model.tool == .rectangle) {
+            ToolbarTextButton(showsTitle: showTitles, systemImage: "rectangle", title: L("video.overlay.rectangle"), help: L("video.tool.rectangle.tip"), isSelected: model.tool == .rectangle) {
                 model.tool = model.tool == .rectangle ? .select : .rectangle
             }
-            ToolbarTextButton(showsTitle: showTitles, systemImage: "eye.slash", title: "Blur", help: "Drag on the video to blur an area", isSelected: model.tool == .blur) {
+            ToolbarTextButton(showsTitle: showTitles, systemImage: "eye.slash", title: L("video.overlay.blur"), help: L("video.tool.blur.tip"), isSelected: model.tool == .blur) {
                 model.tool = model.tool == .blur ? .select : .blur
             }
+            ToolbarTextButton(showsTitle: showTitles, systemImage: "crop", title: L("video.tool.crop"), help: L("video.tool.crop.tip"), isSelected: model.tool == .crop) {
+                model.tool = model.tool == .crop ? .select : .crop
+            }
             Rectangle().fill(Theme.borderStrong).frame(width: 1, height: 22).padding(.horizontal, 6)
-            ToolbarTextButton(showsTitle: showTitles, systemImage: "tortoise", title: "Slow-mo", help: "Half speed for the selected range (or 3 s from the playhead)") {
+            ToolbarTextButton(showsTitle: showTitles, systemImage: "tortoise", title: L("video.tool.slowMotion"), help: L("video.tool.slowMotion.tip")) {
                 model.slowMotion()
             }
-            ToolbarTextButton(showsTitle: showTitles, systemImage: "pause.rectangle", title: "Freeze", help: "Hold the current frame for 2 s") {
+            ToolbarTextButton(showsTitle: showTitles, systemImage: "pause.rectangle", title: L("video.tool.freeze"), help: L("video.tool.freeze.tip")) {
                 model.freezeFrame()
             }
         }
@@ -210,7 +213,7 @@ private struct VideoEditorContent: View {
                 Picker(selection: Binding(get: { model.capture.selectedScreen ?? screens[0].id }, set: { id in onSelectScreen(id) })) {
                     ForEach(screens) { screen in
                         Text(screen.name).tag(screen.id)
-                            .accessibilityLabel("Screen: \(screen.name)")
+                            .accessibilityLabel(L("editors.screen.option", screen.name))
                     }
                 } label: {
                     EmptyView()
@@ -219,7 +222,7 @@ private struct VideoEditorContent: View {
                 .fixedSize()
                 .disabled(switchingScreen)
             }
-            .tip("Which screen is in the clip. Edits stay when you switch.")
+            .tip(L("video.screen.tip"))
             .padding(.trailing, 8)
         }
     }
@@ -228,7 +231,7 @@ private struct VideoEditorContent: View {
 
     private var transport: some View {
         HStack(spacing: 12) {
-            ToolButton(systemImage: "backward.fill", help: "Back 5 seconds") { model.step(seconds: -5) }
+            ToolButton(systemImage: "backward.fill", help: L("video.transport.back")) { model.step(seconds: -5) }
             Button {
                 model.togglePlay()
             } label: {
@@ -240,8 +243,8 @@ private struct VideoEditorContent: View {
                     .clipShape(Circle())
             }
             .buttonStyle(.plain)
-            .accessibilityLabel(model.isPlaying ? "Pause" : "Play")
-            ToolButton(systemImage: "forward.fill", help: "Forward 5 seconds") { model.step(seconds: 5) }
+            .accessibilityLabel(model.isPlaying ? L("video.transport.pause") : L("video.transport.play"))
+            ToolButton(systemImage: "forward.fill", help: L("video.transport.forward")) { model.step(seconds: 5) }
             HStack(spacing: 4) {
                 Text(TimeFormat.clockPrecise(model.outputPlayhead))
                 Text("/ " + TimeFormat.clockPrecise(model.outputDuration)).foregroundStyle(Theme.textSecondary)
@@ -264,10 +267,10 @@ private struct VideoEditorContent: View {
                 Text("\(Int(progress * 100))%").font(.system(size: 12, design: .monospaced))
             }
             VideoDragOut(model: model)
-            Button("Save to folder") { Task { await model.saveToFolder() } }
+            Button(L("editors.save")) { Task { await model.saveToFolder() } }
                 .buttonStyle(SecondaryButtonStyle())
                 .disabled(model.exportProgress != nil)
-            Button("Copy \(model.project.format.rawValue)") { Task { await model.copyFile() } }
+            Button(L("video.copy", model.project.format.rawValue)) { Task { await model.copyFile() } }
                 .buttonStyle(AccentButtonStyle())
                 .disabled(model.exportProgress != nil)
         }
@@ -299,9 +302,9 @@ private struct InlineTextField: NSViewRepresentable {
         field.focusRingType = .none
         field.font = NSFont.systemFont(ofSize: 15, weight: .bold)
         field.textColor = textColor
-        field.placeholderString = "Type…"
+        field.placeholderString = L("video.stage.text.placeholder")
         field.delegate = context.coordinator
-        field.setAccessibilityLabel("Text on the video")
+        field.setAccessibilityLabel(L("video.stage.text.field"))
         // The click that placed the text then focuses the editor itself (it is focusable for its
         // shortcuts), after this field asked: so it asks again until it has the keyboard.
         for delay in [0.0, 0.15, 0.35, 0.6] {
@@ -350,6 +353,18 @@ private struct InlineTextField: NSViewRepresentable {
             if committed { return }
             parent.onEnd()
         }
+    }
+}
+
+/// The player only shows the picture: clicks and drags go to the marks drawn over it. After text
+/// was typed on the video the player took the keyboard, then the drags, and a new arrow did not come.
+final class PassivePlayerView: AVPlayerView {
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        return nil
+    }
+
+    override var acceptsFirstResponder: Bool {
+        return false
     }
 }
 
@@ -407,7 +422,7 @@ private struct VideoDragOut: View {
     var body: some View {
         HStack(spacing: 6) {
             Image(systemName: "hand.draw")
-            Text("Drag")
+            Text(L("editors.drag"))
         }
         .font(.system(size: 12))
         .foregroundStyle(Theme.textSecondary)
@@ -415,7 +430,7 @@ private struct VideoDragOut: View {
         .frame(height: 32)
         .overlay(RoundedRectangle(cornerRadius: 7).stroke(Theme.borderStrong, style: StrokeStyle(lineWidth: 1, dash: [4, 3])))
         .contentShape(Rectangle())
-        .tip("Drag the original clip into another app. Use Copy or Save for the edited version.")
+        .tip(L("video.drag.tip"))
         .onDrag {
             return NSItemProvider(contentsOf: model.capture.mediaURL) ?? NSItemProvider()
         }
@@ -428,13 +443,20 @@ struct PlayerView: NSViewRepresentable {
     let player: AVPlayer
 
     func makeNSView(context: Context) -> AVPlayerView {
-        let view = AVPlayerView()
+        let view = PassivePlayerView()
         view.player = player
+        PlayerView.configure(view)
+        return view
+    }
+
+    /// No controls, and no Live Text: on a paused frame macOS put a text-selection layer over the
+    /// words it found (a text mark just typed, too), and drags there went to it instead of drawing.
+    static func configure(_ view: AVPlayerView) {
         view.controlsStyle = .none
         view.videoGravity = .resizeAspect
+        view.allowsVideoFrameAnalysis = false
         view.wantsLayer = true
         view.layer?.backgroundColor = NSColor(hex: 0x131416).cgColor
-        return view
     }
 
     func updateNSView(_ view: AVPlayerView, context: Context) {
@@ -447,10 +469,18 @@ struct PlayerView: NSViewRepresentable {
 /// The player plus a layer for drawing new overlays and moving the selected one.
 private struct VideoStage: View {
     @Bindable var model: VideoEditorModel
-    @State private var aspect: CGFloat = 16.0 / 9.0
     @State private var dragStart: CGPoint?
     @State private var dragCurrent: CGPoint?
     @State private var moveOriginal: VideoOverlay?
+    /// The crop while it is dragged, in whole-frame coordinates (0…1).
+    @State private var cropDraft: CGRect?
+    /// What the crop drag does: resize by these edges, move (all four), or draw a new one (nil).
+    @State private var cropEdges: AreaEdges?
+    @State private var cropOriginal: CGRect?
+
+    private var aspect: CGFloat {
+        return model.previewAspect
+    }
 
     var body: some View {
         GeometryReader { proxy in
@@ -505,8 +535,11 @@ private struct VideoStage: View {
                     .offset(x: min(point.x, max(0, proxy.size.width - 240)), y: point.y)
                 }
 
-                if model.tool != .select {
-                    Text("Drag on the video to add \(model.tool.overlayKind?.title.lowercased() ?? "")")
+                if model.tool == .crop {
+                    VideoCropOverlay(crop: cropDraft ?? model.project.crop ?? VideoCrop.whole, videoRect: videoRect, sourceSize: model.sourceSize)
+                    cropBar
+                } else if model.tool != .select {
+                    Text(L("video.stage.dragToAdd", model.tool.overlayKind?.title.lowercased() ?? ""))
                         .font(.system(size: 12))
                         .padding(.horizontal, 10)
                         .padding(.vertical, 5)
@@ -535,15 +568,20 @@ private struct VideoStage: View {
                 Color.clear
                     .onAppear { rememberStage(proxy) }
                     .onChange(of: proxy.size) { rememberStage(proxy) }
-                    .onChange(of: aspect) { rememberStage(proxy) }
+                    .onChange(of: model.previewAspect) { rememberStage(proxy) }
             }
         )
-        .task {
-            if let track = try? await model.asset.loadTracks(withMediaType: .video).first,
-               let size = try? await track.load(.naturalSize), size.height > 0 {
-                aspect = size.width / size.height
-            }
-        }
+    }
+
+    private var cropBar: some View {
+        VideoCropBar(
+            hasCrop: model.project.crop != nil || cropDraft != nil,
+            onReset: {
+                cropDraft = nil
+                model.setCrop(nil)
+            },
+            onDone: { model.tool = .select }
+        )
     }
 
     private func rememberStage(_ proxy: GeometryProxy) {
@@ -562,10 +600,12 @@ private struct VideoStage: View {
         return CGRect(x: 0, y: (size.height - height) / 2, width: size.width, height: height)
     }
 
+    /// A point on the shown video to whole-frame coordinates (0…1), through the crop.
     private func normalize(_ point: CGPoint, in rect: CGRect) -> CGPoint {
         let x = (point.x - rect.minX) / rect.width
         let y = (point.y - rect.minY) / rect.height
-        return CGPoint(x: max(0, min(1, x)), y: max(0, min(1, y)))
+        let onPicture = CGPoint(x: max(0, min(1, x)), y: max(0, min(1, y)))
+        return VideoCrop.toFrame(onPicture, crop: model.previewCrop)
     }
 
     /// One click, without waiting to see if a second one follows (a double-click gesture made
@@ -576,16 +616,21 @@ private struct VideoStage: View {
             model.finishTextEditing()
             return
         }
+        if model.tool == .crop {
+            return
+        }
         if model.tool == .text {
             let point = normalize(location, in: videoRect)
             model.addOverlay(kind: .text, start: point, end: point)
             return
         }
         if model.tool != .select {
-            model.message = "Drag on the video to draw the \(model.tool.overlayKind?.title.lowercased() ?? "mark")"
+            model.message = L("video.stage.dragToDraw", model.tool.overlayKind?.title.lowercased() ?? L("video.stage.dragToDraw.mark"))
             return
         }
         for overlay in model.project.overlays.reversed() where overlay.span.contains(model.playhead) {
+            // A mark outside the crop is not on the video.
+            if !denormalize(markBox(overlay), in: videoRect).intersects(videoRect) { continue }
             let box = denormalize(markBox(overlay), in: videoRect).insetBy(dx: -10, dy: -10)
             if !box.contains(location) { continue }
             if overlay.kind == .text && model.selection == .overlay(overlay.id) {
@@ -606,11 +651,17 @@ private struct VideoStage: View {
         return overlay.rect
     }
 
-    private func denormalize(_ rect: CGRect, in video: CGRect) -> CGRect {
+    /// A whole-frame rect (0…1) to the shown video, through the crop.
+    private func denormalize(_ frameRect: CGRect, in video: CGRect) -> CGRect {
+        let rect = VideoCrop.toPicture(frameRect, crop: model.previewCrop)
         return CGRect(x: video.minX + rect.minX * video.width, y: video.minY + rect.minY * video.height, width: rect.width * video.width, height: rect.height * video.height)
     }
 
     private func handleDrag(_ value: DragGesture.Value, videoRect: CGRect) {
+        if model.tool == .crop {
+            dragCrop(value, videoRect: videoRect)
+            return
+        }
         if model.tool != .select {
             if dragStart == nil {
                 dragStart = value.startLocation
@@ -628,15 +679,63 @@ private struct VideoStage: View {
             model.checkpoint()
         }
         guard let original = moveOriginal else { return }
-        let box = markBox(original)
+        // The mark stays on the picture that is shown: inside the crop.
+        let crop = model.previewCrop
+        let box = VideoCrop.toPicture(markBox(original), crop: crop)
         let shift = MarkMove.keepInside(minX: box.minX, minY: box.minY, maxX: box.maxX, maxY: box.maxY, dx: value.translation.width / videoRect.width, dy: value.translation.height / videoRect.height)
+        let dx = shift.dx * crop.width
+        let dy = shift.dy * crop.height
         var moved = original
-        moved.start = CGPoint(x: original.start.x + shift.dx, y: original.start.y + shift.dy)
-        moved.end = CGPoint(x: original.end.x + shift.dx, y: original.end.y + shift.dy)
+        moved.start = CGPoint(x: original.start.x + dx, y: original.start.y + dy)
+        moved.end = CGPoint(x: original.end.x + dx, y: original.end.y + dy)
         model.updateOverlay(moved)
     }
 
+    /// While cropping the whole frame is shown: a handle resizes the crop, a drag inside moves it,
+    /// anywhere else (or with no crop yet) draws a new one.
+    private func dragCrop(_ value: DragGesture.Value, videoRect: CGRect) {
+        // Until the whole frame shows, the frame drawn and the one under the pointer differ.
+        if model.previewCrop != VideoCrop.whole { return }
+        let current = model.project.crop ?? VideoCrop.whole
+        if cropOriginal == nil {
+            cropOriginal = current
+            cropEdges = nil
+            for edges in AreaEdges.handles {
+                let point = edges.point(on: denormalize(current, in: videoRect))
+                if hypot(point.x - value.startLocation.x, point.y - value.startLocation.y) < 12 {
+                    cropEdges = edges
+                    break
+                }
+            }
+            let start = normalize(value.startLocation, in: videoRect)
+            if cropEdges == nil && model.project.crop != nil && current.contains(start) {
+                cropEdges = AreaEdges(minX: true, minY: true, maxX: true, maxY: true)
+            }
+        }
+        guard let original = cropOriginal else { return }
+        let dx = value.translation.width / videoRect.width
+        let dy = value.translation.height / videoRect.height
+        guard let edges = cropEdges else {
+            cropDraft = AreaResize.drawn(from: normalize(value.startLocation, in: videoRect), to: normalize(value.location, in: videoRect), bounds: VideoCrop.whole)
+            return
+        }
+        if edges.minX && edges.maxX && edges.minY && edges.maxY {
+            cropDraft = AreaResize.moved(original, dx: dx, dy: dy, bounds: VideoCrop.whole)
+        } else {
+            cropDraft = AreaResize.resized(original, edges: edges, dx: dx, dy: dy, bounds: VideoCrop.whole, minimum: VideoCrop.minimumSize)
+        }
+    }
+
     private func finishDrag(_ value: DragGesture.Value, videoRect: CGRect) {
+        if model.tool == .crop {
+            if let draft = cropDraft, draft.width >= VideoCrop.minimumSize, draft.height >= VideoCrop.minimumSize {
+                model.setCrop(draft)
+            }
+            cropDraft = nil
+            cropEdges = nil
+            cropOriginal = nil
+            return
+        }
         defer {
             dragStart = nil
             dragCurrent = nil
@@ -647,5 +746,74 @@ private struct VideoStage: View {
         let end = normalize(value.location, in: videoRect)
         if kind != .text && hypot(end.x - start.x, end.y - start.y) < 0.01 { return }
         model.addOverlay(kind: kind, start: start, end: end)
+    }
+}
+
+/// What to do while cropping, at the top of the video.
+struct VideoCropBar: View {
+    var hasCrop: Bool
+    var onReset: () -> Void
+    var onDone: () -> Void
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Text(L("video.crop.hint"))
+                .font(.system(size: 12))
+            if hasCrop {
+                Button(L("video.crop.reset"), action: onReset)
+                    .tip(L("video.crop.reset.tip"))
+            }
+            Button(L("video.crop.done"), action: onDone)
+                .keyboardShortcut(.defaultAction)
+                .tip(L("video.crop.done.tip"))
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 5)
+        .background(Color(hex: 0x1C1D20, alpha: 0.9))
+        .clipShape(RoundedRectangle(cornerRadius: 6))
+        .padding(10)
+    }
+}
+
+/// While cropping: the rest of the frame dimmed, a frame with handles around the part that stays,
+/// and its size in pixels.
+struct VideoCropOverlay: View {
+    var crop: CGRect
+    var videoRect: CGRect
+    var sourceSize: CGSize
+
+    var body: some View {
+        let area = CGRect(x: videoRect.minX + crop.minX * videoRect.width, y: videoRect.minY + crop.minY * videoRect.height, width: crop.width * videoRect.width, height: crop.height * videoRect.height)
+        ZStack(alignment: .topLeading) {
+            Path { path in
+                path.addRect(videoRect)
+                path.addRect(area)
+            }
+            .fill(Color.black.opacity(0.55), style: FillStyle(eoFill: true))
+            Rectangle()
+                .stroke(Theme.accent, lineWidth: 2)
+                .frame(width: area.width, height: area.height)
+                .offset(x: area.minX, y: area.minY)
+            ForEach(0..<AreaEdges.handles.count, id: \.self) { index in
+                let point = AreaEdges.handles[index].point(on: area)
+                RoundedRectangle(cornerRadius: 2)
+                    .fill(Color.white)
+                    .overlay(RoundedRectangle(cornerRadius: 2).stroke(Theme.accent, lineWidth: 1.5))
+                    .frame(width: 10, height: 10)
+                    .offset(x: point.x - 5, y: point.y - 5)
+            }
+            if sourceSize.width > 0 {
+                let pixels = VideoCrop.pixelRect(crop, width: Int(sourceSize.width), height: Int(sourceSize.height))
+                Text("\(Int(pixels.width)) × \(Int(pixels.height))")
+                    .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(Theme.accent)
+                    .foregroundStyle(Color.black)
+                    .clipShape(RoundedRectangle(cornerRadius: 4))
+                    .offset(x: area.minX, y: max(videoRect.minY, area.maxY + 6 > videoRect.maxY - 20 ? area.maxY - 24 : area.maxY + 6))
+            }
+        }
+        .allowsHitTesting(false)
     }
 }

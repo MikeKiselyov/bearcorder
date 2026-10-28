@@ -18,7 +18,7 @@ enum AssetExporter {
         let videoTracks = try await asset.loadTracks(withMediaType: .video)
         let audioTracks = try await asset.loadTracks(withMediaType: .audio)
         guard !videoTracks.isEmpty else {
-            throw BufferError.exportFailed("No video in the clip")
+            throw BufferError.exportFailed(L("capture.export.noVideo"))
         }
         let duration = try await asset.load(.duration)
 
@@ -46,7 +46,7 @@ enum AssetExporter {
         }
         videoOutput.alwaysCopiesSampleData = false
         guard reader.canAdd(videoOutput) else {
-            throw BufferError.exportFailed("Cannot read video")
+            throw BufferError.exportFailed(L("capture.export.cannotRead"))
         }
         reader.add(videoOutput)
 
@@ -109,10 +109,10 @@ enum AssetExporter {
         }
 
         guard reader.startReading() else {
-            throw BufferError.exportFailed(reader.error?.localizedDescription ?? "reader failed")
+            throw BufferError.exportFailed(reader.error?.localizedDescription ?? L("capture.export.readerFailed"))
         }
         guard writer.startWriting() else {
-            throw BufferError.exportFailed(writer.error?.localizedDescription ?? "writer failed")
+            throw BufferError.exportFailed(writer.error?.localizedDescription ?? L("capture.export.writerFailed"))
         }
         let start = options.timeRange?.start ?? .zero
         writer.startSession(atSourceTime: start)
@@ -172,7 +172,7 @@ enum AssetExporter {
 
         if reader.status == .failed {
             writer.cancelWriting()
-            throw BufferError.exportFailed(reader.error?.localizedDescription ?? "reading failed")
+            throw BufferError.exportFailed(reader.error?.localizedDescription ?? L("capture.export.readingFailed"))
         }
         // Cut the file at the requested length; otherwise a long last frame (static screen)
         // stretches the duration.
@@ -181,7 +181,7 @@ enum AssetExporter {
         }
         await writer.finishWriting()
         if writer.status != .completed {
-            throw BufferError.exportFailed(writer.error?.localizedDescription ?? "writing failed")
+            throw BufferError.exportFailed(writer.error?.localizedDescription ?? L("capture.export.writingFailed"))
         }
         progress?(1)
     }

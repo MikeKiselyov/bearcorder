@@ -2,15 +2,29 @@ import AppKit
 import SwiftUI
 
 /// What the "More actions" menu of a capture card offers, in its order.
-enum HistoryCardAction: String, CaseIterable {
-    case open = "Open"
-    case reveal = "Show original in Finder"
-    case copyMarkdown = "Copy bug report (Markdown)"
-    case copyJira = "Copy bug report (Jira wiki)"
-    case copyEnvironment = "Copy environment"
-    case systemLog = "Open system log"
-    case crashReport = "Open crash report"
-    case delete = "Delete…"
+enum HistoryCardAction: CaseIterable {
+    case open
+    case reveal
+    case copyMarkdown
+    case copyJira
+    case copyEnvironment
+    case systemLog
+    case crashReport
+    case delete
+
+    /// The menu item's text.
+    var title: String {
+        switch self {
+        case .open: return L("history.card.action.open")
+        case .reveal: return L("history.card.action.reveal")
+        case .copyMarkdown: return L("history.card.action.copyMarkdown")
+        case .copyJira: return L("history.card.action.copyJira")
+        case .copyEnvironment: return L("history.card.action.copyEnvironment")
+        case .systemLog: return L("history.card.action.systemLog")
+        case .crashReport: return L("history.card.action.crashReport")
+        case .delete: return L("history.card.action.delete")
+        }
+    }
 
     /// The actions this capture has: the log and crash report only when they were saved.
     @MainActor
@@ -90,11 +104,28 @@ struct HistoryView: View {
     }
 
     enum Filter: String, CaseIterable, Identifiable {
-        case all = "All"
-        case screenshots = "Screenshots"
-        case videos = "Videos"
+        case all
+        case screenshots
+        case videos
 
         var id: String { rawValue }
+
+        var title: String {
+            switch self {
+            case .all: return L("history.filter.all")
+            case .screenshots: return L("history.filter.screenshots")
+            case .videos: return L("history.filter.videos")
+            }
+        }
+
+        /// What the sidebar row shows when picked.
+        var tip: String {
+            switch self {
+            case .all: return L("history.filter.all.tip")
+            case .screenshots: return L("history.filter.screenshots.tip")
+            case .videos: return L("history.filter.videos.tip")
+            }
+        }
 
         var symbol: String {
             switch self {
@@ -172,8 +203,8 @@ struct HistoryView: View {
     }
 
     private func dayTitle(_ date: Date, calendar: Calendar) -> String {
-        if calendar.isDateInToday(date) { return "Today" }
-        if calendar.isDateInYesterday(date) { return "Yesterday" }
+        if calendar.isDateInToday(date) { return L("history.day.today") }
+        if calendar.isDateInYesterday(date) { return L("history.day.yesterday") }
         return date.formatted(date: .complete, time: .omitted)
     }
 
@@ -186,9 +217,9 @@ struct HistoryView: View {
                 if filtered.isEmpty {
                     VStack(spacing: 10) {
                         LogoView(size: 64)
-                        Text(app.store.captures.isEmpty ? "No captures yet" : "Nothing matches")
+                        Text(app.store.captures.isEmpty ? L("history.empty.noCaptures") : L("history.empty.noMatches"))
                             .font(.system(size: 15, weight: .semibold))
-                        Text("\(HotKeySettings.shared.text(for: .screenshotArea)) takes a screenshot, \(HotKeySettings.shared.text(for: .saveMinute)) saves the last minute of the screen.")
+                        Text(L("history.empty.hint", HotKeySettings.shared.text(for: .screenshotArea), HotKeySettings.shared.text(for: .saveMinute)))
                             .font(.system(size: 12))
                             .foregroundStyle(Theme.textSecondary)
                     }
@@ -224,30 +255,30 @@ struct HistoryView: View {
                 appFilter = nil
             }
         }
-        .confirmationDialog("Delete this capture?", isPresented: Binding(get: { state.pendingDelete != nil }, set: { value in if !value { state.pendingDelete = nil } }), presenting: state.pendingDelete) { capture in
-            Button("Delete", role: .destructive) {
+        .confirmationDialog(L("history.delete.question"), isPresented: Binding(get: { state.pendingDelete != nil }, set: { value in if !value { state.pendingDelete = nil } }), presenting: state.pendingDelete) { capture in
+            Button(L("history.delete.confirm"), role: .destructive) {
                 WindowManager.shared.close(id: "\(capture.kind == .screenshot ? "screenshot" : "video"):\(capture.id)")
                 app.store.delete(capture)
             }
         } message: { _ in
-            Text("The original and all edits are removed. Exported files stay where you saved them.")
+            Text(L("history.delete.message"))
         }
     }
 
     private var sidebar: some View {
         VStack(alignment: .leading, spacing: 2) {
             ForEach(Filter.allCases) { kind in
-                sidebarRow(title: kind.rawValue, count: count(kind), isSelected: filter == kind && appFilter == nil) {
+                sidebarRow(title: kind.title, count: count(kind), isSelected: filter == kind && appFilter == nil) {
                     IconTile(systemImage: kind.symbol, tint: kind.tint, size: 22)
                 } action: {
                     filter = kind
                     appFilter = nil
                 }
-                .accessibilityLabel(kind.rawValue)
-                .tip("Show \(kind == .all ? "every capture" : "only \(kind.rawValue.lowercased())")")
+                .accessibilityLabel(kind.title)
+                .tip(kind.tip)
             }
             if !topApps.isEmpty {
-                SectionLabel("Apps")
+                SectionLabel(L("history.sidebar.apps"))
                     .padding(.horizontal, 8)
                     .padding(.top, 14)
                     .padding(.bottom, 4)
@@ -258,8 +289,8 @@ struct HistoryView: View {
                         filter = .all
                         appFilter = item.name
                     }
-                    .accessibilityLabel("App: \(item.name)")
-                    .tip("Show only captures of \(item.name)")
+                    .accessibilityLabel(L("history.sidebar.app", item.name))
+                    .tip(L("history.sidebar.app.tip", item.name))
                 }
             }
             Spacer()
@@ -293,8 +324,8 @@ struct HistoryView: View {
         HStack(spacing: 10) {
             HStack(spacing: 8) {
                 Image(systemName: "magnifyingglass").foregroundStyle(Theme.textSecondary)
-                TextField("Search by app, URL…", text: $search).textFieldStyle(.plain)
-                    .tip("Filter captures by app name, URL, title or other environment details")
+                TextField(L("history.search.placeholder"), text: $search).textFieldStyle(.plain)
+                    .tip(L("history.search.tip"))
             }
             .font(.system(size: 13))
             .padding(.horizontal, 10)
@@ -303,19 +334,19 @@ struct HistoryView: View {
             .background(Theme.control)
             .clipShape(RoundedRectangle(cornerRadius: 9))
             Spacer()
-            Text("\(filtered.count) captures").font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
+            Text(L("history.count", filtered.count)).font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
             if !selecting {
-                Button("Select") { selecting = true }
+                Button(L("history.select")) { selecting = true }
                     .buttonStyle(SecondaryButtonStyle())
-                    .tip("Select captures for a step guide or a before/after comparison")
+                    .tip(L("history.select.tip"))
             }
             Button {
                 SystemActions.open(AppPaths.captures)
             } label: {
-                Label("Open folder", systemImage: "folder")
+                Label(L("history.openFolder"), systemImage: "folder")
             }
             .buttonStyle(SecondaryButtonStyle())
-            .tip("Open the folder with all captures in Finder")
+            .tip(L("history.openFolder.tip"))
         }
         .padding(.horizontal, 16)
         .padding(.top, 36)
@@ -325,25 +356,25 @@ struct HistoryView: View {
     /// While selecting: what can be done with the picked captures, at the bottom.
     private var selectionBar: some View {
         HStack(spacing: 8) {
-            Text("\(selected.count) selected").font(.system(size: 13, weight: .semibold))
+            Text(L("history.selection.count", selected.count)).font(.system(size: 13, weight: .semibold))
             Spacer()
-            Button("Step guide") { WindowManager.shared.openStepGuide(captures: selectedCaptures) }
+            Button(L("history.selection.stepGuide")) { WindowManager.shared.openStepGuide(captures: selectedCaptures) }
                 .buttonStyle(SecondaryButtonStyle())
                 .disabled(!canMakeGuide)
-                .tip("Put the selected screenshots into one numbered guide (PNG or PDF)")
-            Button("Compare") {
+                .tip(L("history.selection.stepGuide.tip"))
+            Button(L("history.selection.compare")) {
                 let chosen = selectedCaptures
                 WindowManager.shared.openCompare(chosen[0], chosen[1])
             }
             .buttonStyle(SecondaryButtonStyle())
             .disabled(!canCompare)
-            .tip("Pick two screenshots or two clips: before and after")
-            Button("Done") {
+            .tip(L("history.selection.compare.tip"))
+            Button(L("history.selection.done")) {
                 selecting = false
                 selected = []
             }
             .buttonStyle(AccentButtonStyle())
-            .tip("Finish selecting and clear the selection")
+            .tip(L("history.selection.done.tip"))
         }
         .padding(10)
         .glassCard()
@@ -358,7 +389,7 @@ struct HistoryView: View {
                 .accessibilityElement(children: .ignore)
                 .accessibilityAddTraits(.isButton)
                 // The time tells apart captures of the same app.
-                .accessibilityLabel("\(capture.kind == .screenshot ? "Screenshot" : "Clip"): \(capture.title), \(capture.createdAt.formatted(date: .abbreviated, time: .standard))")
+                .accessibilityLabel(cardLabel(capture))
                 .accessibilityAction { cardPressed(capture, open: !selecting) }
                 .overlay(alignment: .topLeading) {
                     if selecting {
@@ -368,7 +399,7 @@ struct HistoryView: View {
                             .shadow(radius: 2)
                             .padding(8)
                     } else {
-                        Text(capture.kind == .screenshot ? "Screenshot" : "Clip")
+                        Text(capture.kind == .screenshot ? L("history.card.kind.screenshot") : L("history.card.kind.clip"))
                             .font(.system(size: 10, weight: .semibold))
                             .foregroundStyle(.white)
                             .padding(.horizontal, 6)
@@ -386,9 +417,9 @@ struct HistoryView: View {
                     ForEach(HistoryCardAction.available(for: capture), id: \.self) { action in
                         if action == .delete {
                             Divider()
-                            Button(action.rawValue, role: .destructive) { action.perform(on: capture) }
+                            Button(action.title, role: .destructive) { action.perform(on: capture) }
                         } else {
-                            Button(action.rawValue) { action.perform(on: capture) }
+                            Button(action.title) { action.perform(on: capture) }
                         }
                     }
                 } label: {
@@ -396,8 +427,8 @@ struct HistoryView: View {
                 }
                 .menuStyle(.borderlessButton)
                 .fixedSize()
-                .accessibilityLabel("More actions")
-                .tip("More actions: open, show in Finder, copy a bug report or the environment, delete")
+                .accessibilityLabel(L("history.card.moreActions"))
+                .tip(L("history.card.moreActions.tip"))
             }
             if !capture.environment.url.isEmpty {
                 Text(capture.environment.url)
@@ -411,7 +442,7 @@ struct HistoryView: View {
         .glassCard(cornerRadius: 14)
         .contentShape(Rectangle())
         .overlay(RoundedRectangle(cornerRadius: 14).stroke(Theme.accent, lineWidth: selecting && selected.contains(capture.id) ? 2 : 0))
-        .tip("Double-click to open in the editor, drag to drop the file into another app")
+        .tip(L("history.card.tip"))
         .onTapGesture(count: 2) {
             cardPressed(capture, open: true)
         }
@@ -421,6 +452,16 @@ struct HistoryView: View {
         .onDrag {
             NSItemProvider(contentsOf: capture.mediaURL) ?? NSItemProvider()
         }
+    }
+
+    /// What VoiceOver (and the tests) read for a card: the kind, the app and the time, which tells
+    /// apart captures of the same app.
+    private func cardLabel(_ capture: Capture) -> String {
+        let time = capture.createdAt.formatted(date: .abbreviated, time: .standard)
+        if capture.kind == .screenshot {
+            return L("history.card.label.screenshot", capture.title, time)
+        }
+        return L("history.card.label.clip", capture.title, time)
     }
 
     /// A double-click opens the capture; a click while selecting picks it or drops it.

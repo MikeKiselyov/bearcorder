@@ -1,0 +1,182 @@
+/* Settings window (Settings/). %@ is the app's name unless noted. */
+
+/* Sidebar pages: their names, and the line under the name in the header (also the sidebar tip). */
+"settings.page.general" = "General";
+"settings.page.permissions" = "Permissions";
+"settings.page.recording" = "Buffer and recording";
+"settings.page.reports" = "Bug reports";
+"settings.page.storage" = "Storage";
+"settings.page.shortcuts" = "Shortcuts";
+"settings.page.updates" = "Updates and feedback";
+"settings.page.general.help" = "Open at login, the save folder and screenshots";
+"settings.page.permissions.help" = "What %@ may use on your Mac, and what each one is for";
+"settings.page.recording.help" = "The buffer, frame rates, sound, clicks and keys";
+"settings.page.reports.help" = "Bug report format, your fields, the environment and crash clips";
+"settings.page.storage.help" = "Space used by captures and automatic clean-up";
+"settings.page.shortcuts.help" = "Change the keyboard shortcuts";
+"settings.page.updates.help" = "New versions, what's new and feedback";
+
+/* Sidebar. version: the app version. page.label: VoiceOver label of a page button, %@ is the page name. */
+"settings.sidebar.version" = "Version %@";
+"settings.sidebar.page.label" = "Page: %@";
+
+/* General page. */
+"settings.general.section" = "General";
+"settings.general.openAtLogin" = "Open at login";
+"settings.general.openAtLogin.tip" = "Start %@ automatically when you log in to your Mac";
+"settings.general.openAtLogin.error" = "Open at login works when the app is in /Applications (scripts/build-app.sh --install).";
+"settings.general.welcomeGuide" = "Welcome guide";
+"settings.general.welcomeGuide.show" = "Show…";
+"settings.general.welcomeGuide.show.label" = "Show the welcome guide";
+"settings.general.welcomeGuide.show.tip" = "Open the welcome guide again";
+"settings.export.section" = "Export";
+"settings.export.saveTo" = "Save to";
+"settings.export.choose" = "Choose…";
+"settings.export.choose.tip" = "Choose the folder where exported files are saved";
+"settings.screenshots.section" = "Screenshots";
+"settings.screenshots.copy" = "Copy a new screenshot to the clipboard";
+"settings.screenshots.copy.tip" = "Put every new screenshot on the clipboard so you can paste it right away";
+"settings.screenshots.copy.note" = "Paste it with ⌘V right away; the editor opens too, and ⌘C there copies your marks.";
+
+/* Buffer and recording page. minutes, fps, lightest: %ld is a number. */
+"settings.buffer.section" = "Buffer";
+"settings.buffer.length" = "Keep the last";
+"settings.buffer.length.tip" = "How much of the recent screen the buffer keeps, ready to save as a clip";
+"settings.buffer.frameRate" = "Buffer frame rate";
+"settings.buffer.frameRate.fps" = "%ld fps";
+"settings.buffer.frameRate.lightest" = "%ld fps (lightest)";
+"settings.buffer.frameRate.tip" = "Frames per second of the background buffer; lower uses less CPU and memory";
+"settings.buffer.recordingFrameRate" = "Recording frame rate";
+"settings.buffer.recordingFrameRate.tip" = "Frames per second of regular screen recordings";
+"settings.buffer.resolution" = "Resolution";
+"settings.buffer.resolution.native" = "Native";
+"settings.buffer.resolution.tip" = "Maximum height of saved clips; lower makes smaller files";
+"settings.buffer.allDisplays" = "Keep all displays (pick one or all side by side in the editor)";
+"settings.buffer.allDisplays.tip" = "Buffer every connected display instead of only the main one";
+"settings.buffer.pointer" = "Show the mouse pointer";
+"settings.buffer.pointer.tip" = "Include the mouse pointer in the buffer and recordings";
+"settings.buffer.startOnLaunch" = "Start the buffer when the app opens";
+"settings.buffer.startOnLaunch.tip" = "Start keeping the recent screen as soon as %@ launches";
+"settings.buffer.restart" = "Restart buffer";
+"settings.buffer.restart.note" = "Restart the buffer to apply. What it holds now is dropped.";
+"settings.buffer.restart.tip" = "Restart the buffer so the new settings apply; the clip it holds now is lost";
+"settings.audio.section" = "Audio";
+"settings.audio.system" = "Record system audio";
+"settings.audio.system.tip" = "Include the sound your Mac plays in the buffer and recordings";
+"settings.audio.microphone" = "Record microphone";
+"settings.audio.microphone.tip" = "Include your microphone in the buffer and recordings";
+"settings.input.section" = "Clicks and keys";
+"settings.input.clicks" = "Record clicks";
+"settings.input.clicks.tip" = "Remember mouse clicks so they show up as steps and highlights in clips";
+"settings.input.keys" = "Record shortcut keys";
+"settings.input.keys.tip" = "Remember shortcut keys like ⌘S so they show up as steps in clips";
+"settings.input.keys.needsAccess" = "Needs Accessibility access";
+"settings.input.keys.grant" = "Grant";
+"settings.input.keys.grant.tip" = "Ask macOS for Accessibility access, needed to see shortcut keys";
+
+/* "Show what I type in steps" (Settings and the welcome guide), with the note under it for on and off. */
+"settings.typedText.toggle" = "Show what I type in steps";
+"settings.typedText.toggle.tip" = "Steps say Type \"john@test.com\" in \"Email\" text field instead of Type text in \"Email\" text field";
+"settings.typedText.on" = "Steps show the text of the field you typed into, like Type “john@test.com” in “Email” text field. Password fields are never read.";
+"settings.typedText.off" = "Steps say which field you typed into, not what. Turn on to include the text; password fields are never read.";
+
+/* Bug reports page: environment, crashes and logs. */
+"settings.environment.section" = "Environment";
+"settings.environment.browserURL" = "Read the browser tab URL";
+"settings.environment.browserURL.tip" = "Add the current browser tab URL to the environment info of captures, and an Open step for every page in the steps";
+"settings.environment.browserURL.note" = "Safari, Chrome, Arc, Brave, Edge, Vivaldi and Opera. macOS asks once per browser.";
+"settings.crashes.section" = "Crashes and logs";
+"settings.crashes.saveClip" = "Save a clip when an app crashes";
+"settings.crashes.saveClip.tip" = "Automatically save the minute before a crash together with the crash report";
+"settings.crashes.saveClip.note" = "When an app you used in the last 10 minutes crashes, the minute before the crash is saved to Recent with the crash report.";
+"settings.crashes.systemLog" = "Attach the app's system log to clips";
+"settings.crashes.systemLog.tip" = "Add the front app's recent system log lines to saved clips for debugging";
+
+/* Updates and feedback page. */
+"settings.feedback.section" = "Feedback";
+"settings.feedback.problem" = "Report a problem…";
+"settings.feedback.problem.tip" = "Open a GitHub issue about %@ with the version, macOS and logs filled in";
+"settings.feedback.feature" = "Suggest a feature…";
+"settings.feedback.feature.tip" = "Share an idea for %@ as a GitHub issue";
+"settings.feedback.offerCrashReport" = "Offer a report after %@ crashes";
+"settings.feedback.offerCrashReport.tip" = "When %@ quit unexpectedly, open a report with the crash details on the next launch";
+"settings.feedback.note" = "Opens a filled issue on GitHub. You check it and submit it from your account.";
+
+/* Bug reports page. %@ in field.* is the name of an environment field (macOS, Device, URL...). */
+"settings.reports.format" = "Copy bug report as";
+"settings.reports.format.tip" = "Format used when you copy a bug report from the editor";
+"settings.reports.standard.header" = "Filled in by %@";
+"settings.reports.standard.footer" = "Collected with every capture. Rename a field or turn it off, and captures you already have show it that way too.";
+"settings.reports.field.include" = "Include %@";
+"settings.reports.field.include.tip" = "Put %@ into the panel, the badge and the bug report";
+"settings.reports.field.name.label" = "Name for %@";
+"settings.reports.field.name.tip" = "The name shown in the panel and the report; clear it to go back to %@";
+"settings.reports.example.app" = "The app in front and its version";
+"settings.reports.example.url" = "The browser tab address";
+"settings.reports.example.appearance" = "Dark or Light";
+"settings.reports.example.time" = "When the capture was taken";
+
+/* Bug reports page, the tester's own fields. suggestion.tip: %@ is a suggested field name (Stand, Build...). */
+"settings.reports.custom.header" = "Your fields";
+"settings.reports.custom.footer" = "Added to every new capture: the environment panel, the badge and the bug report. Empty values are skipped.";
+"settings.reports.custom.empty" = "None yet. Add the stand, build or test account you work with, and every capture gets it.";
+"settings.reports.custom.name" = "Name";
+"settings.reports.custom.name.tip" = "Field name, for example Stand or Build";
+"settings.reports.custom.value" = "Value";
+"settings.reports.custom.value.tip" = "Field value added to every new capture; leave empty to skip it";
+"settings.reports.custom.remove" = "Remove field";
+"settings.reports.custom.remove.tip" = "Remove this field";
+"settings.reports.custom.add" = "New field";
+"settings.reports.custom.add.tip" = "Add an empty field: type its name and value";
+"settings.reports.custom.or" = "or";
+"settings.reports.custom.suggestion.tip" = "Add a %@ field, then type its value";
+
+/* Storage page. days, gigabytes, cleanUp.deleted: %ld is a number. */
+"settings.storage.section" = "Storage";
+"settings.storage.used" = "Captures use";
+"settings.storage.measuring" = "Measuring…";
+/* Space used by captures: %1$@ is the size (like 1.2 GB), %2$ld the number of captures. */
+"settings.storage.showInFinder" = "Show in Finder";
+"settings.storage.showInFinder.tip" = "Open the captures folder in Finder";
+"settings.storage.capturesAge" = "Delete captures older than";
+"settings.storage.capturesAge.tip" = "Automatically delete captures older than this";
+"settings.storage.crashClipsAge" = "Delete crash clips older than";
+"settings.storage.crashClipsAge.tip" = "Clips %@ saved by itself when an app crashed, with the crash report";
+"settings.storage.never" = "Never";
+"settings.storage.sizeLimit" = "Keep captures under";
+"settings.storage.sizeLimit.none" = "No limit";
+"settings.storage.sizeLimit.gigabytes" = "%ld GB";
+"settings.storage.sizeLimit.tip" = "Delete the oldest captures when they take more space than this";
+"settings.storage.cleanUp" = "Clean up now";
+"settings.storage.cleanUp.note" = "Applied after launch and once a day; the oldest go first. Captures open in an editor are kept.";
+"settings.storage.cleanUp.tip" = "Apply the clean-up rules right now instead of waiting for the daily run";
+
+/* Shortcuts page. row.label: VoiceOver label, %1$@ is the action, %2$@ its keys. error.taken: %1$@ the keys, %2$@ the action that has them. */
+"settings.shortcuts.section" = "Shortcuts";
+"settings.shortcuts.row.label" = "%1$@: %2$@";
+"settings.shortcuts.row.tip" = "Click, then press the new keys. Esc cancels, Delete removes the shortcut.";
+"settings.shortcuts.recording" = "Press keys…";
+"settings.shortcuts.none" = "None";
+"settings.shortcuts.note" = "Shortcuts need ⌘, ⌥ or ⌃ so they don't get in the way of typing.";
+"settings.shortcuts.reset" = "Reset to defaults";
+"settings.shortcuts.reset.tip" = "Restore every shortcut to its default keys";
+"settings.shortcuts.error.noModifier" = "Add ⌘, ⌥ or ⌃ to the key.";
+"settings.shortcuts.error.taken" = "%1$@ is already \"%2$@\". Pick another or change that one first.";
+
+/* Actions that have a global shortcut (Shortcuts page, welcome guide, menus). */
+"settings.action.saveShort" = "Save the last 30 s";
+"settings.action.saveMinute" = "Save the last minute";
+"settings.action.saveBuffer" = "Save the whole buffer";
+"settings.action.screenshotArea" = "Screenshot an area";
+"settings.action.screenshotWindow" = "Screenshot a window";
+"settings.action.scrollingScreenshot" = "Scrolling screenshot";
+"settings.action.copyText" = "Copy text from screen";
+"settings.action.recordToggle" = "Start / stop recording";
+"settings.action.recordPause" = "Pause / resume recording";
+"settings.action.draw" = "Draw on screen";
+"settings.action.mark" = "Mark the moment";
+"settings.action.camera" = "Camera bubble";
+"settings.action.toolbox" = "Dev toolbox";
+"settings.action.ruler" = "Measure on screen";
+"settings.action.pickColor" = "Pick a color";
+"settings.action.openMenu" = "Open the %@ menu";

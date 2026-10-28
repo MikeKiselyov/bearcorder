@@ -1,0 +1,114 @@
+/* The welcome guide (Onboarding/OnboardingView.swift). %@ is the app's name unless noted. Shortcut values are key texts like "⌥⇧1". */
+
+/* Bottom bar. stepOf: the current step, then how many steps there are. */
+"onboarding.stepOf" = "Step %1$ld of %2$ld";
+"onboarding.button.back" = "Back";
+"onboarding.button.skip" = "Skip";
+"onboarding.button.continue" = "Continue";
+"onboarding.button.start" = "Start using %@";
+
+/* Step 1: welcome. */
+"onboarding.welcome.title" = "Welcome to %@";
+"onboarding.welcome.subtitle" = "Catch the bug that already happened.";
+"onboarding.welcome.buffer.title" = "Rolling screen buffer";
+"onboarding.welcome.buffer.text" = "The last minutes of your screen are always kept. Saw a bug? Save what just happened, no need to reproduce it.";
+"onboarding.welcome.record.title" = "Record with pause and drawing";
+"onboarding.welcome.record.text" = "Record a screen, all screens or an area. Pause, draw arrows on the screen, add your camera and voice.";
+"onboarding.welcome.markup.title" = "Mark up and send";
+"onboarding.welcome.markup.text" = "Arrows, boxes, steps and blur on screenshots and videos. The environment (OS, app, URL) is added for you.";
+"onboarding.welcome.toolbox.title" = "Dev toolbox";
+"onboarding.welcome.toolbox.text" = "Format JSON and XML, decode JWT, convert timestamps and time zones, generate UUIDs.";
+"onboarding.welcome.local" = "Everything stays on your Mac. Nothing is uploaded.";
+
+/* Step 2: the screen buffer. explain: the app's name, then the shortcut that saves the last 30 seconds. allDisplays: how many screens. */
+"onboarding.buffer.title" = "Saw a bug? It's already recorded.";
+"onboarding.buffer.story" = "You know the moment: the page flickers, an error flashes for a second, a button does something odd. You try again and it never happens twice.";
+"onboarding.buffer.explain" = "With the screen buffer on, %1$@ quietly keeps the last few minutes. Press %2$@ and the moment you missed opens in the editor: trim it, add an arrow, paste it into the ticket. It also saves the minute before an app crashes, by itself.";
+"onboarding.buffer.on.title" = "Keep the last minutes";
+"onboarding.buffer.on.text" = "A small ring next to the bear shows it is on. Stays on this Mac, deleted when the app quits.";
+"onboarding.buffer.off.title" = "Off for now";
+"onboarding.buffer.off.text" = "Nothing runs in the background. Screenshots, recordings and the toolbox work as usual.";
+"onboarding.buffer.allDisplays" = "Keep all %ld screens, so a bug on any of them is saved. Pick the screen in the editor.";
+"onboarding.buffer.keepLast" = "Keep the last";
+"onboarding.buffer.minutes1" = "1 min";
+"onboarding.buffer.minutes2" = "2 min";
+"onboarding.buffer.minutes3" = "3 min";
+"onboarding.buffer.minutes5" = "5 min";
+"onboarding.buffer.changeLater" = "Change it any time in Settings → Buffer.";
+
+/* The buffer timeline picture. saves: the shortcut. */
+"onboarding.timeline.saves" = "%@ saves this part";
+"onboarding.timeline.now" = "now";
+"onboarding.timeline.accessibility" = "A timeline of the last three minutes. The bug happened shortly before now, and the shortcut saves that part.";
+
+/* The purple screen capture icon of macOS. */
+"onboarding.indicator.text" = "While the buffer or a recording runs, macOS shows this purple icon in the menu bar. That's normal: it only means the screen is being captured, and nothing leaves your Mac.";
+"onboarding.indicator.tip" = "The purple icon is macOS's own sign that an app captures the screen. Apps cannot hide it.";
+
+/* Step 3: how it works. step2.title, step3.title: a shortcut. step2.text: the shortcut that saves a minute, then the one that saves the whole buffer. */
+"onboarding.how.title" = "How it works";
+"onboarding.how.step1.title" = "A ring next to the bear means the buffer is on";
+"onboarding.how.step1.text" = "It keeps the last minutes of the screen. Turn it on or off in the menu that opens from the bear.";
+"onboarding.how.step2.title" = "Saw a bug? Press %@";
+"onboarding.how.step2.text" = "The last 30 seconds open in the editor. %1$@ saves a minute, %2$@ the whole buffer. The same buttons are in the menu.";
+"onboarding.how.step3.title" = "Something about to happen? Press %@";
+"onboarding.how.step3.text" = "It marks the moment; the next save reaches back to it.";
+"onboarding.how.step4.title" = "Trim, point, share";
+"onboarding.how.step4.text" = "In the editor cut the clip, add arrows and text, then copy it or drag it into the ticket.";
+"onboarding.how.step5.title" = "Stopped it from the macOS menu?";
+"onboarding.how.step5.text" = "Stop in the purple screen recording icon saves what the buffer holds and offers to open it.";
+
+/* Where files go. */
+"onboarding.folder.title" = "Save files to";
+"onboarding.folder.choose" = "Choose…";
+"onboarding.folder.choose.tip" = "Pick the folder where saved screenshots and clips go";
+"onboarding.folder.choose.prompt" = "Save here";
+"onboarding.folder.changeLater" = "Change it any time in Settings.";
+
+/* Crash clips. */
+"onboarding.crash.toggle" = "Save the minute before an app crashes";
+"onboarding.crash.toggle.tip" = "When an app you worked with crashes, %@ saves the last minute of the screen with the crash report";
+"onboarding.crash.keepFor" = "Keep crash clips for";
+"onboarding.crash.days3" = "3 days";
+"onboarding.crash.days7" = "7 days";
+"onboarding.crash.days30" = "30 days";
+"onboarding.crash.always" = "Always";
+"onboarding.crash.keepFor.tip" = "After this they are deleted. Clips you open in the editor stay while open";
+
+/* Step 4: permissions (the list itself is in permissions.strings). */
+"onboarding.permissions.title" = "Permissions";
+"onboarding.permissions.intro" = "Only Screen Recording is required. The rest turn on extras and can be granted later in Settings.";
+
+/* Step 5: shortcuts. row: the action's title, then its keys in words. Hints with values take shortcuts. */
+"onboarding.shortcuts.title" = "Shortcuts";
+"onboarding.shortcuts.intro" = "They work from any app. Everything is also in the menu bar.";
+"onboarding.shortcuts.row" = "%1$@ (%2$@)";
+"onboarding.shortcuts.saveMinute.title" = "Save the last minute of the screen";
+/* The shortcut for 30 seconds, then the one for the whole buffer. */
+"onboarding.shortcuts.saveMinute.hint" = "%1$@ for 30 s, %2$@ for the whole buffer";
+"onboarding.shortcuts.mark.title" = "Mark the moment";
+"onboarding.shortcuts.mark.hint" = "The next save reaches back to it and opens there";
+"onboarding.shortcuts.screenshot.title" = "Screenshot an area";
+/* The window screenshot shortcut, then the copy-text shortcut. */
+"onboarding.shortcuts.screenshot.hint" = "%1$@ for a window, %2$@ copies the text in an area";
+"onboarding.shortcuts.record.title" = "Start or stop a recording";
+"onboarding.shortcuts.record.hint" = "%@ pauses and resumes";
+"onboarding.shortcuts.draw.title" = "Draw on the screen";
+"onboarding.shortcuts.draw.hint" = "Arrows and boxes appear in the video";
+"onboarding.shortcuts.camera.title" = "Camera bubble";
+"onboarding.shortcuts.camera.hint" = "Drag it, scroll to resize";
+"onboarding.shortcuts.toolbox.title" = "Dev toolbox";
+"onboarding.shortcuts.toolbox.hint" = "Opens with what is on your clipboard";
+
+/* Step 6: done. The try steps with %@ take a shortcut. */
+"onboarding.finish.title" = "You're set";
+"onboarding.finish.menuBar" = "%@ lives in the menu bar, top right. Click the bear to save from the buffer, take screenshots, record, or open the toolbox.";
+"onboarding.finish.try" = "Try it now";
+"onboarding.finish.buffer.step1" = "Click around in any app for a few seconds.";
+"onboarding.finish.buffer.step2" = "Press %@: the last 30 seconds open in the video editor.";
+"onboarding.finish.buffer.step3" = "Add an arrow, then Copy and paste it into a ticket.";
+"onboarding.finish.screenshot.step1" = "Press %@ and drag over any part of the screen.";
+"onboarding.finish.screenshot.step2" = "The screenshot opens in the editor: add an arrow or a box.";
+"onboarding.finish.screenshot.step3" = "Press ⌘C (Command + C) and paste it into a ticket.";
+"onboarding.finish.noScreenAccess" = "Screen Recording is not allowed yet, so the buffer cannot start. Go back to Permissions to allow it.";
+"onboarding.finish.reopen" = "You can open this guide again from Settings.";

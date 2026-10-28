@@ -19,12 +19,12 @@ struct TimelineEditor: View {
             ZStack(alignment: .topLeading) {
                 VStack(alignment: .leading, spacing: 6) {
                     ruler(width: trackWidth, scale: scale)
-                    track("Video", height: 46) { videoTrack(width: trackWidth, scale: scale) }
-                    track("Clicks", height: 16) { clicksTrack(scale: scale) }
-                    track("Keys", height: 18) { keysTrack(scale: scale) }
-                    track("Marks", height: 22) { overlayTrack(kinds: [.text, .arrow, .rectangle], scale: scale) }
-                    track("Blur", height: 22) { overlayTrack(kinds: [.blur], scale: scale) }
-                    track("Speed", height: 22) { speedTrack(scale: scale) }
+                    track(L("video.timeline.video"), height: 46) { videoTrack(width: trackWidth, scale: scale) }
+                    track(L("video.timeline.clicks"), height: 16) { clicksTrack(scale: scale) }
+                    track(L("video.timeline.keys"), height: 18) { keysTrack(scale: scale) }
+                    track(L("video.timeline.marks"), height: 22) { overlayTrack(kinds: [.text, .arrow, .rectangle], scale: scale) }
+                    track(L("video.timeline.blur"), height: 22) { overlayTrack(kinds: [.blur], scale: scale) }
+                    track(L("video.timeline.speed"), height: 22) { speedTrack(scale: scale) }
                 }
                 .padding(.horizontal, horizontalPadding)
                 .padding(.vertical, 8)
@@ -70,7 +70,7 @@ struct TimelineEditor: View {
 
     private func ruler(width: CGFloat, scale: CGFloat) -> some View {
         HStack(spacing: 12) {
-            Text(model.range.map { selected in "Sel " + TimeFormat.clock(selected.duration, tenths: true) } ?? "")
+            Text(model.range.map { selected in L("video.timeline.selection", TimeFormat.clock(selected.duration, tenths: true)) } ?? "")
                 .font(.system(size: 10, design: .monospaced))
                 .foregroundStyle(Theme.link)
                 .frame(width: labelWidth, alignment: .leading)
@@ -172,7 +172,7 @@ struct TimelineEditor: View {
                     .frame(width: max(3, cut.duration * scale))
                     .overlay(Rectangle().stroke(isSelected ? Theme.text : Theme.accent, lineWidth: isSelected ? 2 : 1))
                     // The tip goes before the offset, so it moves with the bar.
-                    .tip("Cut \(TimeFormat.clock(cut.start, tenths: true))–\(TimeFormat.clock(cut.end, tenths: true)). Delete to restore.")
+                    .tip(L("video.timeline.cut.tip", TimeFormat.clock(cut.start, tenths: true), TimeFormat.clock(cut.end, tenths: true)))
                     .offset(x: cut.start * scale)
                     .onTapGesture { model.selection = .cut(index) }
             }
@@ -198,7 +198,7 @@ struct TimelineEditor: View {
             .padding(.horizontal, TimelineEditor.trimGrabPadding)
             .frame(height: 46)
             .contentShape(Rectangle())
-            .tip(isStart ? "Trim start (I)" : "Trim end (O)")
+            .tip(isStart ? L("video.timeline.trimStart.tip") : L("video.timeline.trimEnd.tip"))
             .offset(x: time * scale - 5 - TimelineEditor.trimGrabPadding)
             .gesture(
                 DragGesture()
@@ -219,7 +219,7 @@ struct TimelineEditor: View {
                     }
                     .onEnded { _ in trimDragOriginal = nil }
             )
-            .accessibilityLabel(isStart ? "Trim start" : "Trim end")
+            .accessibilityLabel(isStart ? L("video.timeline.trimStart") : L("video.timeline.trimEnd"))
     }
 
     // MARK: Clicks and keys
@@ -238,7 +238,7 @@ struct TimelineEditor: View {
                     Image(systemName: "flag.fill")
                         .font(.system(size: 11))
                         .foregroundStyle(Theme.accentSoft)
-                        .tip("Marked moment (\(HotKeySettings.shared.readable(for: .mark)))")
+                        .tip(L("video.timeline.marker.tip", HotKeySettings.shared.readable(for: .mark)))
                         .offset(x: event.time * scale - 2)
                         .onTapGesture { model.seek(toSource: event.time) }
                 }
@@ -322,7 +322,7 @@ struct TimelineEditor: View {
                 let isSelected = model.selection == .freeze(index)
                 HStack(spacing: 3) {
                     Image(systemName: "pause.fill").font(.system(size: 8))
-                    Text(String(format: "%.0fs", freeze.duration)).font(.system(size: 10, weight: .bold))
+                    Text(L("video.timeline.freeze.seconds", String(format: "%.0f", freeze.duration))).font(.system(size: 10, weight: .bold))
                 }
                 .foregroundStyle(Theme.accentText)
                 .padding(.horizontal, 5)
@@ -330,7 +330,7 @@ struct TimelineEditor: View {
                 .background(Theme.link)
                 .overlay(RoundedRectangle(cornerRadius: 4).stroke(Theme.text, lineWidth: isSelected ? 2 : 0))
                 .clipShape(RoundedRectangle(cornerRadius: 4))
-                .tip("Freeze frame. Select and press Delete to remove.")
+                .tip(L("video.timeline.freeze.tip"))
                 .offset(x: freeze.at * scale - 4)
                 .onTapGesture { model.selection = .freeze(index) }
             }
@@ -384,7 +384,7 @@ private struct SpanBar: View {
         .frame(width: width, height: 20)
         // A name the tests find the bar by, to drag it and its edges with the real mouse.
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Bar: \(label)")
+        .accessibilityLabel(L("video.timeline.bar", label))
         .accessibilityAddTraits(.isButton)
         .contentShape(Rectangle())
         .onTapGesture(perform: onSelect)

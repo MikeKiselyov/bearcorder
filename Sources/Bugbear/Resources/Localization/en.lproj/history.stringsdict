@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Texts with a count: the word changes with the number (one/other in English; other languages add few, many...). -->
+<plist version="1.0">
+<dict>
+    <key>history.compare.summary</key>
+    <dict>
+        <key>NSStringLocalizedFormatKey</key>
+        <string>%1$#@areas@ · %2$@%% of pixels</string>
+        <key>areas</key>
+        <dict>
+            <key>NSStringFormatSpecTypeKey</key>
+            <string>NSStringPluralRuleType</string>
+            <key>NSStringFormatValueTypeKey</key>
+            <string>ld</string>
+            <key>one</key>
+            <string>%ld changed area</string>
+            <key>other</key>
+            <string>%ld changed areas</string>
+        </dict>
+    </dict>
+    <key>history.count</key>
+    <dict>
+        <key>NSStringLocalizedFormatKey</key>
+        <string>%#@captures@</string>
+        <key>captures</key>
+        <dict>
+            <key>NSStringFormatSpecTypeKey</key>
+            <string>NSStringPluralRuleType</string>
+            <key>NSStringFormatValueTypeKey</key>
+            <string>ld</string>
+            <key>one</key>
+            <string>%ld capture</string>
+            <key>other</key>
+            <string>%ld captures</string>
+        </dict>
+    </dict>
+</dict>
+</plist>

@@ -3,20 +3,22 @@
 #
 #   scripts/test-all.sh           # everything (~8 min): needs Screen Recording and Accessibility,
 #                                 # opens a Chrome window and moves the mouse, so don't touch the Mac
-#   scripts/test-all.sh --quick   # unit tests and the self-test only (~1 min), no permissions needed
+#   scripts/test-all.sh --quick   # unit tests, self-test, lint and the release check (~2 min), no permissions
 #
 # Suites:
 #   unit       swift test: parsers, converters, reports, timelines, disk tree (BugbearCore)
 #   self-test  media pipeline: export, edits, GIF, size limits, annotations, OCR, QR, stitching
 #   controls   every control in scripts/controls.txt has a check in the tests
+#   lint       shellcheck on every script (when shellcheck is installed)
+#   release    a release build has no automation, self-test or media tools in it
 #   e2e        the real app: buffer, saving, recording with pause, audio, markers, crash watch, updates
 #   features   the real app with a browser: scrolling screenshot, ruler, color picker, overlay,
 #              area recording, shortcuts, reports, displays, menu panel, disk space
 #   perf       CPU and memory while idle and recording, save speed
 set -uo pipefail
 
-cd "$(dirname "$0")/.."
-ROOT="$(pwd)"
+# shellcheck source=lib/common.sh
+source "$(dirname "$0")/lib/common.sh"
 LOGS="$ROOT/build/test-logs"
 rm -rf "$LOGS"
 mkdir -p "$LOGS"
@@ -42,7 +44,7 @@ run_suite() {
     local status=$?
     local seconds=$(($(date +%s) - started))
     local summary
-    summary=$(grep -E "passed, [0-9]+ failed|Executed [0-9]+ tests|ALL CHECKS PASSED|ALL PERFORMANCE CHECKS PASSED|control coverage ok|FAILED" "$log" | tail -1 | sed -E 's/^[[:space:]]+//')
+    summary=$(grep -E "passed, [0-9]+ failed|Executed [0-9]+ tests|ALL CHECKS PASSED|ALL PERFORMANCE CHECKS PASSED|control coverage ok|shellcheck clean|release has no automation|FAILED" "$log" | tail -1 | sed -E 's/^[[:space:]]+//')
     # A suite that stops halfway can still exit 0 (its exit trap runs last); no summary line
     # means it did not finish.
     if [ "$status" = "0" ] && [ -z "$summary" ]; then
@@ -61,6 +63,8 @@ run_suite() {
     TIMES+=("$seconds")
 }
 
+# Run by name through run_suite.
+# shellcheck disable=SC2329
 self_test() {
     local folder="$ROOT/build/self-test"
     rm -rf "$folder"
@@ -69,9 +73,22 @@ self_test() {
     .build/debug/Bugbear --self-test "$folder"
 }
 
+# Run by name through run_suite. shellcheck says nothing when all is well: say how many it checked.
+# shellcheck disable=SC2329
+lint_scripts() {
+    local scripts=(scripts/*.sh scripts/lib/*.sh)
+    shellcheck -x "${scripts[@]}" || return 1
+    echo "shellcheck clean: ${#scripts[@]} scripts"
+}
+
 run_suite unit swift test
 run_suite self-test self_test
 run_suite controls python3 -I scripts/control-coverage.py
+run_suite release scripts/check-no-automation.sh
+# CI lints the scripts too; locally only where shellcheck is installed (brew install shellcheck).
+if command -v shellcheck >/dev/null; then
+    run_suite lint lint_scripts
+fi
 if [ "$QUICK" = "0" ]; then
     run_suite e2e scripts/e2e.sh
     run_suite features scripts/e2e-features.sh

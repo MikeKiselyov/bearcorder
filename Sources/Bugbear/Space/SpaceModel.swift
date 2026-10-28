@@ -30,6 +30,14 @@ final class SpaceModel {
         /// Paths below the home folder to leave out of the scan when access is denied.
         let skipWhenDenied: String
         var state: State = .waiting
+
+        /// The name shown in the scan steps: the folder's own name, or a description for other apps' data.
+        var title: String {
+            if skipWhenDenied == "Library/Containers" {
+                return L("space.access.otherAppsData")
+            }
+            return id
+        }
     }
 
     var volumeTotal: Int64 = 0
@@ -146,7 +154,7 @@ final class SpaceModel {
             return DiskScanner.clean(category, home: root)
         }.value
         Log.info("space: cleaned \(category.id), freed \(freed) bytes")
-        message = "Freed \(SpaceModel.format(freed)) from \(category.title)"
+        message = L("space.message.freed", SpaceModel.format(freed), category.title)
         cleaningID = nil
         await measure(force: true)
     }
@@ -169,7 +177,7 @@ final class SpaceModel {
     var deniedFolders: [String] {
         var names: [String] = []
         for check in accessChecks where check.state == .denied {
-            names.append(check.id)
+            names.append(check.title)
         }
         return names
     }
@@ -332,10 +340,10 @@ final class SpaceModel {
                 }
             }
             topFiles = kept
-            message = "Moved \((path as NSString).lastPathComponent) to the Trash (\(SpaceModel.format(freed))). Empty the Trash to free the space."
+            message = L("space.message.movedToTrash", (path as NSString).lastPathComponent, SpaceModel.format(freed))
             refreshVolume()
         } catch {
-            message = "Could not move it to the Trash: \(error.localizedDescription)"
+            message = L("space.message.trashFailed", error.localizedDescription)
         }
     }
 }

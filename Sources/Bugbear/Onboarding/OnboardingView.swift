@@ -52,18 +52,18 @@ struct OnboardingView: View {
                             .frame(width: index == page ? 18 : 7, height: 7)
                     }
                 }
-                .accessibilityLabel("Step \(page + 1) of \(pageCount)")
+                .accessibilityLabel(L("onboarding.stepOf", page + 1, pageCount))
                 Spacer()
                 if page > 0 {
-                    Button("Back") { page -= 1 }
+                    Button(L("onboarding.button.back")) { page -= 1 }
                         .buttonStyle(SecondaryButtonStyle())
                 } else {
-                    Button("Skip") { complete() }
+                    Button(L("onboarding.button.skip")) { complete() }
                         .buttonStyle(.plain)
                         .foregroundStyle(Theme.textSecondary)
                         .padding(.trailing, 8)
                 }
-                Button(page == pageCount - 1 ? "Start using \(AppInfo.name)" : "Continue") {
+                Button(page == pageCount - 1 ? L("onboarding.button.start", AppInfo.name) : L("onboarding.button.continue")) {
                     if page == pageCount - 1 {
                         complete()
                     } else {
@@ -111,15 +111,15 @@ struct OnboardingView: View {
             HStack(spacing: 16) {
                 LogoView(size: 64)
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Welcome to \(AppInfo.name)").font(.system(size: 26, weight: .bold))
-                    Text("Catch the bug that already happened.").font(.system(size: 15)).foregroundStyle(Theme.textSecondary)
+                    Text(L("onboarding.welcome.title", AppInfo.name)).font(.system(size: 26, weight: .bold))
+                    Text(L("onboarding.welcome.subtitle")).font(.system(size: 15)).foregroundStyle(Theme.textSecondary)
                 }
             }
-            feature("gobackward", "Rolling screen buffer", "The last minutes of your screen are always kept. Saw a bug? Save what just happened, no need to reproduce it.")
-            feature("record.circle", "Record with pause and drawing", "Record a screen, all screens or an area. Pause, draw arrows on the screen, add your camera and voice.")
-            feature("pencil.and.outline", "Mark up and send", "Arrows, boxes, steps and blur on screenshots and videos. The environment (OS, app, URL) is added for you.")
-            feature("wrench.and.screwdriver", "Dev toolbox", "Format JSON and XML, decode JWT, convert timestamps and time zones, generate UUIDs.")
-            Text("Everything stays on your Mac. Nothing is uploaded.")
+            feature("gobackward", L("onboarding.welcome.buffer.title"), L("onboarding.welcome.buffer.text"))
+            feature("record.circle", L("onboarding.welcome.record.title"), L("onboarding.welcome.record.text"))
+            feature("pencil.and.outline", L("onboarding.welcome.markup.title"), L("onboarding.welcome.markup.text"))
+            feature("wrench.and.screwdriver", L("onboarding.welcome.toolbox.title"), L("onboarding.welcome.toolbox.text"))
+            Text(L("onboarding.welcome.local"))
                 .font(.system(size: 12))
                 .foregroundStyle(Theme.textSecondary)
         }
@@ -142,46 +142,46 @@ struct OnboardingView: View {
     private var buffer: some View {
         @Bindable var settings = app.settings
         return VStack(alignment: .leading, spacing: 14) {
-            Text("Saw a bug? It's already recorded.").font(.system(size: 24, weight: .bold))
-            Text("You know the moment: the page flickers, an error flashes for a second, a button does something odd. You try again and it never happens twice.")
+            Text(L("onboarding.buffer.title")).font(.system(size: 24, weight: .bold))
+            Text(L("onboarding.buffer.story"))
                 .font(.system(size: 13))
                 .foregroundStyle(Theme.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
             BufferTimeline()
-            Text("With the screen buffer on, \(AppInfo.name) quietly keeps the last few minutes. Press \(HotKeySettings.shared.readable(for: .saveShort)) and the moment you missed opens in the editor: trim it, add an arrow, paste it into the ticket. It also saves the minute before an app crashes, by itself.")
+            Text(L("onboarding.buffer.explain", AppInfo.name, HotKeySettings.shared.readable(for: .saveShort)))
                 .font(.system(size: 13))
                 .fixedSize(horizontal: false, vertical: true)
             HStack(spacing: 12) {
                 bufferChoice(
                     on: true,
                     symbol: "gobackward",
-                    title: "Keep the last minutes",
-                    text: "A small ring next to the bear shows it is on. Stays on this Mac, deleted when the app quits."
+                    title: L("onboarding.buffer.on.title"),
+                    text: L("onboarding.buffer.on.text")
                 )
                 bufferChoice(
                     on: false,
                     symbol: "pause.circle",
-                    title: "Off for now",
-                    text: "Nothing runs in the background. Screenshots, recordings and the toolbox work as usual."
+                    title: L("onboarding.buffer.off.title"),
+                    text: L("onboarding.buffer.off.text")
                 )
             }
             .fixedSize(horizontal: false, vertical: true)
             ScreenCaptureIndicatorNote()
             if settings.startBufferOnLaunch && NSScreen.screens.count > 1 {
                 Toggle(isOn: $settings.captureAllDisplays) {
-                    Text("Keep all \(NSScreen.screens.count) screens, so a bug on any of them is saved. Pick the screen in the editor.")
+                    Text(L("onboarding.buffer.allDisplays", NSScreen.screens.count))
                         .font(.system(size: 13))
                 }
                 .toggleStyle(.checkbox)
             }
             HStack(spacing: 12) {
                 if settings.startBufferOnLaunch {
-                    Text("Keep the last").font(.system(size: 13))
+                    Text(L("onboarding.buffer.keepLast")).font(.system(size: 13))
                     Picker(selection: $settings.bufferMinutes) {
-                        Text("1 min").tag(1)
-                        Text("2 min").tag(2)
-                        Text("3 min").tag(3)
-                        Text("5 min").tag(5)
+                        Text(L("onboarding.buffer.minutes1")).tag(1)
+                        Text(L("onboarding.buffer.minutes2")).tag(2)
+                        Text(L("onboarding.buffer.minutes3")).tag(3)
+                        Text(L("onboarding.buffer.minutes5")).tag(5)
                     } label: {
                         EmptyView()
                     }
@@ -189,7 +189,7 @@ struct OnboardingView: View {
                     .fixedSize()
                 }
                 Spacer()
-                Text("Change it any time in Settings → Buffer.")
+                Text(L("onboarding.buffer.changeLater"))
                     .font(.system(size: 12))
                     .foregroundStyle(Theme.textSecondary)
             }
@@ -201,16 +201,16 @@ struct OnboardingView: View {
     private var howItWorks: some View {
         let keys = HotKeySettings.shared
         return VStack(alignment: .leading, spacing: 14) {
-            Text("How it works").font(.system(size: 24, weight: .bold))
+            Text(L("onboarding.how.title")).font(.system(size: 24, weight: .bold))
             VStack(alignment: .leading, spacing: 12) {
-                howStep(1, "A ring next to the bear means the buffer is on", "It keeps the last minutes of the screen. Turn it on or off in the menu that opens from the bear.")
-                howStep(2, "Saw a bug? Press \(keys.readable(for: .saveShort))", "The last 30 seconds open in the editor. \(keys.readable(for: .saveMinute)) saves a minute, \(keys.readable(for: .saveBuffer)) the whole buffer. The same buttons are in the menu.")
-                howStep(3, "Something about to happen? Press \(keys.readable(for: .mark))", "It marks the moment; the next save reaches back to it.")
-                howStep(4, "Trim, point, share", "In the editor cut the clip, add arrows and text, then copy it or drag it into the ticket.")
-                howStep(5, "Stopped it from the macOS menu?", "Stop in the purple screen recording icon saves what the buffer holds and offers to open it.")
+                howStep(1, L("onboarding.how.step1.title"), L("onboarding.how.step1.text"))
+                howStep(2, L("onboarding.how.step2.title", keys.readable(for: .saveShort)), L("onboarding.how.step2.text", keys.readable(for: .saveMinute), keys.readable(for: .saveBuffer)))
+                howStep(3, L("onboarding.how.step3.title", keys.readable(for: .mark)), L("onboarding.how.step3.text"))
+                howStep(4, L("onboarding.how.step4.title"), L("onboarding.how.step4.text"))
+                howStep(5, L("onboarding.how.step5.title"), L("onboarding.how.step5.text"))
             }
             VStack(alignment: .leading, spacing: 8) {
-                Text("Save files to").font(.system(size: 14, weight: .semibold))
+                Text(L("onboarding.folder.title")).font(.system(size: 14, weight: .semibold))
                 HStack(spacing: 10) {
                     Image(systemName: "folder")
                         .foregroundStyle(Theme.textSecondary)
@@ -219,15 +219,15 @@ struct OnboardingView: View {
                         .lineLimit(1)
                         .truncationMode(.middle)
                     Spacer()
-                    Button("Choose…") { chooseOutputFolder() }
+                    Button(L("onboarding.folder.choose")) { chooseOutputFolder() }
                         .buttonStyle(SecondaryButtonStyle())
-                        .tip("Pick the folder where saved screenshots and clips go")
+                        .tip(L("onboarding.folder.choose.tip"))
                 }
                 .padding(.horizontal, 12)
                 .frame(height: 40)
                 .background(Theme.control)
                 .clipShape(RoundedRectangle(cornerRadius: 8))
-                Text("Change it any time in Settings.")
+                Text(L("onboarding.folder.changeLater"))
                     .font(.system(size: 12))
                     .foregroundStyle(Theme.textSecondary)
             }
@@ -240,24 +240,24 @@ struct OnboardingView: View {
         @Bindable var settings = app.settings
         return VStack(alignment: .leading, spacing: 8) {
             Toggle(isOn: $settings.saveOnCrash) {
-                Text("Save the minute before an app crashes").font(.system(size: 14, weight: .semibold))
+                Text(L("onboarding.crash.toggle")).font(.system(size: 14, weight: .semibold))
             }
             .toggleStyle(.checkbox)
-            .tip("When an app you worked with crashes, \(AppInfo.name) saves the last minute of the screen with the crash report")
+            .tip(L("onboarding.crash.toggle.tip", AppInfo.name))
             if settings.saveOnCrash {
                 HStack(spacing: 10) {
-                    Text("Keep crash clips for").font(.system(size: 13))
+                    Text(L("onboarding.crash.keepFor")).font(.system(size: 13))
                     Picker(selection: $settings.keepCrashClipsDays) {
-                        Text("3 days").tag(3)
-                        Text("7 days").tag(7)
-                        Text("30 days").tag(30)
-                        Text("Always").tag(0)
+                        Text(L("onboarding.crash.days3")).tag(3)
+                        Text(L("onboarding.crash.days7")).tag(7)
+                        Text(L("onboarding.crash.days30")).tag(30)
+                        Text(L("onboarding.crash.always")).tag(0)
                     } label: {
                         EmptyView()
                     }
                     .pickerStyle(.segmented)
                     .fixedSize()
-                    .tip("After this they are deleted. Clips you open in the editor stay while open")
+                    .tip(L("onboarding.crash.keepFor.tip"))
                 }
             }
         }
@@ -287,7 +287,7 @@ struct OnboardingView: View {
     }
 
     private func chooseOutputFolder() {
-        if let url = SystemActions.chooseFolder(startingAt: app.settings.outputFolder, prompt: "Save here") {
+        if let url = SystemActions.chooseFolder(startingAt: app.settings.outputFolder, prompt: L("onboarding.folder.choose.prompt")) {
             app.settings.outputFolderPath = url.path
         }
     }
@@ -326,8 +326,8 @@ struct OnboardingView: View {
     private var permissions: some View {
         @Bindable var settings = app.settings
         return VStack(alignment: .leading, spacing: 10) {
-            Text("Permissions").font(.system(size: 24, weight: .bold))
-            Text("Only Screen Recording is required. The rest turn on extras and can be granted later in Settings.")
+            Text(L("onboarding.permissions.title")).font(.system(size: 24, weight: .bold))
+            Text(L("onboarding.permissions.intro"))
                 .font(.system(size: 13))
                 .foregroundStyle(Theme.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -340,18 +340,18 @@ struct OnboardingView: View {
     private var shortcuts: some View {
         let keys = HotKeySettings.shared
         return VStack(alignment: .leading, spacing: 14) {
-            Text("Shortcuts").font(.system(size: 24, weight: .bold))
-            Text("They work from any app. Everything is also in the menu bar.")
+            Text(L("onboarding.shortcuts.title")).font(.system(size: 24, weight: .bold))
+            Text(L("onboarding.shortcuts.intro"))
                 .font(.system(size: 13))
                 .foregroundStyle(Theme.textSecondary)
             Grid(alignment: .leading, horizontalSpacing: 18, verticalSpacing: 10) {
-                shortcut(.saveMinute, "Save the last minute of the screen", "\(keys.readable(for: .saveShort)) for 30 s, \(keys.readable(for: .saveBuffer)) for the whole buffer")
-                shortcut(.mark, "Mark the moment", "The next save reaches back to it and opens there")
-                shortcut(.screenshotArea, "Screenshot an area", "\(keys.readable(for: .screenshotWindow)) for a window, \(keys.readable(for: .copyText)) copies the text in an area")
-                shortcut(.recordToggle, "Start or stop a recording", "\(keys.readable(for: .recordPause)) pauses and resumes")
-                shortcut(.draw, "Draw on the screen", "Arrows and boxes appear in the video")
-                shortcut(.camera, "Camera bubble", "Drag it, scroll to resize")
-                shortcut(.toolbox, "Dev toolbox", "Opens with what is on your clipboard")
+                shortcut(.saveMinute, L("onboarding.shortcuts.saveMinute.title"), L("onboarding.shortcuts.saveMinute.hint", keys.readable(for: .saveShort), keys.readable(for: .saveBuffer)))
+                shortcut(.mark, L("onboarding.shortcuts.mark.title"), L("onboarding.shortcuts.mark.hint"))
+                shortcut(.screenshotArea, L("onboarding.shortcuts.screenshot.title"), L("onboarding.shortcuts.screenshot.hint", keys.readable(for: .screenshotWindow), keys.readable(for: .copyText)))
+                shortcut(.recordToggle, L("onboarding.shortcuts.record.title"), L("onboarding.shortcuts.record.hint", keys.readable(for: .recordPause)))
+                shortcut(.draw, L("onboarding.shortcuts.draw.title"), L("onboarding.shortcuts.draw.hint"))
+                shortcut(.camera, L("onboarding.shortcuts.camera.title"), L("onboarding.shortcuts.camera.hint"))
+                shortcut(.toolbox, L("onboarding.shortcuts.toolbox.title"), L("onboarding.shortcuts.toolbox.hint"))
             }
         }
     }
@@ -368,7 +368,7 @@ struct OnboardingView: View {
                 .overlay(RoundedRectangle(cornerRadius: 6).stroke(Theme.borderStrong, lineWidth: 1))
                 .clipShape(RoundedRectangle(cornerRadius: 6))
             VStack(alignment: .leading, spacing: 1) {
-                Text("\(title) (\(keys.spoken(for: action)))").font(.system(size: 13, weight: .semibold))
+                Text(L("onboarding.shortcuts.row", title, keys.spoken(for: action))).font(.system(size: 13, weight: .semibold))
                 Text(hint).font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
             }
         }
@@ -376,7 +376,7 @@ struct OnboardingView: View {
 
     private var finish: some View {
         VStack(alignment: .leading, spacing: 18) {
-            Text("You're set").font(.system(size: 24, weight: .bold))
+            Text(L("onboarding.finish.title")).font(.system(size: 24, weight: .bold))
             HStack(spacing: 14) {
                 Image(nsImage: Logo.menuBarImage(recording: true))
                     .renderingMode(.template)
@@ -384,29 +384,29 @@ struct OnboardingView: View {
                     .padding(10)
                     .background(Theme.control)
                     .clipShape(RoundedRectangle(cornerRadius: 8))
-                Text("\(AppInfo.name) lives in the menu bar, top right. Click the bear to save from the buffer, take screenshots, record, or open the toolbox.")
+                Text(L("onboarding.finish.menuBar", AppInfo.name))
                     .font(.system(size: 13))
                     .fixedSize(horizontal: false, vertical: true)
             }
             VStack(alignment: .leading, spacing: 8) {
-                SectionLabel("Try it now")
+                SectionLabel(L("onboarding.finish.try"))
                 if app.settings.startBufferOnLaunch {
-                    tryStep("1", "Click around in any app for a few seconds.")
-                    tryStep("2", "Press \(HotKeySettings.shared.readable(for: .saveShort)): the last 30 seconds open in the video editor.")
-                    tryStep("3", "Add an arrow, then Copy and paste it into a ticket.")
+                    tryStep("1", L("onboarding.finish.buffer.step1"))
+                    tryStep("2", L("onboarding.finish.buffer.step2", HotKeySettings.shared.readable(for: .saveShort)))
+                    tryStep("3", L("onboarding.finish.buffer.step3"))
                 } else {
-                    tryStep("1", "Press \(HotKeySettings.shared.readable(for: .screenshotArea)) and drag over any part of the screen.")
-                    tryStep("2", "The screenshot opens in the editor: add an arrow or a box.")
-                    tryStep("3", "Press ⌘C (Command + C) and paste it into a ticket.")
+                    tryStep("1", L("onboarding.finish.screenshot.step1", HotKeySettings.shared.readable(for: .screenshotArea)))
+                    tryStep("2", L("onboarding.finish.screenshot.step2"))
+                    tryStep("3", L("onboarding.finish.screenshot.step3"))
                 }
             }
             if !screenAccess && app.settings.startBufferOnLaunch {
-                Label("Screen Recording is not allowed yet, so the buffer cannot start. Go back to Permissions to allow it.", systemImage: "exclamationmark.triangle.fill")
+                Label(L("onboarding.finish.noScreenAccess"), systemImage: "exclamationmark.triangle.fill")
                     .font(.system(size: 12))
                     .foregroundStyle(Theme.warning)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            Text("You can open this guide again from Settings.")
+            Text(L("onboarding.finish.reopen"))
                 .font(.system(size: 12))
                 .foregroundStyle(Theme.textSecondary)
         }
@@ -461,17 +461,17 @@ private struct BufferTimeline: View {
             HStack {
                 Text("−3:00").font(.system(size: 11, design: .monospaced)).foregroundStyle(Theme.textSecondary)
                 Spacer()
-                Text("\(HotKeySettings.shared.readable(for: .saveShort)) saves this part")
+                Text(L("onboarding.timeline.saves", HotKeySettings.shared.readable(for: .saveShort)))
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(Theme.accentSoft)
-                Text("now").font(.system(size: 11, design: .monospaced)).foregroundStyle(Theme.accentSoft)
+                Text(L("onboarding.timeline.now")).font(.system(size: 11, design: .monospaced)).foregroundStyle(Theme.accentSoft)
             }
         }
         .padding(12)
         .background(Theme.panel)
         .clipShape(RoundedRectangle(cornerRadius: 10))
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("A timeline of the last three minutes. The bug happened shortly before now, and the shortcut saves that part.")
+        .accessibilityLabel(L("onboarding.timeline.accessibility"))
     }
 }
 
@@ -487,7 +487,7 @@ struct ScreenCaptureIndicatorNote: View {
                 .frame(width: 44, height: 24)
                 .background(Capsule().fill(Color(hex: 0x6E5BE8)))
                 .accessibilityHidden(true)
-            Text("While the buffer or a recording runs, macOS shows this purple icon in the menu bar. That's normal: it only means the screen is being captured, and nothing leaves your Mac.")
+            Text(L("onboarding.indicator.text"))
                 .font(.system(size: 12))
                 .foregroundStyle(Theme.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -496,7 +496,7 @@ struct ScreenCaptureIndicatorNote: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Theme.panel)
         .clipShape(RoundedRectangle(cornerRadius: 8))
-        .tip("The purple icon is macOS's own sign that an app captures the screen. Apps cannot hide it.")
+        .tip(L("onboarding.indicator.tip"))
     }
 }
 
@@ -507,26 +507,26 @@ struct PermissionUse: Identifiable, Equatable {
     var id: String { text }
 
     static let screen = [
-        PermissionUse(symbol: "gobackward.30", text: "⌥⇧1: the last 30 s"),
-        PermissionUse(symbol: "camera.viewfinder", text: "Screenshots"),
-        PermissionUse(symbol: "record.circle", text: "Recordings"),
-        PermissionUse(symbol: "text.viewfinder", text: "Text from screen"),
+        PermissionUse(symbol: "gobackward.30", text: L("permissions.use.screen.lastSeconds")),
+        PermissionUse(symbol: "camera.viewfinder", text: L("permissions.use.screen.screenshots")),
+        PermissionUse(symbol: "record.circle", text: L("permissions.use.screen.recordings")),
+        PermissionUse(symbol: "text.viewfinder", text: L("permissions.use.screen.text")),
     ]
     static let accessibility = [
-        PermissionUse(symbol: "list.number", text: "Click “Sign in” in steps"),
-        PermissionUse(symbol: "command", text: "⌘C in clips"),
-        PermissionUse(symbol: "arrow.down.to.line", text: "Scrolling shots"),
-        PermissionUse(symbol: "macwindow", text: "Window sizes"),
+        PermissionUse(symbol: "list.number", text: L("permissions.use.accessibility.steps")),
+        PermissionUse(symbol: "command", text: L("permissions.use.accessibility.keys")),
+        PermissionUse(symbol: "arrow.down.to.line", text: L("permissions.use.accessibility.scrolling")),
+        PermissionUse(symbol: "macwindow", text: L("permissions.use.accessibility.windows")),
     ]
     static let microphone = [
-        PermissionUse(symbol: "waveform", text: "Your voice in clips"),
+        PermissionUse(symbol: "waveform", text: L("permissions.use.microphone.voice")),
     ]
     static let camera = [
-        PermissionUse(symbol: "person.crop.circle", text: "Your face in a bubble"),
+        PermissionUse(symbol: "person.crop.circle", text: L("permissions.use.camera.face")),
     ]
     static let browsers = [
-        PermissionUse(symbol: "link", text: "URL in reports"),
-        PermissionUse(symbol: "list.number", text: "Open shop.test/login in steps"),
+        PermissionUse(symbol: "link", text: L("permissions.use.browsers.url")),
+        PermissionUse(symbol: "list.number", text: L("permissions.use.browsers.steps")),
     ]
 }
 

@@ -1,0 +1,128 @@
+/* Disk Space (Space/): the window and the Space tab of the menu bar panel. Sizes come formatted, like "3.2 GB". */
+
+/* The disk bar and ring. used: the used size, then the disk's size. label: the free size, then the disk's size. */
+"space.bar.free" = "%@ free";
+"space.bar.used" = "%1$@ of %2$@ used";
+"space.ring.freeOf" = "free of %@";
+"space.ring.label" = "%1$@ free of %2$@";
+
+/* Sections of the window. */
+"space.section.cleanUp" = "Clean up";
+"space.section.folders" = "Folders";
+"space.section.largest" = "Largest files";
+"space.section.tip" = "Switch between safe clean-up, folders by size and the largest files";
+
+/* Clean up. %@ in cleanable is a size. */
+"space.cleanable" = "%@ can be cleaned safely";
+"space.measureAgain" = "Measure again";
+"space.measureAgain.tip" = "Measure the clean-up categories again to get fresh sizes";
+"space.cleanUp.note" = "Caches are made again by apps when they need them. Deleting them cannot be undone, so each one asks first.";
+
+/* A category row. %@ is the category's name; question: the size, then the category's name; confirm: the size. */
+"space.clean" = "Clean";
+"space.clean.label" = "Clean %@";
+"space.clean.tip" = "Delete the contents of %@ to free space; asks to confirm first";
+"space.clean.question" = "Delete %1$@ from %2$@? This cannot be undone.";
+"space.clean.cancel" = "Cancel";
+"space.clean.cancel.tip" = "Keep these files";
+"space.clean.confirm" = "Delete %@";
+"space.clean.confirm.tip" = "Delete for good; this cannot be undone";
+"space.captures.open" = "Open";
+"space.captures.open.tip" = "Open the captures history to delete screenshots and clips you no longer need";
+
+/* Results. freed: the size, then the category's name. movedToTrash: the file's name, then its size. trashFailed: the error. */
+"space.message.freed" = "Freed %1$@ from %2$@";
+"space.message.movedToTrash" = "Moved %1$@ to the Trash (%2$@). Empty the Trash to free the space.";
+"space.message.trashFailed" = "Could not move it to the Trash: %@";
+
+/* Clean-up categories. %@ is the app's name. */
+"space.category.appCaches.title" = "App caches";
+"space.category.appCaches.detail" = "Files apps keep to start and load faster. They are made again as needed; apps may be slower for a moment. Apple's own caches are left alone.";
+"space.category.derivedData.title" = "Xcode DerivedData";
+"space.category.derivedData.detail" = "Build products and indexes. The next build of each project takes longer.";
+"space.category.deviceSupport.title" = "Xcode device support";
+"space.category.deviceSupport.detail" = "Symbols copied from devices you debugged. Xcode copies them again when a device connects.";
+"space.category.simulatorCaches.title" = "Simulator caches";
+"space.category.simulatorCaches.detail" = "Cached data of iOS simulators. Simulators and their apps stay.";
+"space.category.javascript.title" = "npm, Yarn and pnpm caches";
+"space.category.javascript.detail" = "Downloaded packages. They are downloaded again on the next install.";
+"space.category.gradle.title" = "Gradle caches";
+"space.category.gradle.detail" = "Downloaded dependencies and build caches of Android and Java projects.";
+"space.category.homebrew.title" = "Homebrew downloads";
+"space.category.homebrew.detail" = "Installers Homebrew kept after installing. Installed tools stay.";
+"space.category.cocoapods.title" = "CocoaPods cache";
+"space.category.cocoapods.detail" = "Downloaded pods. Projects keep their own copies.";
+"space.category.pip.title" = "pip cache";
+"space.category.pip.detail" = "Downloaded Python packages. Installed packages stay.";
+"space.category.logs.title" = "Logs";
+"space.category.logs.detail" = "Logs apps wrote for troubleshooting. %@'s own log and crash reports stay.";
+"space.category.captures.title" = "%@ captures";
+"space.category.captures.detail" = "Your screenshots and clips. Delete them in Recent, or set limits in Settings → Storage.";
+
+/* Before a scan. %@ in note is the app's name. */
+"space.scan.title" = "See what takes space on this Mac";
+"space.scan.note" = "%@ adds up every folder and finds the biggest files. It takes a minute or two. macOS may ask once for Desktop, Documents and Downloads; other apps' private data, Apple's own folders and the Photos and Music libraries are skipped.";
+"space.scan.includeAppData" = "Include other apps' private data (Docker, Slack, Telegram…). macOS asks once.";
+"space.scan.includeAppData.tip" = "Also count other apps' data folders in the scan; macOS asks for permission once";
+"space.scan.start" = "Scan home folder and Applications";
+"space.scan.start.tip" = "Add up every folder and find the biggest files; takes a minute or two";
+
+/* While scanning. progress: the number of files, then their size. folder: the folder being scanned. */
+"space.scan.checkingAccess" = "Checking access…";
+"space.scan.scanning" = "Scanning…";
+"space.scan.stop" = "Stop";
+"space.scan.stop.tip" = "Stop the scan";
+"space.scan.step.access" = "Access to protected folders";
+"space.scan.step.home" = "Home folder";
+"space.scan.step.applications" = "Applications";
+"space.scan.folder" = "In %@";
+"space.scan.accessNote" = "macOS asks once for each folder. Allow the ones you want counted; the scan then runs on its own.";
+"space.scan.stalled" = "No progress for a while: macOS is probably asking for permission. Look for a dialog on your screens and answer it; the scan goes on right after.";
+
+/* Protected folders asked about before the scan. %@ is the folder's name. */
+"space.access.otherAppsData" = "Other apps' data";
+"space.access.asking" = "%@: answer the macOS dialog";
+"space.access.allowed" = "%@: allowed";
+"space.access.denied" = "%@: not allowed, left out";
+
+/* Folders by size. %@ is a folder's name; row.label: the name, then its size. denied: the folders, then the app's name. */
+"space.folders.top" = "This Mac";
+"space.folders.top.tip" = "Go back to the top level";
+"space.folders.back" = "Back to %@";
+"space.folders.back.tip" = "Go back to %@";
+"space.folders.showInFinder" = "Show in Finder";
+"space.folders.showInFinder.tip" = "Open this folder in Finder";
+"space.folders.scanAgain" = "Scan again";
+"space.folders.scanAgain.tip" = "Scan the disk again to get fresh numbers";
+"space.folders.notCounted" = "Not counted";
+"space.folders.notCounted.detail" = "macOS itself, other users, skipped folders, local Time Machine snapshots";
+"space.folders.filesHere" = "Files directly in this folder";
+"space.folders.denied" = "Not counted, access not allowed: %1$@. Allow it in System Settings → Privacy & Security → Files and Folders → %2$@, then scan again.";
+"space.folders.libraryNote" = "In Library only app data, caches, developer files and logs are counted. Skipped, because it is macOS's own data or macOS asks for permission: Apple's folders, the Photos and Music libraries, Contacts, Calendars, Mail, Messages, the Trash.";
+"space.folders.libraryNote.withAppData" = "In Library only app data, caches, developer files and logs are counted, plus other apps' private data. Skipped, because it is macOS's own data or macOS asks for permission: Apple's folders, the Photos and Music libraries, Contacts, Calendars, Mail, Messages, the Trash.";
+"space.folders.row.label" = "Folder %1$@, %2$@";
+"space.folders.row.open.tip" = "Open this folder to see what is inside";
+"space.folders.row.noSubfolders.tip" = "%@ has no subfolders";
+
+/* Largest files. %@ is the file's name. */
+"space.largest.empty" = "No files over 50 MB.";
+"space.largest.note" = "Files over 50 MB, biggest first. Move to Trash keeps them in the Trash until you empty it.";
+"space.largest.show" = "Show";
+"space.largest.show.label" = "Show %@ in Finder";
+"space.largest.show.tip" = "Show this file in Finder";
+"space.largest.keep" = "Cancel";
+"space.largest.keep.label" = "Keep %@";
+"space.largest.keep.tip" = "Keep this file";
+"space.largest.move" = "Move";
+"space.largest.move.label" = "Move %@ to the Trash now";
+"space.largest.move.tip" = "Confirm: move the file to the Trash";
+"space.largest.trash" = "Move to Trash";
+"space.largest.trash.label" = "Move %@ to Trash";
+"space.largest.trash.tip" = "Move this file to the Trash; asks to confirm first and you can still restore it from the Trash";
+
+/* The Space tab of the menu bar panel. */
+"space.tab.canBeCleaned" = "Can be cleaned";
+"space.tab.allCategories" = "All categories";
+"space.tab.allCategories.tip" = "Open the Disk Space window with every clean-up category";
+"space.tab.whatTakesSpace" = "What takes space…";
+"space.tab.whatTakesSpace.tip" = "Scan folders to see what takes the most space on this Mac";

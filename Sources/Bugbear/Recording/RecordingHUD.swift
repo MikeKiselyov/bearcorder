@@ -13,18 +13,18 @@ struct RecordingHUDView: View {
                 RecordingClock(session: session)
                     .frame(width: RecordingClockView.width, height: 18, alignment: .leading)
 
-                HUDButton(systemImage: session.isPaused ? "play.fill" : "pause.fill", help: session.isPaused ? "Resume the recording (\(HotKeySettings.shared.text(for: .recordPause)))" : "Pause the recording without ending it (\(HotKeySettings.shared.text(for: .recordPause)))") {
+                HUDButton(systemImage: session.isPaused ? "play.fill" : "pause.fill", help: session.isPaused ? L("recording.hud.resume", HotKeySettings.shared.text(for: .recordPause)) : L("recording.hud.pause", HotKeySettings.shared.text(for: .recordPause))) {
                     session.togglePause()
                 }
             } else {
-                Text("Draw on screen")
+                Text(L("recording.hud.drawOnScreen"))
                     .font(.system(size: 12, weight: .semibold))
                     .padding(.leading, 4)
             }
 
             divider
 
-            HUDButton(systemImage: "pencil.and.scribble", help: overlay.isDrawing ? "Stop drawing and use the screen normally again (Esc)" : "Draw arrows and boxes on screen to point things out (\(HotKeySettings.shared.text(for: .draw)))", isSelected: overlay.isDrawing) {
+            HUDButton(systemImage: "pencil.and.scribble", help: overlay.isDrawing ? L("recording.hud.draw.stop") : L("recording.hud.draw.start", HotKeySettings.shared.text(for: .draw)), isSelected: overlay.isDrawing) {
                 app.toggleDrawing()
             }
 
@@ -48,16 +48,16 @@ struct RecordingHUDView: View {
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel(color.rawValue)
-                    .tip("Draw in \(color.rawValue)")
+                    .tip(L("recording.hud.color", color.rawValue))
                 }
                 divider
-                HUDButton(systemImage: overlay.autoFade ? "timer" : "pin.fill", help: overlay.autoFade ? "Marks fade after 3 s (click to keep)" : "Marks stay (click to fade)") {
+                HUDButton(systemImage: overlay.autoFade ? "timer" : "pin.fill", help: overlay.autoFade ? L("recording.hud.marksFade") : L("recording.hud.marksStay")) {
                     overlay.autoFade.toggle()
                 }
-                HUDButton(systemImage: "arrow.uturn.backward", help: "Undo the last mark (⌘Z)") {
+                HUDButton(systemImage: "arrow.uturn.backward", help: L("recording.hud.undo")) {
                     overlay.undo()
                 }
-                HUDButton(systemImage: "trash", help: "Clear all marks from the screen (Delete)") {
+                HUDButton(systemImage: "trash", help: L("recording.hud.clear")) {
                     overlay.clear()
                 }
             }
@@ -65,7 +65,7 @@ struct RecordingHUDView: View {
             divider
 
             if app.recording != nil {
-                HUDButton(systemImage: "xmark", help: "Stop and throw the recording away without saving") {
+                HUDButton(systemImage: "xmark", help: L("recording.hud.discard")) {
                     app.discardRecording()
                 }
                 Button {
@@ -73,7 +73,7 @@ struct RecordingHUDView: View {
                 } label: {
                     HStack(spacing: 5) {
                         Image(systemName: "stop.fill").font(.system(size: 10))
-                        Text("Stop").font(.system(size: 12, weight: .bold))
+                        Text(L("recording.hud.stop")).font(.system(size: 12, weight: .bold))
                     }
                     .foregroundStyle(Theme.accentText)
                     .padding(.horizontal, 12)
@@ -82,9 +82,9 @@ struct RecordingHUDView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 7))
                 }
                 .buttonStyle(.plain)
-                .tip("Stop recording and open it in the editor (\(HotKeySettings.shared.text(for: .recordToggle)))")
+                .tip(L("recording.hud.stop.tip", HotKeySettings.shared.text(for: .recordToggle)))
             } else {
-                HUDButton(systemImage: "xmark", help: "Close the drawing bar") {
+                HUDButton(systemImage: "xmark", help: L("recording.hud.closeDrawingBar")) {
                     app.hideOverlay()
                 }
             }
@@ -226,9 +226,9 @@ final class RecordingClockView: NSView {
         let dotY = (bounds.height - 9) / 2
         NSBezierPath(ovalIn: CGRect(x: 0, y: dotY, width: 9, height: 9)).fill()
 
-        var label = "REC"
+        var label = L("recording.clock.rec")
         if state.paused {
-            label = "Paused"
+            label = L("recording.clock.paused")
         }
         let labelAttributes: [NSAttributedString.Key: Any] = [
             .font: NSFont.systemFont(ofSize: 12, weight: .bold),
@@ -256,9 +256,9 @@ final class RecordingClockView: NSView {
     override func accessibilityLabel() -> String? {
         let state = reading
         if state.paused {
-            return "Paused, \(state.time)"
+            return L("recording.clock.accessibility.paused", state.time)
         }
-        return "Recording, \(state.time)"
+        return L("recording.clock.accessibility.recording", state.time)
     }
 }
 

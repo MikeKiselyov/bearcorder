@@ -23,20 +23,20 @@ enum AnnotationTool: String, CaseIterable, Identifiable, Codable {
 
     var title: String {
         switch self {
-        case .select: return "Select"
-        case .arrow: return "Arrow"
-        case .callout: return "Arrow with text"
-        case .rectangle: return "Rectangle"
-        case .ellipse: return "Ellipse"
-        case .line: return "Line"
-        case .highlighter: return "Highlighter"
-        case .pen: return "Pen"
-        case .text: return "Text"
-        case .step: return "Numbered step"
-        case .blur: return "Blur"
-        case .magnifier: return "Magnifier"
-        case .crop: return "Crop"
-        case .image: return "Image"
+        case .select: return L("annotations.tool.select")
+        case .arrow: return L("annotations.tool.arrow")
+        case .callout: return L("annotations.tool.callout")
+        case .rectangle: return L("annotations.tool.rectangle")
+        case .ellipse: return L("annotations.tool.ellipse")
+        case .line: return L("annotations.tool.line")
+        case .highlighter: return L("annotations.tool.highlighter")
+        case .pen: return L("annotations.tool.pen")
+        case .text: return L("annotations.tool.text")
+        case .step: return L("annotations.tool.step")
+        case .blur: return L("annotations.tool.blur")
+        case .magnifier: return L("annotations.tool.magnifier")
+        case .crop: return L("annotations.tool.crop")
+        case .image: return L("annotations.tool.image")
         }
     }
 
@@ -62,20 +62,20 @@ enum AnnotationTool: String, CaseIterable, Identifiable, Codable {
     /// What the tool is for, for tooltips.
     var purpose: String {
         switch self {
-        case .select: return "pick, move and resize marks"
-        case .arrow: return "point at something"
-        case .callout: return "point at something and type the note right at the arrow"
-        case .rectangle: return "frame an area"
-        case .ellipse: return "circle an area"
-        case .line: return "draw a straight line"
-        case .highlighter: return "mark text like a marker pen"
-        case .pen: return "draw freehand"
-        case .text: return "write a note on the image"
-        case .step: return "number the steps to reproduce"
-        case .blur: return "hide private data"
-        case .magnifier: return "show a small detail bigger"
-        case .crop: return "cut the image down to the part that matters"
-        case .image: return "show another screenshot or picture on this one"
+        case .select: return L("annotations.tool.select.purpose")
+        case .arrow: return L("annotations.tool.arrow.purpose")
+        case .callout: return L("annotations.tool.callout.purpose")
+        case .rectangle: return L("annotations.tool.rectangle.purpose")
+        case .ellipse: return L("annotations.tool.ellipse.purpose")
+        case .line: return L("annotations.tool.line.purpose")
+        case .highlighter: return L("annotations.tool.highlighter.purpose")
+        case .pen: return L("annotations.tool.pen.purpose")
+        case .text: return L("annotations.tool.text.purpose")
+        case .step: return L("annotations.tool.step.purpose")
+        case .blur: return L("annotations.tool.blur.purpose")
+        case .magnifier: return L("annotations.tool.magnifier.purpose")
+        case .crop: return L("annotations.tool.crop.purpose")
+        case .image: return L("annotations.tool.image.purpose")
         }
     }
 
@@ -396,9 +396,9 @@ struct Annotation: Identifiable, Codable, Equatable {
 
     var layerName: String {
         switch tool {
-        case .text: return text.isEmpty ? "Text" : "Text · \(text.prefix(18))"
-        case .callout: return text.isEmpty ? "Arrow with text" : "Arrow · \(text.prefix(18))"
-        case .step: return "Step \(number)"
+        case .text: return text.isEmpty ? L("annotations.tool.text") : L("annotations.layer.text", String(text.prefix(18)))
+        case .callout: return text.isEmpty ? L("annotations.tool.callout") : L("annotations.layer.callout", String(text.prefix(18)))
+        case .step: return L("annotations.layer.step", number)
         default: return tool.title
         }
     }

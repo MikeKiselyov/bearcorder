@@ -23,18 +23,18 @@ struct PermissionsList: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             row(
-                title: "Screen & System Audio Recording",
-                detail: "Required for screenshots, recordings and the buffer. After allowing it, relaunch the app.",
+                title: L("permissions.screen.title"),
+                detail: L("permissions.screen.detail"),
                 examples: PermissionUse.screen,
                 granted: screenAccess,
                 required: true,
                 pane: "Privacy_ScreenCapture",
                 action: { app.requestScreenRecordingAccess() },
-                extra: screenAccess && app.bufferState == .needsPermission ? AnyView(Button("Relaunch") { relaunch() }.buttonStyle(SecondaryButtonStyle())) : nil
+                extra: screenAccess && app.bufferState == .needsPermission ? AnyView(Button(L("permissions.screen.relaunch")) { relaunch() }.buttonStyle(SecondaryButtonStyle())) : nil
             )
             row(
-                title: "Accessibility",
-                detail: "Names what you click and type into, and shows the shortcut keys you press, as steps in videos and bug reports.",
+                title: L("permissions.accessibility.title"),
+                detail: L("permissions.accessibility.detail"),
                 examples: PermissionUse.accessibility,
                 granted: accessibilityAccess,
                 required: false,
@@ -43,8 +43,8 @@ struct PermissionsList: View {
                 extra: nil
             )
             row(
-                title: "Microphone",
-                detail: "Your voice in recordings, when you turn the mic on.",
+                title: L("permissions.microphone.title"),
+                detail: L("permissions.microphone.detail"),
                 examples: PermissionUse.microphone,
                 granted: microphoneStatus == .authorized,
                 required: false,
@@ -53,8 +53,8 @@ struct PermissionsList: View {
                 extra: nil
             )
             row(
-                title: "Camera",
-                detail: "The round camera bubble you can show while recording.",
+                title: L("permissions.camera.title"),
+                detail: L("permissions.camera.detail"),
                 examples: PermissionUse.camera,
                 granted: cameraStatus == .authorized,
                 required: false,
@@ -63,7 +63,7 @@ struct PermissionsList: View {
                 extra: nil
             )
             row(
-                title: "Browsers (Automation)",
+                title: L("permissions.browsers.title"),
                 detail: browserDetail,
                 examples: PermissionUse.browsers,
                 granted: browsers == .allowed,
@@ -80,11 +80,11 @@ struct PermissionsList: View {
     private var browserDetail: String {
         switch browsers {
         case .denied:
-            return "Turned off for a browser: the URL stays empty. Allow… opens System Settings → Automation, switch \(AppInfo.name) on there."
+            return L("permissions.browsers.detail.denied", AppInfo.name)
         case .notRunning:
-            return "Reads the address of the open tab for the URL field. Open your browser to check it here."
+            return L("permissions.browsers.detail.notRunning")
         default:
-            return "Reads the address of the open tab for the URL field. macOS asks once for each browser."
+            return L("permissions.browsers.detail.ask")
         }
     }
 
@@ -130,7 +130,7 @@ struct PermissionsList: View {
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 6) {
                         Text(title).font(.system(size: 14, weight: .semibold))
-                        Text(required ? "Required" : "Optional")
+                        Text(required ? L("permissions.badge.required") : L("permissions.badge.optional"))
                             .font(.system(size: 10, weight: .semibold))
                             .foregroundStyle(Theme.textSecondary)
                             .padding(.horizontal, 6)
@@ -145,18 +145,18 @@ struct PermissionsList: View {
                     extraView
                 }
                 if granted {
-                    Text("Allowed").font(.system(size: 12)).foregroundStyle(Theme.success)
+                    Text(L("permissions.allowed")).font(.system(size: 12)).foregroundStyle(Theme.success)
                     if opensAllowed {
-                        Button("Open…") { openPane(pane) }
+                        Button(L("permissions.button.open")) { openPane(pane) }
                             .buttonStyle(SecondaryButtonStyle())
-                            .accessibilityLabel("Open \(title) in System Settings")
-                            .tip("See or take back this permission in System Settings")
+                            .accessibilityLabel(L("permissions.button.open.accessibility", title))
+                            .tip(L("permissions.button.open.tip"))
                     }
                 } else {
-                    Button("Allow…", action: action)
+                    Button(L("permissions.button.allow"), action: action)
                         .buttonStyle(SecondaryButtonStyle())
-                        .accessibilityLabel("Allow \(title)")
-                        .tip("Ask macOS for this permission")
+                        .accessibilityLabel(L("permissions.button.allow.accessibility", title))
+                        .tip(L("permissions.button.allow.tip"))
                 }
             }
             // Examples of what it is for, across the whole row and lined up with the text.

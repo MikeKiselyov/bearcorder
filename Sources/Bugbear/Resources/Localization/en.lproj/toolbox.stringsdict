@@ -1,0 +1,151 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Texts with a count: the word changes with the number (one/other in English; other languages add few, many...). -->
+<plist version="1.0">
+<dict>
+    <key>toolbox.diff.count</key>
+    <dict>
+        <key>NSStringLocalizedFormatKey</key>
+        <string>%#@differences@</string>
+        <key>differences</key>
+        <dict>
+            <key>NSStringFormatSpecTypeKey</key>
+            <string>NSStringPluralRuleType</string>
+            <key>NSStringFormatValueTypeKey</key>
+            <string>ld</string>
+            <key>one</key>
+            <string>%ld difference</string>
+            <key>other</key>
+            <string>%ld differences</string>
+        </dict>
+    </dict>
+    <key>toolbox.http.bodyTitle</key>
+    <dict>
+        <key>NSStringLocalizedFormatKey</key>
+        <string>%1$@ · %2$#@bytes@</string>
+        <key>bytes</key>
+        <dict>
+            <key>NSStringFormatSpecTypeKey</key>
+            <string>NSStringPluralRuleType</string>
+            <key>NSStringFormatValueTypeKey</key>
+            <string>ld</string>
+            <key>one</key>
+            <string>%ld byte</string>
+            <key>other</key>
+            <string>%ld bytes</string>
+        </dict>
+    </dict>
+    <key>toolbox.http.headerCount</key>
+    <dict>
+        <key>NSStringLocalizedFormatKey</key>
+        <string>%#@headers@</string>
+        <key>headers</key>
+        <dict>
+            <key>NSStringFormatSpecTypeKey</key>
+            <string>NSStringPluralRuleType</string>
+            <key>NSStringFormatValueTypeKey</key>
+            <string>ld</string>
+            <key>one</key>
+            <string>%ld header</string>
+            <key>other</key>
+            <string>%ld headers</string>
+        </dict>
+    </dict>
+    <key>toolbox.length.previewCut</key>
+    <dict>
+        <key>NSStringLocalizedFormatKey</key>
+        <string>… (%#@characters@, Copy takes all)</string>
+        <key>characters</key>
+        <dict>
+            <key>NSStringFormatSpecTypeKey</key>
+            <string>NSStringPluralRuleType</string>
+            <key>NSStringFormatValueTypeKey</key>
+            <string>ld</string>
+            <key>one</key>
+            <string>%ld character</string>
+            <key>other</key>
+            <string>%ld characters</string>
+        </dict>
+    </dict>
+    <key>toolbox.matches</key>
+    <dict>
+        <key>NSStringLocalizedFormatKey</key>
+        <string>%#@matches@</string>
+        <key>matches</key>
+        <dict>
+            <key>NSStringFormatSpecTypeKey</key>
+            <string>NSStringPluralRuleType</string>
+            <key>NSStringFormatValueTypeKey</key>
+            <string>ld</string>
+            <key>one</key>
+            <string>%ld match</string>
+            <key>other</key>
+            <string>%ld matches</string>
+        </dict>
+    </dict>
+    <key>toolbox.matches.first</key>
+    <dict>
+        <key>NSStringLocalizedFormatKey</key>
+        <string>First %#@matches@</string>
+        <key>matches</key>
+        <dict>
+            <key>NSStringFormatSpecTypeKey</key>
+            <string>NSStringPluralRuleType</string>
+            <key>NSStringFormatValueTypeKey</key>
+            <string>ld</string>
+            <key>one</key>
+            <string>%ld match</string>
+            <key>other</key>
+            <string>%ld matches</string>
+        </dict>
+    </dict>
+    <key>toolbox.qr.read</key>
+    <dict>
+        <key>NSStringLocalizedFormatKey</key>
+        <string>Read %#@codes@</string>
+        <key>codes</key>
+        <dict>
+            <key>NSStringFormatSpecTypeKey</key>
+            <string>NSStringPluralRuleType</string>
+            <key>NSStringFormatValueTypeKey</key>
+            <string>ld</string>
+            <key>one</key>
+            <string>%ld code</string>
+            <key>other</key>
+            <string>%ld codes</string>
+        </dict>
+    </dict>
+    <key>toolbox.regex.previewCut</key>
+    <dict>
+        <key>NSStringLocalizedFormatKey</key>
+        <string>… preview cut at %#@characters@</string>
+        <key>characters</key>
+        <dict>
+            <key>NSStringFormatSpecTypeKey</key>
+            <string>NSStringPluralRuleType</string>
+            <key>NSStringFormatValueTypeKey</key>
+            <string>ld</string>
+            <key>one</key>
+            <string>%ld character</string>
+            <key>other</key>
+            <string>%ld characters</string>
+        </dict>
+    </dict>
+    <key>toolbox.testData.passwordCharacters</key>
+    <dict>
+        <key>NSStringLocalizedFormatKey</key>
+        <string>%#@characters@</string>
+        <key>characters</key>
+        <dict>
+            <key>NSStringFormatSpecTypeKey</key>
+            <string>NSStringPluralRuleType</string>
+            <key>NSStringFormatValueTypeKey</key>
+            <string>ld</string>
+            <key>one</key>
+            <string>%ld character</string>
+            <key>other</key>
+            <string>%ld characters</string>
+        </dict>
+    </dict>
+</dict>
+</plist>

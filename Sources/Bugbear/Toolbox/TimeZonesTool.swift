@@ -42,7 +42,7 @@ struct TimeZonesTool: View {
             ToolFooter {
                 Text(meetingWindowText).foregroundStyle(Theme.textSecondary).lineLimit(1)
                 Spacer()
-                CopyButton(text: summaryText, title: "Copy summary", primary: false)
+                CopyButton(text: summaryText, title: L("toolbox.zones.copySummary"), primary: false)
             }
         }
         .onReceive(ticker) { value in now = value }
@@ -55,7 +55,7 @@ struct TimeZonesTool: View {
         return VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .firstTextBaseline, spacing: 14) {
                 VStack(alignment: .leading, spacing: 4) {
-                    SectionLabel("Your time · \(WorldClock.city(of: reference.identifier))")
+                    SectionLabel(L("toolbox.zones.yourTime", WorldClock.city(of: reference.identifier)))
                     Text(TimeConverter.format(moment, pattern: "HH:mm:ss", timeZone: reference))
                         .font(.system(size: 34, weight: .semibold, design: .monospaced))
                 }
@@ -69,18 +69,18 @@ struct TimeZonesTool: View {
                 Spacer()
             }
             HStack(spacing: 12) {
-                Text("Compare at").font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
+                Text(L("toolbox.zones.compareAt")).font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
                 Slider(value: $shiftMinutes, in: -720...720, step: 30)
                     .tint(Theme.accent)
-                    .accessibilityLabel("Compare at")
-                    .tip("Move the time forward or back to see what time it will be in every zone, for example to plan a call")
+                    .accessibilityLabel(L("toolbox.zones.compareAt"))
+                    .tip(L("toolbox.zones.compareAt.tip"))
                 Text(shiftLabel)
                     .font(.system(size: 12, design: .monospaced))
                     .frame(width: 90, alignment: .trailing)
-                Button("Now") { shiftMinutes = 0 }
+                Button(L("toolbox.button.now")) { shiftMinutes = 0 }
                     .buttonStyle(SecondaryButtonStyle())
                     .disabled(shiftMinutes == 0)
-                    .tip("Go back to the current time")
+                    .tip(L("toolbox.zones.now.tip"))
             }
         }
         .padding(14)
@@ -89,12 +89,12 @@ struct TimeZonesTool: View {
     }
 
     private var shiftLabel: String {
-        if shiftMinutes == 0 { return "now" }
+        if shiftMinutes == 0 { return L("toolbox.zones.shift.now") }
         let hours = Int(abs(shiftMinutes)) / 60
         let minutes = Int(abs(shiftMinutes)) % 60
         let sign = shiftMinutes > 0 ? "+" : "−"
-        if minutes == 0 { return "\(sign)\(hours)h" }
-        return "\(sign)\(hours)h \(minutes)m"
+        if minutes == 0 { return L("toolbox.zones.shift.hours", sign, hours) }
+        return L("toolbox.zones.shift.hoursMinutes", sign, hours, minutes)
     }
 
     // MARK: Search
@@ -103,19 +103,19 @@ struct TimeZonesTool: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
                 Image(systemName: "magnifyingglass").foregroundStyle(Theme.textSecondary)
-                TextField("Search a city, country, abbreviation (PST) or offset (+5:30)", text: $query)
+                TextField(L("toolbox.zones.search.placeholder"), text: $query)
                     .textFieldStyle(.plain)
                     .font(.system(size: 14))
                     .onSubmit {
                         if let first = results.first { add(first) }
                     }
-                    .tip("Find a time zone to add, Return adds the first match")
+                    .tip(L("toolbox.zones.search.tip"))
                 if !query.isEmpty {
                     Button { query = "" } label: { Image(systemName: "xmark.circle.fill") }
                         .buttonStyle(.plain)
                         .foregroundStyle(Theme.textSecondary)
-                        .accessibilityLabel("Clear search")
-                        .tip("Clear the search")
+                        .accessibilityLabel(L("toolbox.zones.clearSearch"))
+                        .tip(L("toolbox.zones.clearSearch.tip"))
                 }
             }
             .padding(.horizontal, 12)
@@ -126,7 +126,7 @@ struct TimeZonesTool: View {
 
             if !query.trimmingCharacters(in: .whitespaces).isEmpty {
                 if results.isEmpty {
-                    Text("No time zone matches “\(query)”").font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
+                    Text(L("toolbox.zones.noMatch", query)).font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
                 } else {
                     VStack(spacing: 2) {
                         ForEach(results, id: \.self) { identifier in
@@ -171,8 +171,8 @@ struct TimeZonesTool: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(isSaved ? "\(identifier), added" : "Add \(identifier)")
-        .tip(isSaved ? "Already in your time zones" : "Add this time zone to compare with")
+        .accessibilityLabel(isSaved ? L("toolbox.zones.added", identifier) : L("toolbox.zones.add", identifier))
+        .tip(isSaved ? L("toolbox.zones.added.tip") : L("toolbox.zones.add.tip"))
     }
 
     private func add(_ identifier: String) {
@@ -194,12 +194,12 @@ struct TimeZonesTool: View {
 
         return VStack(alignment: .leading, spacing: 8) {
             HStack {
-                SectionLabel("Compared zones · \(zones.count)")
+                SectionLabel(L("toolbox.zones.compared", zones.count))
                 Spacer()
                 Legend()
             }
             ZoneRow(
-                title: "You · \(WorldClock.city(of: reference.identifier))",
+                title: L("toolbox.zones.you.title", WorldClock.city(of: reference.identifier)),
                 subtitle: reference.identifier,
                 info: WorldClock.compare(reference.identifier, at: moment, reference: reference),
                 strip: referenceStrip,
@@ -209,7 +209,7 @@ struct TimeZonesTool: View {
                 onRemove: nil
             )
             if zones.isEmpty {
-                Text("Search above to add zones to compare.")
+                Text(L("toolbox.zones.empty"))
                     .font(.system(size: 12))
                     .foregroundStyle(Theme.textSecondary)
                     .padding(.vertical, 8)
@@ -237,9 +237,9 @@ struct TimeZonesTool: View {
         let zones = [reference] + savedZones.compactMap { TimeZone(identifier: $0) }
         let shared = WorldClock.sharedWorkingHours(zones: zones, on: moment, reference: reference)
         guard let first = shared.first, let last = shared.last else {
-            return savedZones.isEmpty ? "Add zones to find a shared meeting window" : "No hours where everyone is at work (9–18)"
+            return savedZones.isEmpty ? L("toolbox.zones.meeting.addZones") : L("toolbox.zones.meeting.none")
         }
-        return String(format: "Everyone at work: %02d:00–%02d:00 your time (%d h)", first, last + 1, shared.count)
+        return L("toolbox.zones.meeting.window", first, last + 1, shared.count)
     }
 
     private var summaryText: String {
@@ -271,10 +271,10 @@ private struct DifferenceBadge: View {
 private struct Legend: View {
     var body: some View {
         HStack(spacing: 10) {
-            item(color: ZoneRow.color(for: .work), title: "Work 9–18")
-            item(color: ZoneRow.color(for: .morning), title: "Morning")
-            item(color: ZoneRow.color(for: .evening), title: "Evening")
-            item(color: ZoneRow.color(for: .night), title: "Night")
+            item(color: ZoneRow.color(for: .work), title: L("toolbox.zones.legend.work"))
+            item(color: ZoneRow.color(for: .morning), title: L("toolbox.zones.legend.morning"))
+            item(color: ZoneRow.color(for: .evening), title: L("toolbox.zones.legend.evening"))
+            item(color: ZoneRow.color(for: .night), title: L("toolbox.zones.legend.night"))
         }
         .font(.system(size: 11))
         .foregroundStyle(Theme.textSecondary)
@@ -331,7 +331,7 @@ private struct ZoneRow: View {
             .frame(width: 120, alignment: .leading)
 
             VStack(alignment: .trailing, spacing: 1) {
-                DifferenceBadge(text: isReference ? "you" : (info?.differenceText ?? ""), seconds: isReference ? 0 : (info?.differenceSeconds ?? 0))
+                DifferenceBadge(text: isReference ? L("toolbox.zones.you") : (info?.differenceText ?? ""), seconds: isReference ? 0 : (info?.differenceSeconds ?? 0))
                 Text(info?.offsetText ?? "").font(.system(size: 11, design: .monospaced)).foregroundStyle(Theme.textSecondary)
             }
             .frame(width: 80, alignment: .trailing)
@@ -360,8 +360,8 @@ private struct ZoneRow: View {
                 .buttonStyle(.plain)
                 .foregroundStyle(Theme.textTertiary)
                 .frame(width: 16)
-                .accessibilityLabel("Remove \(title)")
-                .tip("Remove \(title) from your time zones")
+                .accessibilityLabel(L("toolbox.zone.remove", title))
+                .tip(L("toolbox.zone.remove.tip", title))
             } else {
                 Color.clear.frame(width: 16)
             }

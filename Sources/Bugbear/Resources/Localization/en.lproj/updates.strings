@@ -1,0 +1,7 @@
+/* Updates (Updates/). sourceMissing, uncommittedChanges: the source folder's path. */
+"updates.error.httpStatus" = "GitHub did not answer (HTTP %ld). Try again later.";
+"updates.error.unreachable" = "Could not reach GitHub: %@";
+"updates.error.sourceMissing" = "The source folder %@ is missing. Reinstall with scripts/install.sh.";
+"updates.error.startFailed" = "Could not start the update: %@";
+"updates.error.uncommittedChanges" = "The source folder has uncommitted changes, so it was not updated. Commit or stash them in %@, then try again.";
+"updates.error.failed" = "Update failed: %@";

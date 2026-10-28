@@ -15,6 +15,19 @@ enum SettingsPage: String, CaseIterable, Identifiable {
 
     var id: String { rawValue }
 
+    /// The page's name in the sidebar and the header. `rawValue` stays the English name for automation.
+    var title: String {
+        switch self {
+        case .general: return L("settings.page.general")
+        case .permissions: return L("settings.page.permissions")
+        case .recording: return L("settings.page.recording")
+        case .reports: return L("settings.page.reports")
+        case .storage: return L("settings.page.storage")
+        case .shortcuts: return L("settings.page.shortcuts")
+        case .updates: return L("settings.page.updates")
+        }
+    }
+
     var symbol: String {
         switch self {
         case .general: return "gearshape"
@@ -41,13 +54,13 @@ enum SettingsPage: String, CaseIterable, Identifiable {
 
     var help: String {
         switch self {
-        case .general: return "Open at login, the save folder and screenshots"
-        case .permissions: return "What \(AppInfo.name) may use on your Mac, and what each one is for"
-        case .recording: return "The buffer, frame rates, sound, clicks and keys"
-        case .reports: return "Bug report format, your fields, the environment and crash clips"
-        case .storage: return "Space used by captures and automatic clean-up"
-        case .shortcuts: return "Change the keyboard shortcuts"
-        case .updates: return "New versions, what's new and feedback"
+        case .general: return L("settings.page.general.help")
+        case .permissions: return L("settings.page.permissions.help", AppInfo.name)
+        case .recording: return L("settings.page.recording.help")
+        case .reports: return L("settings.page.reports.help")
+        case .storage: return L("settings.page.storage.help")
+        case .shortcuts: return L("settings.page.shortcuts.help")
+        case .updates: return L("settings.page.updates.help")
         }
     }
 }
@@ -76,7 +89,7 @@ struct SettingsView: View {
                     IconTile(systemImage: navigation.page.symbol, tint: navigation.page.tint, size: 52)
                         .shadow(color: navigation.page.tint.color.opacity(0.45), radius: 14, y: 6)
                     VStack(alignment: .leading, spacing: 3) {
-                        Text(navigation.page.rawValue).font(.system(size: 22, weight: .bold))
+                        Text(navigation.page.title).font(.system(size: 22, weight: .bold))
                         Text(navigation.page.help).font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
                     }
                 }
@@ -138,7 +151,7 @@ struct SettingsView: View {
                 LogoView(size: 36)
                 VStack(alignment: .leading, spacing: 1) {
                     Text(AppInfo.name).font(.system(size: 14, weight: .bold))
-                    Text("Version \(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "dev")")
+                    Text(L("settings.sidebar.version", Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "dev"))
                         .font(.system(size: 11))
                         .foregroundStyle(Theme.textSecondary)
                 }
@@ -151,7 +164,7 @@ struct SettingsView: View {
                 } label: {
                     HStack(spacing: 10) {
                         IconTile(systemImage: page.symbol, tint: page.tint, size: 26)
-                        Text(page.rawValue)
+                        Text(page.title)
                     }
                         .font(.system(size: 13))
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -163,7 +176,7 @@ struct SettingsView: View {
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(navigation.page == page ? Theme.text : Theme.textSecondary)
-                .accessibilityLabel("Page: \(page.rawValue)")
+                .accessibilityLabel(L("settings.sidebar.page.label", page.title))
                 .accessibilityAddTraits(navigation.page == page ? .isSelected : [])
                 .tip(page.help)
             }
@@ -177,38 +190,38 @@ struct SettingsView: View {
 
     @ViewBuilder private var generalPage: some View {
         @Bindable var settings = app.settings
-        Section("General") {
-            Toggle("Open at login", isOn: $launchAtLogin)
-                .tip("Start \(AppInfo.name) automatically when you log in to your Mac")
+        Section(L("settings.general.section")) {
+            Toggle(L("settings.general.openAtLogin"), isOn: $launchAtLogin)
+                .tip(L("settings.general.openAtLogin.tip", AppInfo.name))
                 .onChange(of: launchAtLogin) { _, enabled in
                     setLaunchAtLogin(enabled)
                 }
             HStack {
-                Text("Welcome guide")
+                Text(L("settings.general.welcomeGuide"))
                 Spacer()
-                Button("Show…") { WindowManager.shared.openOnboarding() }
-                    .accessibilityLabel("Show the welcome guide")
-                    .tip("Open the welcome guide again")
+                Button(L("settings.general.welcomeGuide.show")) { WindowManager.shared.openOnboarding() }
+                    .accessibilityLabel(L("settings.general.welcomeGuide.show.label"))
+                    .tip(L("settings.general.welcomeGuide.show.tip"))
             }
         }
 
-        Section("Export") {
+        Section(L("settings.export.section")) {
             HStack {
-                Text("Save to")
+                Text(L("settings.export.saveTo"))
                 Spacer()
                 Text(settings.outputFolder.path.replacingOccurrences(of: NSHomeDirectory(), with: "~"))
                     .foregroundStyle(Theme.textSecondary)
                     .lineLimit(1)
                     .truncationMode(.middle)
-                Button("Choose…") { chooseFolder() }
-                    .tip("Choose the folder where exported files are saved")
+                Button(L("settings.export.choose")) { chooseFolder() }
+                    .tip(L("settings.export.choose.tip"))
             }
         }
 
-        Section("Screenshots") {
-            Toggle("Copy a new screenshot to the clipboard", isOn: $settings.copyScreenshots)
-                .tip("Put every new screenshot on the clipboard so you can paste it right away")
-            Text("Paste it with ⌘V right away; the editor opens too, and ⌘C there copies your marks.")
+        Section(L("settings.screenshots.section")) {
+            Toggle(L("settings.screenshots.copy"), isOn: $settings.copyScreenshots)
+                .tip(L("settings.screenshots.copy.tip"))
+            Text(L("settings.screenshots.copy.note"))
                 .font(.system(size: 11))
                 .foregroundStyle(Theme.textSecondary)
         }
@@ -216,73 +229,73 @@ struct SettingsView: View {
 
     @ViewBuilder private var recordingPage: some View {
         @Bindable var settings = app.settings
-        Section("Buffer") {
-            Picker("Keep the last", selection: $settings.bufferMinutes) {
-                Text("1 minute").tag(1)
-                Text("2 minutes").tag(2)
-                Text("3 minutes").tag(3)
-                Text("5 minutes").tag(5)
+        Section(L("settings.buffer.section")) {
+            Picker(L("settings.buffer.length"), selection: $settings.bufferMinutes) {
+                Text(L("settings.buffer.length.minutes", 1)).tag(1)
+                Text(L("settings.buffer.length.minutes", 2)).tag(2)
+                Text(L("settings.buffer.length.minutes", 3)).tag(3)
+                Text(L("settings.buffer.length.minutes", 5)).tag(5)
             }
-            .tip("How much of the recent screen the buffer keeps, ready to save as a clip")
-            Picker("Buffer frame rate", selection: $settings.framesPerSecond) {
-                Text("15 fps (lightest)").tag(15)
-                Text("30 fps").tag(30)
-                Text("60 fps").tag(60)
+            .tip(L("settings.buffer.length.tip"))
+            Picker(L("settings.buffer.frameRate"), selection: $settings.framesPerSecond) {
+                Text(L("settings.buffer.frameRate.lightest", 15)).tag(15)
+                Text(L("settings.buffer.frameRate.fps", 30)).tag(30)
+                Text(L("settings.buffer.frameRate.fps", 60)).tag(60)
             }
-            .tip("Frames per second of the background buffer; lower uses less CPU and memory")
-            Picker("Recording frame rate", selection: $settings.recordingFramesPerSecond) {
-                Text("30 fps").tag(30)
-                Text("60 fps").tag(60)
+            .tip(L("settings.buffer.frameRate.tip"))
+            Picker(L("settings.buffer.recordingFrameRate"), selection: $settings.recordingFramesPerSecond) {
+                Text(L("settings.buffer.frameRate.fps", 30)).tag(30)
+                Text(L("settings.buffer.frameRate.fps", 60)).tag(60)
             }
-            .tip("Frames per second of regular screen recordings")
-            Picker("Resolution", selection: $settings.maxHeight) {
+            .tip(L("settings.buffer.recordingFrameRate.tip"))
+            Picker(L("settings.buffer.resolution"), selection: $settings.maxHeight) {
                 Text("720p").tag(720)
                 Text("1080p").tag(1080)
                 Text("1440p").tag(1440)
-                Text("Native").tag(0)
+                Text(L("settings.buffer.resolution.native")).tag(0)
             }
-            .tip("Maximum height of saved clips; lower makes smaller files")
-            Toggle("Keep all displays (pick one or all side by side in the editor)", isOn: $settings.captureAllDisplays)
-                .tip("Buffer every connected display instead of only the main one")
-            Toggle("Show the mouse pointer", isOn: $settings.showsCursor)
-                .tip("Include the mouse pointer in the buffer and recordings")
-            Toggle("Start the buffer when the app opens", isOn: $settings.startBufferOnLaunch)
-                .tip("Start keeping the recent screen as soon as \(AppInfo.name) launches")
+            .tip(L("settings.buffer.resolution.tip"))
+            Toggle(L("settings.buffer.allDisplays"), isOn: $settings.captureAllDisplays)
+                .tip(L("settings.buffer.allDisplays.tip"))
+            Toggle(L("settings.buffer.pointer"), isOn: $settings.showsCursor)
+                .tip(L("settings.buffer.pointer.tip"))
+            Toggle(L("settings.buffer.startOnLaunch"), isOn: $settings.startBufferOnLaunch)
+                .tip(L("settings.buffer.startOnLaunch.tip", AppInfo.name))
             if needsRestart {
                 HStack {
-                    Text("Restart the buffer to apply. What it holds now is dropped.")
+                    Text(L("settings.buffer.restart.note"))
                         .font(.system(size: 12))
                         .foregroundStyle(Theme.textSecondary)
                     Spacer()
-                    Button("Restart buffer") {
+                    Button(L("settings.buffer.restart")) {
                         needsRestart = false
                         Task { await app.restartBufferIfRunning() }
                     }
-                    .tip("Restart the buffer so the new settings apply; the clip it holds now is lost")
+                    .tip(L("settings.buffer.restart.tip"))
                 }
             }
         }
 
-        Section("Audio") {
-            Toggle("Record system audio", isOn: $settings.recordSystemAudio)
-                .tip("Include the sound your Mac plays in the buffer and recordings")
-            Toggle("Record microphone", isOn: $settings.recordMicrophone)
-                .tip("Include your microphone in the buffer and recordings")
+        Section(L("settings.audio.section")) {
+            Toggle(L("settings.audio.system"), isOn: $settings.recordSystemAudio)
+                .tip(L("settings.audio.system.tip"))
+            Toggle(L("settings.audio.microphone"), isOn: $settings.recordMicrophone)
+                .tip(L("settings.audio.microphone.tip"))
         }
 
-        Section("Clicks and keys") {
-            Toggle("Record clicks", isOn: $settings.recordClicks)
-                .tip("Remember mouse clicks so they show up as steps and highlights in clips")
-            Toggle("Record shortcut keys", isOn: $settings.recordKeys)
-                .tip("Remember shortcut keys like ⌘S so they show up as steps in clips")
+        Section(L("settings.input.section")) {
+            Toggle(L("settings.input.clicks"), isOn: $settings.recordClicks)
+                .tip(L("settings.input.clicks.tip"))
+            Toggle(L("settings.input.keys"), isOn: $settings.recordKeys)
+                .tip(L("settings.input.keys.tip"))
             if settings.recordKeys && !app.hasAccessibilityAccess {
                 HStack {
-                    Text("Needs Accessibility access")
+                    Text(L("settings.input.keys.needsAccess"))
                         .font(.system(size: 12))
                         .foregroundStyle(Theme.warning)
                     Spacer()
-                    Button("Grant") { app.requestAccessibilityAccess() }
-                        .tip("Ask macOS for Accessibility access, needed to see shortcut keys")
+                    Button(L("settings.input.keys.grant")) { app.requestAccessibilityAccess() }
+                        .tip(L("settings.input.keys.grant.tip"))
                 }
             }
             TypedTextChoice(isOn: $settings.recordTypedText)
@@ -293,22 +306,22 @@ struct SettingsView: View {
         @Bindable var settings = app.settings
         ReportSettingsSection()
 
-        Section("Environment") {
-            Toggle("Read the browser tab URL", isOn: $settings.readBrowserURL)
-                .tip("Add the current browser tab URL to the environment info of captures, and an Open step for every page in the steps")
-            Text("Safari, Chrome, Arc, Brave, Edge, Vivaldi and Opera. macOS asks once per browser.")
+        Section(L("settings.environment.section")) {
+            Toggle(L("settings.environment.browserURL"), isOn: $settings.readBrowserURL)
+                .tip(L("settings.environment.browserURL.tip"))
+            Text(L("settings.environment.browserURL.note"))
                 .font(.system(size: 11))
                 .foregroundStyle(Theme.textSecondary)
         }
 
-        Section("Crashes and logs") {
-            Toggle("Save a clip when an app crashes", isOn: $settings.saveOnCrash)
-                .tip("Automatically save the minute before a crash together with the crash report")
-            Text("When an app you used in the last 10 minutes crashes, the minute before the crash is saved to Recent with the crash report.")
+        Section(L("settings.crashes.section")) {
+            Toggle(L("settings.crashes.saveClip"), isOn: $settings.saveOnCrash)
+                .tip(L("settings.crashes.saveClip.tip"))
+            Text(L("settings.crashes.saveClip.note"))
                 .font(.system(size: 12))
                 .foregroundStyle(Theme.textSecondary)
-            Toggle("Attach the app's system log to clips", isOn: $settings.attachSystemLogs)
-                .tip("Add the front app's recent system log lines to saved clips for debugging")
+            Toggle(L("settings.crashes.systemLog"), isOn: $settings.attachSystemLogs)
+                .tip(L("settings.crashes.systemLog.tip"))
         }
     }
 
@@ -316,16 +329,16 @@ struct SettingsView: View {
         @Bindable var settings = app.settings
         UpdateSettingsSection()
 
-        Section("Feedback") {
+        Section(L("settings.feedback.section")) {
             HStack {
-                Button("Report a problem…") { WindowManager.shared.openFeedback(kind: .problem) }
-                    .tip("Open a GitHub issue about \(AppInfo.name) with the version, macOS and logs filled in")
-                Button("Suggest a feature…") { WindowManager.shared.openFeedback(kind: .idea) }
-                    .tip("Share an idea for \(AppInfo.name) as a GitHub issue")
+                Button(L("settings.feedback.problem")) { WindowManager.shared.openFeedback(kind: .problem) }
+                    .tip(L("settings.feedback.problem.tip", AppInfo.name))
+                Button(L("settings.feedback.feature")) { WindowManager.shared.openFeedback(kind: .idea) }
+                    .tip(L("settings.feedback.feature.tip", AppInfo.name))
             }
-            Toggle("Offer a report after \(AppInfo.name) crashes", isOn: $settings.offerCrashReports)
-                .tip("When \(AppInfo.name) quit unexpectedly, open a report with the crash details on the next launch")
-            Text("Opens a filled issue on GitHub. You check it and submit it from your account.")
+            Toggle(L("settings.feedback.offerCrashReport", AppInfo.name), isOn: $settings.offerCrashReports)
+                .tip(L("settings.feedback.offerCrashReport.tip", AppInfo.name))
+            Text(L("settings.feedback.note"))
                 .font(.system(size: 12))
                 .foregroundStyle(Theme.textSecondary)
         }
@@ -342,7 +355,7 @@ struct SettingsView: View {
             try SystemActions.setOpenAtLogin(enabled)
         } catch {
             launchAtLogin = SMAppService.mainApp.status == .enabled
-            app.statusMessage = "Open at login works when the app is in /Applications (scripts/build-app.sh --install)."
+            app.statusMessage = L("settings.general.openAtLogin.error")
         }
     }
 }
@@ -354,15 +367,15 @@ struct TypedTextChoice: View {
 
     private var explanation: String {
         if isOn {
-            return "Steps show the text of the field you typed into, like Type “john@test.com” in “Email” text field. Password fields are never read."
+            return L("settings.typedText.on")
         }
-        return "Steps say which field you typed into, not what. Turn on to include the text; password fields are never read."
+        return L("settings.typedText.off")
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Toggle("Show what I type in steps", isOn: $isOn)
-                .tip("Steps say Type \"john@test.com\" in \"Email\" text field instead of Type text in \"Email\" text field")
+            Toggle(L("settings.typedText.toggle"), isOn: $isOn)
+                .tip(L("settings.typedText.toggle.tip"))
             // Verbatim: as a localized string the example address turned into a mail link.
             Text(verbatim: explanation)
                 .font(.system(size: 11))

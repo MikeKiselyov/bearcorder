@@ -7,8 +7,8 @@
 # Sections that need the browser test page from earlier sections are not meant for this.
 set -uo pipefail
 
-cd "$(dirname "$0")/.."
-ROOT="$(pwd)"
+# shellcheck source=lib/common.sh
+source "$(dirname "$0")/lib/common.sh"
 if [ -f "$ROOT/.env" ]; then
     set -a
     # shellcheck disable=SC1091
@@ -19,8 +19,11 @@ BUNDLE_ID="${BUGBEAR_BUNDLE_ID:-io.github.bugbear.app}"
 # shellcheck disable=SC1091
 source "$ROOT/scripts/test-app.sh"
 R=scripts/bugbear-run.sh
+# BROWSER and LOG are for the section file sourced below.
+# shellcheck disable=SC2034
 BROWSER="${E2E_BROWSER:-Google Chrome}"
 WORK="$ROOT/build/e2e-features"
+# shellcheck disable=SC2034
 LOG="$HOME/Library/Logs/Bugbear/bugbear.log"
 FAILURES=0
 PASSES=0

@@ -1,3 +1,4 @@
+# shellcheck shell=bash
 # Sourced by the scripts: APP_NAME, the name people see (the .app, its Info.plist, messages), read
 # from Sources/BugbearCore/Support/AppInfo.swift so the name lives in one place.
 # The executable and process stay "Bugbear" whatever the name: scripts find and quit older copies

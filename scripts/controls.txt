@@ -155,7 +155,7 @@ design-overlay	Opacity|@1x|@2x|@3x	design overlay opacity slider and export scal
 design-overlay	Click through to the app	design overlay \"Click through to the app\" switch
 design-overlay	Close the overlay	design overlay \"Close the overlay\"
 
-recording-bar	(Arrow|Rectangle|Ellipse|Pen|Highlighter|Numbered step|Step).*|coral|yellow|blue|green|purple|white|Marks .+	drawing bar tool, color and fade buttons
+recording-bar	(Arrow|Text|Rectangle|Ellipse|Pen|Highlighter|Numbered step|Step).*|coral|yellow|blue|green|purple|white|Marks .+	drawing bar tool, color and fade buttons
 recording-bar	Undo the last mark \(⌘Z\)|Clear all marks from the screen \(Delete\)|Stop drawing.+|Draw arrows.+|Close the drawing bar	drawing bar undo, clear, stop drawing and close
 recording-bar	Pause the recording.+|Resume the recording.+|Stop and throw the recording away without saving	recording bar pause, resume and \"throw away\" saves nothing
 recording-bar	Stop	recording bar \"Stop\" saves the recording
@@ -223,3 +223,6 @@ video:	Copy bug report · .+|Copy bug report as	video \"Copy bug report\" copies
 region-picker	Size .+	area picker \"Size\" chips and \"Record\" pressed by name
 region-picker	Record	area picker \"Size\" chips and \"Record\" pressed by name
 region-picker	Capture|Cancel	area picker \"Cancel\" closes it
+video:	Crop	video \"Crop\" shows the whole frame to pick from
+video:	Done	video \"Done\" shows only the cropped part
+video:	Reset	video \"Reset\" keeps the whole frame again

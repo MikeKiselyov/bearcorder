@@ -1,0 +1,62 @@
+/* Recording (Recording/): the HUD and drawing bar, the area picker, the ruler, the camera and the outline. */
+
+/* HUD and drawing bar. resume, pause, draw.start, stop.tip: the shortcut. color: the color's name. */
+"recording.hud.resume" = "Resume the recording (%@)";
+"recording.hud.pause" = "Pause the recording without ending it (%@)";
+"recording.hud.drawOnScreen" = "Draw on screen";
+"recording.hud.draw.stop" = "Stop drawing and use the screen normally again (Esc)";
+"recording.hud.draw.start" = "Draw arrows and boxes on screen to point things out (%@)";
+"recording.hud.color" = "Draw in %@";
+"recording.hud.marksFade" = "Marks fade after 3 s (click to keep)";
+"recording.hud.marksStay" = "Marks stay (click to fade)";
+"recording.hud.undo" = "Undo the last mark (⌘Z)";
+"recording.hud.clear" = "Clear all marks from the screen (Delete)";
+"recording.hud.discard" = "Stop and throw the recording away without saving";
+"recording.hud.stop" = "Stop";
+"recording.hud.stop.tip" = "Stop recording and open it in the editor (%@)";
+"recording.hud.closeDrawingBar" = "Close the drawing bar";
+
+/* The recording clock. accessibility: the running time. */
+"recording.clock.rec" = "REC";
+"recording.clock.paused" = "Paused";
+"recording.clock.accessibility.recording" = "Recording, %@";
+"recording.clock.accessibility.paused" = "Paused, %@";
+
+/* Area picker. record and cancel.withKey keep two spaces before the key: the part before them names the button for VoiceOver. size.button: the size chip's title. */
+"recording.areaPicker.record" = "Record  ↩";
+"recording.areaPicker.cancel" = "Cancel";
+"recording.areaPicker.cancel.withKey" = "Cancel  esc";
+"recording.areaPicker.size" = "Size";
+"recording.areaPicker.size.button" = "Size %@";
+"recording.areaPicker.size.phone" = "Phone";
+"recording.areaPicker.size.fullScreen" = "Full screen";
+
+/* Screen ruler. pixelsAndDiagonal: width and height in pixels, then the diagonal in points. */
+"recording.ruler.pixelsAndDiagonal" = "%1$ld × %2$ld px · diagonal %3$ld pt";
+"recording.ruler.copied" = "Copied";
+"recording.ruler.hint" = "Drag to measure  ·  ⌘C copies the size  ·  Esc to finish";
+
+/* Outline around the recorded area. label: the size in pixels, like 1280 × 720. */
+"recording.outline.notRecorded" = "Not recorded";
+"recording.outline.label" = "● REC  %@";
+
+/* Camera bubble menu. */
+"recording.camera.size.small" = "Small";
+"recording.camera.size.medium" = "Medium";
+"recording.camera.size.large" = "Large";
+"recording.camera.hide" = "Hide camera";
+
+/* Drawing on screen. */
+"recording.drawing.textField" = "Text on the screen";
+
+/* Design overlay. */
+"recording.design.choose" = "Choose a design export (PNG from Figma works best)";
+"recording.design.title" = "Design overlay";
+"recording.design.close" = "Close the overlay";
+"recording.design.opacity" = "Opacity";
+"recording.design.opacity.tip" = "How see-through the design is, so you can compare it with the real UI under it";
+"recording.design.exportScale" = "Export";
+"recording.design.exportScale.tip" = "Scale the design was exported at, so it shows at its real size in points";
+"recording.design.clickThrough" = "Click through to the app";
+"recording.design.clickThrough.tip" = "Let clicks pass through the design to the app underneath";
+"recording.design.hint" = "Drag the design to line it up; arrows nudge 1 pt, Shift 10 pt.";

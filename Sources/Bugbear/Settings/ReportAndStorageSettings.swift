@@ -10,27 +10,27 @@ struct ReportSettingsSection: View {
 
     var body: some View {
         Section {
-            Picker("Copy bug report as", selection: $settings.bugReportFormat) {
+            Picker(L("settings.reports.format"), selection: $settings.bugReportFormat) {
                 ForEach(BugReport.Format.allCases) { format in
                     Text(format.rawValue).tag(format.rawValue)
                 }
             }
-            .tip("Format used when you copy a bug report from the editor")
+            .tip(L("settings.reports.format.tip"))
         }
 
         Section {
             ForEach(EnvironmentSnapshot.StandardField.allCases, id: \.self) { field in
                 HStack(spacing: 10) {
-                    Toggle("Include \(field.rawValue)", isOn: includeBinding(field))
+                    Toggle(L("settings.reports.field.include", field.rawValue), isOn: includeBinding(field))
                         .toggleStyle(.checkbox)
                         .labelsHidden()
-                        .tip("Put \(field.rawValue) into the panel, the badge and the bug report")
+                        .tip(L("settings.reports.field.include.tip", field.rawValue))
                     TextField("", text: nameBinding(field), prompt: Text(field.rawValue))
                         .labelsHidden()
                         .textFieldStyle(.roundedBorder)
                         .frame(width: 150)
-                        .accessibilityLabel("Name for \(field.rawValue)")
-                        .tip("The name shown in the panel and the report; clear it to go back to \(field.rawValue)")
+                        .accessibilityLabel(L("settings.reports.field.name.label", field.rawValue))
+                        .tip(L("settings.reports.field.name.tip", field.rawValue))
                         .disabled(!isIncluded(field))
                     Text(example(field))
                         .font(.system(size: 12))
@@ -41,34 +41,34 @@ struct ReportSettingsSection: View {
                 }
             }
         } header: {
-            Text("Filled in by \(AppInfo.name)")
+            Text(L("settings.reports.standard.header", AppInfo.name))
         } footer: {
-            Text("Collected with every capture. Rename a field or turn it off, and captures you already have show it that way too.")
+            Text(L("settings.reports.standard.footer"))
                 .font(.system(size: 12))
                 .foregroundStyle(Theme.textSecondary)
         }
 
         Section {
             if settings.reportFields.isEmpty {
-                Text("None yet. Add the stand, build or test account you work with, and every capture gets it.")
+                Text(L("settings.reports.custom.empty"))
                     .font(.system(size: 12))
                     .foregroundStyle(Theme.textSecondary)
             }
             ForEach(settings.reportFields.indices, id: \.self) { index in
                 HStack(spacing: 8) {
-                    TextField("Name", text: fieldBinding(index, name: true))
+                    TextField(L("settings.reports.custom.name"), text: fieldBinding(index, name: true))
                         .frame(width: 130)
-                        .tip("Field name, for example Stand or Build")
-                    TextField("Value", text: fieldBinding(index, name: false))
-                        .tip("Field value added to every new capture; leave empty to skip it")
+                        .tip(L("settings.reports.custom.name.tip"))
+                    TextField(L("settings.reports.custom.value"), text: fieldBinding(index, name: false))
+                        .tip(L("settings.reports.custom.value.tip"))
                     Button {
                         settings.reportFields.remove(at: index)
                     } label: {
                         Image(systemName: "minus.circle")
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel("Remove field")
-                    .tip("Remove this field")
+                    .accessibilityLabel(L("settings.reports.custom.remove"))
+                    .tip(L("settings.reports.custom.remove.tip"))
                 }
                 .textFieldStyle(.roundedBorder)
             }
@@ -76,11 +76,11 @@ struct ReportSettingsSection: View {
                 Button {
                     settings.reportFields.append(EnvironmentSnapshot.Field(name: "", value: ""))
                 } label: {
-                    Label("New field", systemImage: "plus")
+                    Label(L("settings.reports.custom.add"), systemImage: "plus")
                 }
-                .tip("Add an empty field: type its name and value")
+                .tip(L("settings.reports.custom.add.tip"))
                 if !unusedSuggestions.isEmpty {
-                    Text("or")
+                    Text(L("settings.reports.custom.or"))
                         .font(.system(size: 12))
                         .foregroundStyle(Theme.textSecondary)
                     ForEach(unusedSuggestions, id: \.self) { name in
@@ -97,14 +97,14 @@ struct ReportSettingsSection: View {
                         .buttonStyle(.plain)
                         .foregroundStyle(Theme.link)
                         .accessibilityLabel(name)
-                        .tip("Add a \(name) field, then type its value")
+                        .tip(L("settings.reports.custom.suggestion.tip", name))
                     }
                 }
             }
         } header: {
-            Text("Your fields")
+            Text(L("settings.reports.custom.header"))
         } footer: {
-            Text("Added to every new capture: the environment panel, the badge and the bug report. Empty values are skipped.")
+            Text(L("settings.reports.custom.footer"))
                 .font(.system(size: 12))
                 .foregroundStyle(Theme.textSecondary)
         }
@@ -159,15 +159,15 @@ struct ReportSettingsSection: View {
         case .display:
             return EnvironmentCollector.displayDescription()
         case .app:
-            return "The app in front and its version"
+            return L("settings.reports.example.app")
         case .url:
-            return "The browser tab address"
+            return L("settings.reports.example.url")
         case .locale:
             return Locale.current.identifier.replacingOccurrences(of: "_", with: "-")
         case .appearance:
-            return "Dark or Light"
+            return L("settings.reports.example.appearance")
         case .time:
-            return "When the capture was taken"
+            return L("settings.reports.example.time")
         }
     }
 
@@ -192,55 +192,55 @@ struct ReportSettingsSection: View {
 /// Settings → Storage: space used and automatic clean-up.
 struct StorageSettingsSection: View {
     @Bindable private var settings = AppSettings.shared
-    @State private var usedText = "Measuring…"
+    @State private var usedText = L("settings.storage.measuring")
     @State private var resultText = ""
 
     var body: some View {
-        Section("Storage") {
+        Section(L("settings.storage.section")) {
             HStack {
-                Text("Captures use")
+                Text(L("settings.storage.used"))
                 Spacer()
                 Text(usedText).foregroundStyle(Theme.textSecondary)
-                Button("Show in Finder") { SystemActions.open(AppPaths.captures) }
-                    .tip("Open the captures folder in Finder")
+                Button(L("settings.storage.showInFinder")) { SystemActions.open(AppPaths.captures) }
+                    .tip(L("settings.storage.showInFinder.tip"))
             }
-            Picker("Delete captures older than", selection: $settings.keepCapturesDays) {
-                Text("Never").tag(0)
-                Text("7 days").tag(7)
-                Text("30 days").tag(30)
-                Text("90 days").tag(90)
+            Picker(L("settings.storage.capturesAge"), selection: $settings.keepCapturesDays) {
+                Text(L("settings.storage.never")).tag(0)
+                Text(L("settings.storage.days", 7)).tag(7)
+                Text(L("settings.storage.days", 30)).tag(30)
+                Text(L("settings.storage.days", 90)).tag(90)
             }
-            .tip("Automatically delete captures older than this")
-            Picker("Delete crash clips older than", selection: $settings.keepCrashClipsDays) {
-                Text("3 days").tag(3)
-                Text("7 days").tag(7)
-                Text("30 days").tag(30)
-                Text("Never").tag(0)
+            .tip(L("settings.storage.capturesAge.tip"))
+            Picker(L("settings.storage.crashClipsAge"), selection: $settings.keepCrashClipsDays) {
+                Text(L("settings.storage.days", 3)).tag(3)
+                Text(L("settings.storage.days", 7)).tag(7)
+                Text(L("settings.storage.days", 30)).tag(30)
+                Text(L("settings.storage.never")).tag(0)
             }
-            .tip("Clips \(AppInfo.name) saved by itself when an app crashed, with the crash report")
-            Picker("Keep captures under", selection: $settings.maxCapturesGB) {
-                Text("No limit").tag(0)
-                Text("2 GB").tag(2)
-                Text("5 GB").tag(5)
-                Text("10 GB").tag(10)
-                Text("20 GB").tag(20)
+            .tip(L("settings.storage.crashClipsAge.tip", AppInfo.name))
+            Picker(L("settings.storage.sizeLimit"), selection: $settings.maxCapturesGB) {
+                Text(L("settings.storage.sizeLimit.none")).tag(0)
+                Text(L("settings.storage.sizeLimit.gigabytes", 2)).tag(2)
+                Text(L("settings.storage.sizeLimit.gigabytes", 5)).tag(5)
+                Text(L("settings.storage.sizeLimit.gigabytes", 10)).tag(10)
+                Text(L("settings.storage.sizeLimit.gigabytes", 20)).tag(20)
             }
-            .tip("Delete the oldest captures when they take more space than this")
+            .tip(L("settings.storage.sizeLimit.tip"))
             HStack {
-                Text("Applied after launch and once a day; the oldest go first. Captures open in an editor are kept.")
+                Text(L("settings.storage.cleanUp.note"))
                     .font(.system(size: 12))
                     .foregroundStyle(Theme.textSecondary)
                 Spacer()
-                Button("Clean up now") {
+                Button(L("settings.storage.cleanUp")) {
                     Task {
                         let deleted = await AppState.shared.cleanUpStorage()
                         Log.info("clean up now: deleted \(deleted)")
-                        resultText = deleted == 1 ? "Deleted 1 capture" : "Deleted \(deleted) captures"
+                        resultText = L("settings.storage.cleanUp.deleted", deleted)
                         await measure()
                     }
                 }
                 .disabled(settings.keepCapturesDays == 0 && settings.maxCapturesGB == 0 && settings.keepCrashClipsDays == 0)
-                .tip("Apply the clean-up rules right now instead of waiting for the daily run")
+                .tip(L("settings.storage.cleanUp.tip"))
             }
             if !resultText.isEmpty {
                 Text(resultText).font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
@@ -256,6 +256,6 @@ struct StorageSettingsSection: View {
             total += size
         }
         let count = CaptureStore.shared.captures.count
-        usedText = "\(DataSizeConverter.describe(Double(total)).decimal) · \(count) captures"
+        usedText = L("settings.storage.usedValue", DataSizeConverter.describe(Double(total)).decimal, count)
     }
 }

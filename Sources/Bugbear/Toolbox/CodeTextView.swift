@@ -35,7 +35,7 @@ struct CodeTextView: NSViewRepresentable {
         textView.textContainerInset = NSSize(width: 12, height: 10)
         textView.isEditable = isEditable
         textView.isSelectable = true
-        textView.setAccessibilityLabel(label ?? (isEditable ? "Input" : "Output"))
+        textView.setAccessibilityLabel(label ?? (isEditable ? L("toolbox.pane.input") : L("toolbox.pane.output")))
         context.coordinator.textView = textView
         apply(text, to: textView)
         return scrollView
