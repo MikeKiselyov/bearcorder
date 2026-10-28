@@ -1,0 +1,42 @@
+/* The permissions list (Onboarding/PermissionsList.swift), on the welcome guide and in Settings → Permissions. */
+
+/* Each permission: its name and what it is for. */
+"permissions.screen.title" = "Screen & System Audio Recording";
+"permissions.screen.detail" = "Required for screenshots, recordings and the buffer. After allowing it, relaunch the app.";
+"permissions.screen.relaunch" = "Relaunch";
+"permissions.accessibility.title" = "Accessibility";
+"permissions.accessibility.detail" = "Names what you click and type into, and shows the shortcut keys you press, as steps in videos and bug reports.";
+"permissions.microphone.title" = "Microphone";
+"permissions.microphone.detail" = "Your voice in recordings, when you turn the mic on.";
+"permissions.camera.title" = "Camera";
+"permissions.camera.detail" = "The round camera bubble you can show while recording.";
+"permissions.browsers.title" = "Browsers (Automation)";
+/* %@ is the app's name. */
+"permissions.browsers.detail.denied" = "Turned off for a browser: the URL stays empty. Allow… opens System Settings → Automation, switch %@ on there.";
+"permissions.browsers.detail.notRunning" = "Reads the address of the open tab for the URL field. Open your browser to check it here.";
+"permissions.browsers.detail.ask" = "Reads the address of the open tab for the URL field. macOS asks once for each browser.";
+
+/* Examples of what each permission is for, small chips under it. */
+"permissions.use.screen.lastSeconds" = "⌥⇧1: the last 30 s";
+"permissions.use.screen.screenshots" = "Screenshots";
+"permissions.use.screen.recordings" = "Recordings";
+"permissions.use.screen.text" = "Text from screen";
+"permissions.use.accessibility.steps" = "Click “Sign in” in steps";
+"permissions.use.accessibility.keys" = "⌘C in clips";
+"permissions.use.accessibility.scrolling" = "Scrolling shots";
+"permissions.use.accessibility.windows" = "Window sizes";
+"permissions.use.microphone.voice" = "Your voice in clips";
+"permissions.use.camera.face" = "Your face in a bubble";
+"permissions.use.browsers.url" = "URL in reports";
+"permissions.use.browsers.steps" = "Open shop.test/login in steps";
+
+/* Badges, state and buttons of a row. %@ is the permission's name. */
+"permissions.badge.required" = "Required";
+"permissions.badge.optional" = "Optional";
+"permissions.allowed" = "Allowed";
+"permissions.button.open" = "Open…";
+"permissions.button.open.accessibility" = "Open %@ in System Settings";
+"permissions.button.open.tip" = "See or take back this permission in System Settings";
+"permissions.button.allow" = "Allow…";
+"permissions.button.allow.accessibility" = "Allow %@";
+"permissions.button.allow.tip" = "Ask macOS for this permission";

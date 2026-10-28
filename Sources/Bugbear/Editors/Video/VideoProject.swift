@@ -11,10 +11,10 @@ struct VideoOverlay: Identifiable, Codable, Equatable {
 
         var title: String {
             switch self {
-            case .text: return "Text"
-            case .arrow: return "Arrow"
-            case .rectangle: return "Box"
-            case .blur: return "Blur"
+            case .text: return L("video.overlay.text")
+            case .arrow: return L("video.overlay.arrow")
+            case .rectangle: return L("video.overlay.rectangle")
+            case .blur: return L("video.overlay.blur")
             }
         }
 
@@ -81,6 +81,14 @@ enum VideoQuality: String, CaseIterable, Identifiable, Codable {
 
     var id: String { rawValue }
 
+    /// The name in the quality menu. The raw value is saved in project.json, so it stays English.
+    var title: String {
+        if self == .original {
+            return L("video.quality.original")
+        }
+        return rawValue
+    }
+
     var maxHeight: Double? {
         switch self {
         case .original: return nil
@@ -107,6 +115,9 @@ struct VideoProject: Codable, Equatable {
     /// The current step ("3. Click "Pay" button") as a caption at the bottom. Optional so older
     /// project.json files still load.
     var showSteps: Bool?
+    /// The part of the frame in the video (0…1, origin top-left), nil for all of it. Marks stay in
+    /// whole-frame coordinates. Optional so older project.json files still load.
+    var crop: CGRect?
 
     var isShowingSteps: Bool {
         return showSteps ?? false

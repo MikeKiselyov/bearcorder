@@ -7,8 +7,8 @@
 # Needs Screen Recording permission. Uses the automation hook like scripts/e2e.sh.
 set -uo pipefail
 
-cd "$(dirname "$0")/.."
-ROOT="$(pwd)"
+# shellcheck source=lib/common.sh
+source "$(dirname "$0")/lib/common.sh"
 if [ -f "$ROOT/.env" ]; then
     set -a
     # shellcheck disable=SC1091

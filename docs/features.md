@@ -57,6 +57,8 @@ it goes. The bug you could not reproduce is already recorded:
 - The clip opens in the video editor right away. Saving is instant: nothing is re-encoded.
 - Every display is kept. The editor has a switch at the top: one display, another, or all side by
   side. It opens on the display the pointer was on.
+- When the displays go away (the lid closes, a monitor is unplugged, the Mac sleeps), the buffer
+  starts again by itself as soon as a display is back.
 - Clicks and shortcut keys are recorded with the clip and can be shown on the video and turned into
   steps.
 - When an app you used in the last 10 minutes crashes, the minute before the crash is saved for you,
@@ -105,6 +107,9 @@ opens in about half a second.
   1:1, phone) or your own. Move and resize the frame before you start.
 - While recording, a frame shows what is in the video and the rest is dimmed; neither is in the
   video. Displays that are not recorded say so.
+- The frame of an area keeps its handles while recording: drag a corner or an edge to make the
+  area bigger or smaller. The video gets the area as it is when you stop. After you pick the area,
+  the app you were in is in front again.
 
 <p align="center">
   <img src="images/record-outline-area.png" width="720" alt="Recording an area: the frame and the dimmed rest of the screen">
@@ -120,10 +125,11 @@ opens in about half a second.
   <img src="images/hud-drawing.png" width="720" alt="The drawing bar: tools, colors, fade, undo, clear">
 </p>
 
-Press `⌥⇧A` or Draw in the menu and draw right on the screen, while recording or not: arrows, boxes,
-ellipses, pen, highlighter, numbered steps. Drawing goes on the display the pointer is on. Marks fade
-after a few seconds unless you pin them, and they are part of the recording. `Esc` ends drawing,
-`⌘Z` undoes, Delete clears.
+Press `⌥⇧A` or Draw in the menu and draw right on the screen, while recording or not: arrows, text,
+boxes, ellipses, pen, highlighter, numbered steps. With Text, click where the note goes and type;
+Return keeps it, `Esc` drops it. Drawing goes on the display the pointer is on. Marks fade after a few
+seconds unless you pin them, and they are part of the recording. `Esc` ends drawing, `⌘Z` undoes,
+Delete clears.
 
 ## The video editor
 
@@ -138,6 +144,14 @@ after a few seconds unless you pin them, and they are part of the recording. `Es
 - Every mark has a bar on the timeline: drag its middle to move it in time, its edges to make it
   shorter or longer. On the video, drag a mark to move it; it stays inside the frame.
 - `+` and `-` resize the selected mark. Text can be a label or outlined letters.
+- **Crop** keeps only part of the screen: the whole frame shows, drag the edges or draw the part to
+  keep, then Done. Marks, clicks and blur stay on the picture; keystrokes, steps and the badge stay
+  in the corners of the cropped video. Reset brings the whole screen back.
+
+<p align="center">
+  <img src="images/video-crop.png" width="720" alt="Crop in the video editor: the part to keep with its handles and size">
+</p>
+
 - Show clicks, keystrokes and the steps as captions, and the environment badge.
 - Export MP4 or GIF, pick the quality, and set a size limit (10 to 100 MB) for trackers that cap
   attachments. Copy the file, save it, or drag it out.

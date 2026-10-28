@@ -93,18 +93,6 @@ public enum BugReport {
         return lines
     }
 
-    /// What the copy button says, so it is clear before pasting whether the report has steps.
-    /// Short enough for the editors' side panels; the format is ticked in the button's menu.
-    public static func copyButtonTitle(stepCount: Int) -> String {
-        if stepCount == 1 {
-            return "Copy bug report · 1 step"
-        }
-        if stepCount > 1 {
-            return "Copy bug report · \(stepCount) steps"
-        }
-        return "Copy bug report · no steps"
-    }
-
     /// Numbered Markdown steps: "1. Click …". No times: a ticket reader repeats the steps, the
     /// seconds into the clip only got in the way.
     public static func steps(from actions: [Action]) -> [String] {

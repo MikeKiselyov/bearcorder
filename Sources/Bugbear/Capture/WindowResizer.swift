@@ -19,10 +19,10 @@ enum WindowResizer {
     ]
 
     static let mobilePresets = [
-        Preset(title: "Phone · 375 × 812", size: CGSize(width: 375, height: 812)),
-        Preset(title: "Phone · 390 × 844", size: CGSize(width: 390, height: 844)),
-        Preset(title: "Tablet · 768 × 1024", size: CGSize(width: 768, height: 1024)),
-        Preset(title: "Tablet · 1024 × 768", size: CGSize(width: 1024, height: 768)),
+        Preset(title: L("capture.resize.phone", 375, 812), size: CGSize(width: 375, height: 812)),
+        Preset(title: L("capture.resize.phone", 390, 844), size: CGSize(width: 390, height: 844)),
+        Preset(title: L("capture.resize.tablet", 768, 1024), size: CGSize(width: 768, height: 1024)),
+        Preset(title: L("capture.resize.tablet", 1024, 768), size: CGSize(width: 1024, height: 768)),
     ]
 
     enum Failure: Error {

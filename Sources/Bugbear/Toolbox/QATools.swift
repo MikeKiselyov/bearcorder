@@ -44,25 +44,25 @@ struct TestDataTool: View {
     private var peopleSection: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 12) {
-                SectionLabel("People")
+                SectionLabel(L("toolbox.testData.people"))
                 PillPicker(options: TestData.PhoneCountry.allCases, selection: $country) { value in value.rawValue }
                     .frame(width: 260)
-                    .tip("Country for names and phone number formats")
+                    .tip(L("toolbox.testData.country.tip"))
                 Spacer()
-                Button("Generate") { generatePeople() }
-                    .accessibilityLabel("Generate people")
+                Button(L("toolbox.button.generate")) { generatePeople() }
+                    .accessibilityLabel(L("toolbox.testData.generatePeople"))
                     .buttonStyle(SecondaryButtonStyle())
-                    .tip("Generate five new fake people")
-                CopyButton(text: peopleAsText(), title: "Copy all", primary: false)
+                    .tip(L("toolbox.testData.generatePeople.tip"))
+                CopyButton(text: peopleAsText(), title: L("toolbox.button.copyAll"), primary: false)
             }
-            Text("Emails use reserved test domains, US and UK phones come from ranges set aside for fiction: nothing reaches a real person.")
+            Text(L("toolbox.testData.people.note"))
                 .font(.system(size: 11))
                 .foregroundStyle(Theme.textSecondary)
             ForEach(Array(people.enumerated()), id: \.offset) { _, person in
                 HStack(spacing: 6) {
-                    ValueRow(label: "Name", value: "\(person.firstName) \(person.lastName)", mono: false)
-                    ValueRow(label: "Email", value: person.email)
-                    ValueRow(label: "Phone", value: person.phone)
+                    ValueRow(label: L("toolbox.testData.name"), value: "\(person.firstName) \(person.lastName)", mono: false)
+                    ValueRow(label: L("toolbox.testData.email"), value: person.email)
+                    ValueRow(label: L("toolbox.testData.phone"), value: person.phone)
                 }
             }
         }
@@ -72,24 +72,24 @@ struct TestDataTool: View {
     private var cardSection: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 12) {
-                SectionLabel("Card")
+                SectionLabel(L("toolbox.testData.card"))
                 PillPicker(options: TestData.CardBrand.allCases, selection: $brand) { value in value.rawValue }
                     .frame(width: 300)
-                    .tip("Card brand, sets the number prefix and length")
+                    .tip(L("toolbox.testData.brand.tip"))
                 Spacer()
-                Button("Generate") { generateCard() }
-                    .accessibilityLabel("Generate card")
+                Button(L("toolbox.button.generate")) { generateCard() }
+                    .accessibilityLabel(L("toolbox.testData.generateCard"))
                     .buttonStyle(SecondaryButtonStyle())
-                    .tip("Generate a new fake card number, expiry and CVC")
+                    .tip(L("toolbox.testData.generateCard.tip"))
             }
             HStack(spacing: 6) {
-                ValueRow(label: "Number · passes Luhn", value: card)
-                ValueRow(label: "Expiry", value: expiry)
+                ValueRow(label: L("toolbox.testData.cardNumber"), value: card)
+                ValueRow(label: L("toolbox.testData.expiry"), value: expiry)
                     .frame(width: 120)
                 ValueRow(label: "CVC", value: cvc)
                     .frame(width: 100)
             }
-            Text("Random numbers in the right format, not real cards. Payment sandboxes (Stripe, Adyen) need their own test numbers.")
+            Text(L("toolbox.testData.card.note"))
                 .font(.system(size: 11))
                 .foregroundStyle(Theme.textSecondary)
         }
@@ -99,17 +99,17 @@ struct TestDataTool: View {
     private var ibanSection: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 12) {
-                SectionLabel("IBAN")
+                SectionLabel(L("toolbox.testData.iban"))
                 PillPicker(options: TestData.IBANCountry.allCases, selection: $ibanCountry) { value in value.rawValue }
                     .frame(width: 220)
-                    .tip("Country of the IBAN, sets its length and format")
+                    .tip(L("toolbox.testData.ibanCountry.tip"))
                 Spacer()
-                Button("Generate") { generateIBAN() }
-                    .accessibilityLabel("Generate IBAN")
+                Button(L("toolbox.button.generate")) { generateIBAN() }
+                    .accessibilityLabel(L("toolbox.testData.generateIBAN"))
                     .buttonStyle(SecondaryButtonStyle())
-                    .tip("Generate a new IBAN with valid check digits")
+                    .tip(L("toolbox.testData.generateIBAN.tip"))
             }
-            ValueRow(label: "Valid check digits", value: iban)
+            ValueRow(label: L("toolbox.testData.validCheckDigits"), value: iban)
         }
         .onChange(of: ibanCountry) { generateIBAN() }
     }
@@ -117,24 +117,24 @@ struct TestDataTool: View {
     private var passwordSection: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 12) {
-                SectionLabel("Passwords")
-                Stepper("Length: \(passwordLength)", value: $passwordLength, in: 4...64)
+                SectionLabel(L("toolbox.testData.passwords"))
+                Stepper(L("toolbox.testData.passwordLength", passwordLength), value: $passwordLength, in: 4...64)
                     .font(.system(size: 12))
-                    .tip("Length of the generated passwords")
-                Toggle("A-Z", isOn: $passwordUppercase).toggleStyle(.checkbox).font(.system(size: 12))
-                    .tip("Include uppercase letters")
-                Toggle("0-9", isOn: $passwordDigits).toggleStyle(.checkbox).font(.system(size: 12))
-                    .tip("Include digits")
-                Toggle("!@#", isOn: $passwordSymbols).toggleStyle(.checkbox).font(.system(size: 12))
-                    .tip("Include symbols")
+                    .tip(L("toolbox.testData.passwordLength.tip"))
+                Toggle(L("toolbox.testData.uppercase"), isOn: $passwordUppercase).toggleStyle(.checkbox).font(.system(size: 12))
+                    .tip(L("toolbox.testData.uppercase.tip"))
+                Toggle(L("toolbox.testData.digits"), isOn: $passwordDigits).toggleStyle(.checkbox).font(.system(size: 12))
+                    .tip(L("toolbox.testData.digits.tip"))
+                Toggle(L("toolbox.testData.symbols"), isOn: $passwordSymbols).toggleStyle(.checkbox).font(.system(size: 12))
+                    .tip(L("toolbox.testData.symbols.tip"))
                 Spacer()
-                Button("Generate") { generatePasswords() }
-                    .accessibilityLabel("Generate passwords")
+                Button(L("toolbox.button.generate")) { generatePasswords() }
+                    .accessibilityLabel(L("toolbox.testData.generatePasswords"))
                     .buttonStyle(SecondaryButtonStyle())
-                    .tip("Generate three new passwords")
+                    .tip(L("toolbox.testData.generatePasswords.tip"))
             }
             ForEach(passwords, id: \.self) { password in
-                ValueRow(label: "\(password.count) characters", value: password)
+                ValueRow(label: L("toolbox.testData.passwordCharacters", password.count), value: password)
             }
         }
         .onChange(of: passwordLength) { generatePasswords() }
@@ -145,30 +145,30 @@ struct TestDataTool: View {
 
     private var checkSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            SectionLabel("Check a card number or IBAN")
-            TextField("Paste a card number or IBAN", text: $checkInput)
+            SectionLabel(L("toolbox.testData.check"))
+            TextField(L("toolbox.testData.check.placeholder"), text: $checkInput)
                 .textFieldStyle(.roundedBorder)
                 .font(.system(size: 13, design: .monospaced))
-                .tip("Check whether a card number passes Luhn or an IBAN has valid check digits")
+                .tip(L("toolbox.testData.check.tip"))
             if !checkInput.trimmingCharacters(in: .whitespaces).isEmpty {
                 HStack(spacing: 16) {
-                    checkResult("Luhn (cards)", TestData.isValidLuhn(checkInput))
-                    checkResult("IBAN checksum", TestData.isValidIBAN(checkInput))
+                    checkResult(L("toolbox.testData.check.luhn"), TestData.isValidLuhn(checkInput))
+                    checkResult(L("toolbox.testData.check.iban"), TestData.isValidIBAN(checkInput))
                 }
             }
         }
     }
 
     private func checkResult(_ title: String, _ valid: Bool) -> some View {
-        Label("\(title): \(valid ? "valid" : "invalid")", systemImage: valid ? "checkmark.circle.fill" : "xmark.circle")
+        Label(valid ? L("toolbox.testData.check.valid", title) : L("toolbox.testData.check.invalid", title), systemImage: valid ? "checkmark.circle.fill" : "xmark.circle")
             .font(.system(size: 12))
             .foregroundStyle(valid ? Theme.success : Theme.textSecondary)
     }
 
     private var edgeCaseSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            SectionLabel("Tricky inputs")
-            Text("Strings that often break forms, layouts and backends. Copy one into the field you test.")
+            SectionLabel(L("toolbox.testData.tricky"))
+            Text(L("toolbox.testData.tricky.note"))
                 .font(.system(size: 11))
                 .foregroundStyle(Theme.textSecondary)
             LazyVGrid(columns: [GridItem(.flexible(), spacing: 6), GridItem(.flexible(), spacing: 6)], spacing: 6) {
@@ -257,14 +257,14 @@ struct RegexTool: View {
         VStack(spacing: 0) {
             patternBar(current)
             SplitPanes {
-                PaneHeader(title: "Text") {
-                    Button("Paste") {
+                PaneHeader(title: L("toolbox.regex.text")) {
+                    Button(L("toolbox.button.paste")) {
                         input = NSPasteboard.general.string(forType: .string) ?? input
                     }
                     .buttonStyle(.plain)
                     .font(.system(size: 12))
                     .foregroundStyle(Theme.link)
-                    .tip("Replace the text with the clipboard contents")
+                    .tip(L("toolbox.regex.paste.tip"))
                 }
                 CodeTextView(text: $input)
             } right: {
@@ -279,7 +279,7 @@ struct RegexTool: View {
                             .background(Theme.panel)
                             .clipShape(RoundedRectangle(cornerRadius: 8))
                         if let replaced = current.replaced {
-                            ValueRow(label: "After replace", value: replaced)
+                            ValueRow(label: L("toolbox.regex.afterReplace"), value: replaced)
                         }
                         ForEach(Array(current.matches.prefix(200).enumerated()), id: \.offset) { index, match in
                             matchRow(index: index, match: match)
@@ -300,21 +300,21 @@ struct RegexTool: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 10) {
                 Text("/").foregroundStyle(Theme.textSecondary)
-                TextField("Pattern", text: $pattern)
+                TextField(L("toolbox.regex.pattern"), text: $pattern)
                     .textFieldStyle(.roundedBorder)
                     .font(.system(size: 13, design: .monospaced))
-                    .tip("Regular expression to test; matches are highlighted on the right")
+                    .tip(L("toolbox.regex.pattern.tip"))
                 Text("/").foregroundStyle(Theme.textSecondary)
-                Toggle("i", isOn: $caseInsensitive).toggleStyle(.checkbox).tip("Ignore case: A matches a")
-                Toggle("m", isOn: $multiline).toggleStyle(.checkbox).tip("^ and $ match at every line")
-                Toggle("s", isOn: $dotAll).toggleStyle(.checkbox).tip(". matches line breaks")
+                Toggle(L("toolbox.regex.flag.i"), isOn: $caseInsensitive).toggleStyle(.checkbox).tip(L("toolbox.regex.flag.i.tip"))
+                Toggle(L("toolbox.regex.flag.m"), isOn: $multiline).toggleStyle(.checkbox).tip(L("toolbox.regex.flag.m.tip"))
+                Toggle(L("toolbox.regex.flag.s"), isOn: $dotAll).toggleStyle(.checkbox).tip(L("toolbox.regex.flag.s.tip"))
             }
             HStack(spacing: 10) {
-                Text("Replace").font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
-                TextField("Template, e.g. [$1] or ${id}", text: $replacement)
+                Text(L("toolbox.regex.replace")).font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
+                TextField(L("toolbox.regex.template"), text: $replacement)
                     .textFieldStyle(.roundedBorder)
                     .font(.system(size: 13, design: .monospaced))
-                    .tip("Optional replacement to preview; use $1 or ${name} for groups")
+                    .tip(L("toolbox.regex.template.tip"))
                 if let error = current.error {
                     Text(error).font(.system(size: 12)).foregroundStyle(Theme.warning)
                 }
@@ -327,19 +327,16 @@ struct RegexTool: View {
 
     private func matchTitle(_ current: RegexTester.Result) -> String {
         if current.truncated {
-            return "First \(RegexTester.limit) matches"
+            return L("toolbox.matches.first", RegexTester.limit)
         }
-        if current.matches.count == 1 {
-            return "1 match"
-        }
-        return "\(current.matches.count) matches"
+        return L("toolbox.matches", current.matches.count)
     }
 
     private func matchRow(index: Int, match: RegexTester.Match) -> some View {
         VStack(alignment: .leading, spacing: 4) {
-            ValueRow(label: "Match \(index + 1) · at \(match.range.location)", value: match.value)
+            ValueRow(label: L("toolbox.regex.match", index + 1, match.range.location), value: match.value)
             ForEach(Array(match.groups.enumerated()), id: \.offset) { _, group in
-                ValueRow(label: "Group \(group.name)", value: group.value ?? "(not matched)")
+                ValueRow(label: L("toolbox.regex.group", group.name), value: group.value ?? L("toolbox.regex.notMatched"))
                     .padding(.leading, 16)
             }
         }
@@ -365,7 +362,7 @@ struct RegexTool: View {
             text += AttributedString(source.substring(with: NSRange(location: cursor, length: limit - cursor)))
         }
         if source.length > limit {
-            text += AttributedString("\n… preview cut at \(previewLimit) characters")
+            text += AttributedString("\n" + L("toolbox.regex.previewCut", previewLimit))
         }
         return text
     }
@@ -380,30 +377,30 @@ struct QRTool: View {
     var body: some View {
         let image = QRCode.image(for: input)
         SplitPanes {
-            PaneHeader(title: "Text or link") {
-                Button("Read from screen…") { Task { await readFromScreen() } }
+            PaneHeader(title: L("toolbox.qr.input")) {
+                Button(L("toolbox.qr.readScreen")) { Task { await readFromScreen() } }
                     .buttonStyle(.plain)
                     .font(.system(size: 12))
                     .foregroundStyle(Theme.link)
-                    .tip("Select an area of the screen with a QR code and read it")
-                Button("Read from clipboard image") { Task { await readFromClipboard() } }
+                    .tip(L("toolbox.qr.readScreen.tip"))
+                Button(L("toolbox.qr.readClipboard")) { Task { await readFromClipboard() } }
                     .buttonStyle(.plain)
                     .font(.system(size: 12))
                     .foregroundStyle(Theme.link)
-                    .tip("Read a QR code from an image on the clipboard")
+                    .tip(L("toolbox.qr.readClipboard.tip"))
             }
             CodeTextView(text: $input)
             ToolFooter {
                 if let message = readMessage {
                     Text(message).foregroundStyle(Theme.textSecondary)
                 } else {
-                    Text("Open a staging link on your phone: show the code, scan it with the camera.")
+                    Text(L("toolbox.qr.footer"))
                         .foregroundStyle(Theme.textSecondary)
                 }
                 Spacer()
             }
         } right: {
-            PaneHeader(title: "QR code") { EmptyView() }
+            PaneHeader(title: L("toolbox.qr.code")) { EmptyView() }
             VStack {
                 Spacer()
                 if let qr = image {
@@ -416,21 +413,21 @@ struct QRTool: View {
                         .background(Color.white)
                         .clipShape(RoundedRectangle(cornerRadius: 10))
                 } else {
-                    Text("Type a link or text").foregroundStyle(Theme.textSecondary)
+                    Text(L("toolbox.qr.empty")).foregroundStyle(Theme.textSecondary)
                 }
                 Spacer()
             }
             .frame(maxWidth: .infinity)
             ToolFooter {
                 Spacer()
-                Button("Save PNG…") { save(image) }
+                Button(L("toolbox.qr.save")) { save(image) }
                     .buttonStyle(SecondaryButtonStyle())
                     .disabled(image == nil)
-                    .tip("Save the QR code as a PNG file")
-                Button("Copy image") { copy(image) }
+                    .tip(L("toolbox.qr.save.tip"))
+                Button(L("toolbox.qr.copyImage")) { copy(image) }
                     .buttonStyle(AccentButtonStyle(isEnabled: image != nil))
                     .disabled(image == nil)
-                    .tip("Copy the QR code image to paste into a chat or document")
+                    .tip(L("toolbox.qr.copyImage.tip"))
             }
         }
     }
@@ -444,7 +441,7 @@ struct QRTool: View {
 
     private func readFromClipboard() async {
         guard let image = NSImage(pasteboard: NSPasteboard.general), let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
-            readMessage = "No image on the clipboard"
+            readMessage = L("toolbox.qr.noImage")
             return
         }
         await show(QRCode.read(cgImage))
@@ -452,15 +449,11 @@ struct QRTool: View {
 
     private func show(_ payloads: [String]) async {
         if payloads.isEmpty {
-            readMessage = "No QR code found"
+            readMessage = L("toolbox.qr.noCode")
             return
         }
         input = payloads.joined(separator: "\n")
-        if payloads.count == 1 {
-            readMessage = "Read 1 code"
-        } else {
-            readMessage = "Read \(payloads.count) codes"
-        }
+        readMessage = L("toolbox.qr.read", payloads.count)
     }
 
     private func copy(_ image: NSImage?) {

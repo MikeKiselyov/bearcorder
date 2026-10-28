@@ -1,0 +1,137 @@
+/* The video editor (Editors/Video/). */
+
+/* Kinds of marks on the video. */
+"video.overlay.text" = "Text";
+"video.overlay.arrow" = "Arrow";
+"video.overlay.rectangle" = "Box";
+"video.overlay.blur" = "Blur";
+
+/* Toolbar. */
+"video.tool.cut" = "Cut";
+"video.tool.cut.tip" = "Cut the selected range (drag on the ruler first)";
+"video.tool.in" = "In";
+"video.tool.in.tip" = "Trim start at playhead (I)";
+"video.tool.out" = "Out";
+"video.tool.out.tip" = "Trim end at playhead (O)";
+"video.tool.text.tip" = "Drag on the video to place text";
+"video.tool.arrow.tip" = "Drag on the video to draw an arrow";
+"video.tool.rectangle.tip" = "Drag on the video to draw a box";
+"video.tool.blur.tip" = "Drag on the video to blur an area";
+"video.tool.crop" = "Crop";
+"video.tool.crop.tip" = "Choose the part of the screen that is in the video";
+"video.tool.slowMotion" = "Slow-mo";
+"video.tool.slowMotion.tip" = "Half speed for the selected range (or 3 s from the playhead)";
+"video.tool.freeze" = "Freeze";
+"video.tool.freeze.tip" = "Hold the current frame for 2 s";
+"video.screen.tip" = "Which screen is in the clip. Edits stay when you switch.";
+
+/* On the video. dragToAdd and dragToDraw: the kind of mark in lower case (dragToDraw.mark when none). */
+"video.stage.text.placeholder" = "Type…";
+"video.stage.text.field" = "Text on the video";
+"video.stage.dragToAdd" = "Drag on the video to add %@";
+"video.stage.dragToDraw" = "Drag on the video to draw the %@";
+"video.stage.dragToDraw.mark" = "mark";
+
+/* Crop. */
+"video.crop.hint" = "Drag the edges or draw the part of the screen to keep";
+"video.crop.reset" = "Reset";
+"video.crop.reset.tip" = "Keep the whole screen in the video";
+"video.crop.done" = "Done";
+"video.crop.done.tip" = "Show the video with this crop";
+
+/* Playback and the buttons below the video. copy: the file type (MP4 or GIF). */
+"video.transport.back" = "Back 5 seconds";
+"video.transport.forward" = "Forward 5 seconds";
+"video.transport.play" = "Play";
+"video.transport.pause" = "Pause";
+"video.copy" = "Copy %@";
+"video.drag.tip" = "Drag the original clip into another app. Use Copy or Save for the edited version.";
+
+/* Timeline. selection: the length of the selected range. cut.tip: where the cut starts, then where it ends.
+   marker.tip: the shortcut for marking a moment. freeze.seconds: how many seconds. bar: the bar's label. */
+"video.timeline.video" = "Video";
+"video.timeline.clicks" = "Clicks";
+"video.timeline.keys" = "Keys";
+"video.timeline.marks" = "Marks";
+"video.timeline.blur" = "Blur";
+"video.timeline.speed" = "Speed";
+"video.timeline.selection" = "Sel %@";
+"video.timeline.cut.tip" = "Cut %1$@–%2$@. Delete to restore.";
+"video.timeline.trimStart" = "Trim start";
+"video.timeline.trimStart.tip" = "Trim start (I)";
+"video.timeline.trimEnd" = "Trim end";
+"video.timeline.trimEnd.tip" = "Trim end (O)";
+"video.timeline.marker.tip" = "Marked moment (%@)";
+"video.timeline.freeze.seconds" = "%@s";
+"video.timeline.freeze.tip" = "Freeze frame. Select and press Delete to remove.";
+"video.timeline.bar" = "Bar: %@";
+
+/* Sidebar: overlays. */
+"video.overlays.title" = "Overlays";
+"video.overlays.clicks" = "Highlight clicks";
+"video.overlays.keys" = "Show keystrokes";
+"video.overlays.steps" = "Show steps";
+"video.overlays.steps.tip" = "Caption each step at the bottom: clicks, typing and pages opened, like in the bug report";
+"video.overlays.badge" = "Environment badge";
+"video.overlays.noEvents" = "No clicks or keys were recorded for this clip.";
+
+/* Sidebar: the selected item. */
+"video.selected.title" = "Selected";
+"video.selected.cut" = "Selected · Cut";
+"video.selected.slowMotion" = "Selected · Slow motion";
+"video.selected.freeze" = "Selected · Freeze frame";
+"video.selected.background" = "Background";
+"video.selected.background.label" = "Label";
+"video.selected.background.transparent" = "Transparent";
+"video.selected.size" = "Size";
+"video.selected.smaller" = "Smaller mark";
+"video.selected.smaller.tip" = "Smaller (-)";
+"video.selected.bigger" = "Bigger mark";
+"video.selected.bigger.tip" = "Bigger (+)";
+"video.selected.remove" = "Remove";
+
+/* Sidebar: how to edit, when nothing is selected. */
+"video.help.title" = "How to edit";
+"video.help.selectRange" = "Drag on the ruler to select a range";
+"video.help.useRange" = "Cut, Slow-mo and marks use that range";
+"video.help.marks" = "Pick Text, Arrow, Box or Blur, then drag on the video";
+"video.help.bars" = "Drag bars to move, edges to resize";
+"video.help.crop" = "Crop keeps only part of the screen";
+"video.help.keys" = "Space plays, I / O trim, Delete removes";
+"video.help.resize" = "+ and - resize the selected text, arrow or box";
+
+/* Sidebar: environment. */
+"video.report.tip" = "Steps from your clicks and keys, environment and the saved file";
+"video.environment.systemLog" = "System log";
+"video.environment.crashReport" = "Crash report";
+
+/* Sidebar: export. megabytes and size.*: a size in MB. fps: frames per second.
+   length.value: the length of the result, then of the whole clip. sameAsOriginal: the quality's name. */
+"video.export.title" = "Export";
+"video.export.quality" = "Quality";
+"video.export.quality.tip" = "Picture size of the MP4 and about how big the file comes out. Lower quality makes a smaller file";
+"video.quality.original" = "Original";
+"video.quality.sameAsOriginal" = "%@ (same as original)";
+"video.export.sizeLimit" = "Size limit";
+"video.export.sizeLimit.off" = "Off";
+"video.export.megabytes" = "%ld MB";
+"video.export.frameRate" = "Frame rate";
+"video.export.frameRate.gif" = "GIF frame rate";
+"video.export.fps" = "%ld fps";
+"video.export.length" = "Length";
+"video.export.length.value" = "%1$@ of %2$@";
+"video.export.estimatedSize" = "Est. size";
+"video.export.size.tooLong" = "too long for %ld MB";
+"video.export.size.limit" = "≤ %ld MB";
+"video.export.gifTooLong" = "GIFs longer than ~20 s get large. Trim or use MP4.";
+"video.export.error.noVideo" = "Clip has no video";
+"video.export.error.noTrack" = "Cannot create video track";
+"video.export.error.gifCreate" = "Cannot create GIF";
+"video.export.error.gifWrite" = "Could not write GIF";
+
+/* Messages after an action. saved: the file's name. copied: the file type. overLimit: the file's size, then the limit in MB. */
+"video.message.chooseCut" = "Drag on the ruler to choose what to cut";
+"video.message.previewNotReady" = "The preview is not ready yet. Try again in a moment.";
+"video.message.overLimit" = "The file is %1$@, over the %2$ld MB limit. Trim the clip.";
+"video.message.saved" = "Saved %@";
+"video.message.copied" = "Copied %@ to clipboard";

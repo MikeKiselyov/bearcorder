@@ -10,10 +10,10 @@ enum BadgeCorner: String, CaseIterable, Codable, Identifiable {
 
     var title: String {
         switch self {
-        case .topRight: return "Top right"
-        case .topLeft: return "Top left"
-        case .bottomRight: return "Bottom right"
-        case .bottomLeft: return "Bottom left"
+        case .topRight: return L("annotations.corner.topRight")
+        case .topLeft: return L("annotations.corner.topLeft")
+        case .bottomRight: return L("annotations.corner.bottomRight")
+        case .bottomLeft: return L("annotations.corner.bottomLeft")
         }
     }
 }
@@ -182,7 +182,7 @@ enum AnnotationRenderer {
 
     /// Shown, dimmed, where the text goes while nothing is typed yet. The typing field has no
     /// placeholder of its own: two of them showed on top of each other.
-    static let textPlaceholder = "Type…"
+    static var textPlaceholder: String { L("annotations.text.placeholder") }
 
     static func textAttributes(_ annotation: Annotation) -> [NSAttributedString.Key: Any] {
         let font = NSFont.systemFont(ofSize: annotation.fontSize, weight: .bold)

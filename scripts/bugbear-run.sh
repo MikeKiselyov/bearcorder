@@ -3,9 +3,10 @@
 #
 #   scripts/bugbear-run.sh <command> [timeout seconds]
 #
-# Needs the automation hook on (scripts/e2e.sh turns it on; see Support/Automation.swift).
+# Needs the automation hook on (scripts/e2e.sh turns it on; see DevTools/Automation.swift).
 set -uo pipefail
-cd "$(dirname "$0")/.."
+# shellcheck source=lib/common.sh
+source "$(dirname "$0")/lib/common.sh"
 LOG="$HOME/Library/Logs/Bugbear/bugbear.log"
 command="$1"
 timeout="${2:-60}"

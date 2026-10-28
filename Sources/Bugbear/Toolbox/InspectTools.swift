@@ -19,12 +19,12 @@ struct JSONDiffTool: View {
         do {
             left = try JSONParser.parse(leftText)
         } catch {
-            return (changes: [], error: "Before: \(error)")
+            return (changes: [], error: L("toolbox.diff.error.before", "\(error)"))
         }
         do {
             right = try JSONParser.parse(rightText)
         } catch {
-            return (changes: [], error: "After: \(error)")
+            return (changes: [], error: L("toolbox.diff.error.after", "\(error)"))
         }
         return (changes: JSONDiff.compare(left, right), error: nil)
     }
@@ -34,28 +34,28 @@ struct JSONDiffTool: View {
         SplitPanes {
             VSplitView {
                 VStack(spacing: 0) {
-                    PaneHeader(title: "Before") { pasteButton("before") { text in input = text } }
-                    CodeTextView(text: $input, label: "Before")
+                    PaneHeader(title: L("toolbox.diff.before")) { pasteButton(L("toolbox.diff.pasteBefore")) { text in input = text } }
+                    CodeTextView(text: $input, label: L("toolbox.diff.before"))
                 }
                 VStack(spacing: 0) {
-                    PaneHeader(title: "After") { pasteButton("after") { text in other = text } }
-                    CodeTextView(text: $other, label: "After")
+                    PaneHeader(title: L("toolbox.diff.after")) { pasteButton(L("toolbox.diff.pasteAfter")) { text in other = text } }
+                    CodeTextView(text: $other, label: L("toolbox.diff.after"))
                 }
             }
         } right: {
             PaneHeader(title: changesTitle(current.changes)) {
-                CopyButton(text: report(current.changes), title: "Copy list", primary: false)
+                CopyButton(text: report(current.changes), title: L("toolbox.diff.copyList"), primary: false)
             }
             ScrollView {
                 VStack(alignment: .leading, spacing: 6) {
                     if let error = current.error {
                         Text(error).font(.system(size: 12)).foregroundStyle(Theme.warning)
                     } else if current.changes.isEmpty && !input.isEmpty && !other.isEmpty {
-                        Label("The documents are the same (key order and 1 vs 1.0 are ignored).", systemImage: "checkmark.circle.fill")
+                        Label(L("toolbox.diff.same"), systemImage: "checkmark.circle.fill")
                             .font(.system(size: 12))
                             .foregroundStyle(Theme.success)
                     } else if input.isEmpty || other.isEmpty {
-                        Text("Paste two JSON responses to see what changed between them.")
+                        Text(L("toolbox.diff.empty"))
                             .font(.system(size: 12))
                             .foregroundStyle(Theme.textSecondary)
                     }
@@ -68,20 +68,18 @@ struct JSONDiffTool: View {
         }
     }
 
-    private func pasteButton(_ side: String, _ apply: @escaping (String) -> Void) -> some View {
-        Button("Paste") { apply(NSPasteboard.general.string(forType: .string) ?? "") }
-            .accessibilityLabel("Paste \(side)")
+    /// `name`: what VoiceOver (and tests) call the button, e.g. "Paste before".
+    private func pasteButton(_ name: String, _ apply: @escaping (String) -> Void) -> some View {
+        Button(L("toolbox.button.paste")) { apply(NSPasteboard.general.string(forType: .string) ?? "") }
+            .accessibilityLabel(name)
             .buttonStyle(.plain)
             .font(.system(size: 12))
             .foregroundStyle(Theme.link)
-            .tip("Replace this side with the JSON on the clipboard")
+            .tip(L("toolbox.diff.paste.tip"))
     }
 
     private func changesTitle(_ changes: [JSONDiff.Change]) -> String {
-        if changes.count == 1 {
-            return "1 difference"
-        }
-        return "\(changes.count) differences"
+        return L("toolbox.diff.count", changes.count)
     }
 
     private func changeRow(_ change: JSONDiff.Change) -> some View {
@@ -166,29 +164,29 @@ struct JSONPathTool: View {
                 TextField("$.items[*].price", text: $expression)
                     .textFieldStyle(.roundedBorder)
                     .font(.system(size: 13, design: .monospaced))
-                    .tip("JSONPath expression to select values from the JSON below, for example $..id")
+                    .tip(L("toolbox.jsonPath.expression.tip"))
                 ForEach(["$..id", "$.items[*]", "$.items[0]", "$..*"], id: \.self) { example in
                     Button(example) { expression = example }
                         .buttonStyle(.plain)
                         .font(.system(size: 11, design: .monospaced))
                         .foregroundStyle(Theme.link)
-                        .tip("Try the example expression \(example)")
+                        .tip(L("toolbox.example.tip", example))
                 }
             }
             .padding(12)
             .background(Theme.sidebar)
             SplitPanes {
                 PaneHeader(title: "JSON") {
-                    Button("Paste") { input = NSPasteboard.general.string(forType: .string) ?? input }
+                    Button(L("toolbox.button.paste")) { input = NSPasteboard.general.string(forType: .string) ?? input }
                         .buttonStyle(.plain)
                         .font(.system(size: 12))
                         .foregroundStyle(Theme.link)
-                        .tip("Replace the JSON with the clipboard contents")
+                        .tip(L("toolbox.jsonPath.paste.tip"))
                 }
                 CodeTextView(text: $input)
             } right: {
-                PaneHeader(title: current.matches.count == 1 ? "1 match" : "\(current.matches.count) matches") {
-                    CopyButton(text: valuesText(current.matches), title: "Copy values", primary: false)
+                PaneHeader(title: L("toolbox.matches", current.matches.count)) {
+                    CopyButton(text: valuesText(current.matches), title: L("toolbox.jsonPath.copyValues"), primary: false)
                 }
                 ScrollView {
                     VStack(alignment: .leading, spacing: 6) {
@@ -226,35 +224,35 @@ struct CronTool: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
                 VStack(alignment: .leading, spacing: 8) {
-                    SectionLabel("Expression")
-                    TextField("minute hour day month weekday", text: $input)
+                    SectionLabel(L("toolbox.cron.expression"))
+                    TextField(L("toolbox.cron.placeholder"), text: $input)
                         .textFieldStyle(.roundedBorder)
                         .font(.system(size: 15, design: .monospaced))
-                        .tip("Cron expression to explain: minute, hour, day of month, month, weekday")
+                        .tip(L("toolbox.cron.expression.tip"))
                     HStack(spacing: 10) {
                         ForEach(examples, id: \.self) { example in
                             Button(example) { input = example }
                                 .buttonStyle(.plain)
                                 .font(.system(size: 11, design: .monospaced))
                                 .foregroundStyle(Theme.link)
-                                .tip("Try the example expression \(example)")
+                                .tip(L("toolbox.example.tip", example))
                         }
                     }
-                    Text("minute (0-59) · hour (0-23) · day of month (1-31) · month (1-12 or JAN) · weekday (0-7 or MON, 0 and 7 are Sunday)")
+                    Text(L("toolbox.cron.fields"))
                         .font(.system(size: 11))
                         .foregroundStyle(Theme.textSecondary)
                 }
                 switch Result(catching: { try CronExpression.parse(expression) }) {
                 case .success(let cron):
                     VStack(alignment: .leading, spacing: 8) {
-                        SectionLabel("Meaning")
+                        SectionLabel(L("toolbox.cron.meaning"))
                         Text(cron.description).font(.system(size: 17, weight: .semibold)).textSelection(.enabled)
                     }
                     VStack(alignment: .leading, spacing: 6) {
-                        SectionLabel("Next runs")
+                        SectionLabel(L("toolbox.cron.nextRuns"))
                         let runs = cron.nextRuns(after: Date(), count: 10)
                         if runs.isEmpty {
-                            Text("Never runs (for example 30 February).").font(.system(size: 12)).foregroundStyle(Theme.warning)
+                            Text(L("toolbox.cron.never")).font(.system(size: 12)).foregroundStyle(Theme.warning)
                         }
                         ForEach(Array(runs.enumerated()), id: \.offset) { _, run in
                             HStack {
@@ -270,7 +268,7 @@ struct CronTool: View {
                             .background(Theme.panel)
                             .clipShape(RoundedRectangle(cornerRadius: 6))
                         }
-                        Text("Times in your zone (\(TimeZone.current.identifier)); the server may run cron in UTC.")
+                        Text(L("toolbox.cron.zoneNote", TimeZone.current.identifier))
                             .font(.system(size: 11))
                             .foregroundStyle(Theme.textSecondary)
                     }
@@ -293,12 +291,12 @@ struct HTTPTool: View {
     var body: some View {
         let message = HTTPMessage.parse(input)
         SplitPanes {
-            PaneHeader(title: "Raw request or response") {
-                Button("Paste") { input = NSPasteboard.general.string(forType: .string) ?? input }
+            PaneHeader(title: L("toolbox.http.raw")) {
+                Button(L("toolbox.button.paste")) { input = NSPasteboard.general.string(forType: .string) ?? input }
                     .buttonStyle(.plain)
                     .font(.system(size: 12))
                     .foregroundStyle(Theme.link)
-                    .tip("Replace the input with the request or response on the clipboard")
+                    .tip(L("toolbox.http.paste.tip"))
             }
             CodeTextView(text: $input)
         } right: {
@@ -306,31 +304,31 @@ struct HTTPTool: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     if input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                        Text("Paste a request or response: from devtools (Copy request headers), Charles, Proxyman or a log.")
+                        Text(L("toolbox.http.empty"))
                             .font(.system(size: 12))
                             .foregroundStyle(Theme.textSecondary)
                     }
                     if !message.query.isEmpty {
-                        fields("Query parameters", message.query)
+                        fields(L("toolbox.http.query"), message.query)
                     }
                     if !message.headers.isEmpty {
-                        fields("Headers", message.headers)
+                        fields(L("toolbox.http.headers"), message.headers)
                     }
                     if !message.cookies.isEmpty {
                         VStack(alignment: .leading, spacing: 6) {
-                            SectionLabel("Cookies")
+                            SectionLabel(L("toolbox.http.cookies"))
                             ForEach(Array(message.cookies.enumerated()), id: \.offset) { _, cookie in
                                 ValueRow(label: cookieLabel(cookie), value: cookie.value)
                             }
                         }
                     }
                     if !message.formFields.isEmpty {
-                        fields("Form body", message.formFields)
+                        fields(L("toolbox.http.formBody"), message.formFields)
                     }
                     if let pretty = message.prettyBody {
-                        bodyBlock("JSON body", pretty, bytes: message.body.utf8.count)
+                        bodyBlock(L("toolbox.http.jsonBody"), pretty, bytes: message.body.utf8.count)
                     } else if !message.body.isEmpty && message.formFields.isEmpty {
-                        bodyBlock("Body", message.body, bytes: message.body.utf8.count)
+                        bodyBlock(L("toolbox.http.body"), message.body, bytes: message.body.utf8.count)
                     }
                 }
                 .padding(12)
@@ -342,9 +340,9 @@ struct HTTPTool: View {
     private func bodyBlock(_ title: String, _ text: String, bytes: Int) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
-                SectionLabel("\(title) · \(bytes) bytes")
+                SectionLabel(L("toolbox.http.bodyTitle", title, bytes))
                 Spacer()
-                CopyButton(text: text, title: "Copy", primary: false, name: "Copy \(title.lowercased())")
+                CopyButton(text: text, title: L("toolbox.button.copy"), primary: false, name: L("toolbox.copy.named", title.lowercased()))
             }
             Text(text)
                 .font(.system(size: 12, design: .monospaced))
@@ -359,8 +357,8 @@ struct HTTPTool: View {
     private func summary(_ message: HTTPMessage) -> String {
         switch message.kind {
         case .request: return "\(message.method) \(message.path)"
-        case .response: return "Response \(message.statusCode) \(message.reason)"
-        case .headers: return "\(message.headers.count) headers"
+        case .response: return L("toolbox.http.response", message.statusCode, message.reason)
+        case .headers: return L("toolbox.http.headerCount", message.headers.count)
         }
     }
 
@@ -397,20 +395,20 @@ struct LengthTool: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 22) {
                 VStack(alignment: .leading, spacing: 10) {
-                    SectionLabel("Make a string of exact length")
+                    SectionLabel(L("toolbox.length.make"))
                     HStack(spacing: 12) {
-                        TextField("Length", value: $length, format: .number)
+                        TextField(L("toolbox.length.length"), value: $length, format: .number)
                             .textFieldStyle(.roundedBorder)
                             .frame(width: 100)
-                            .tip("Exact length of the string to generate, in characters")
+                            .tip(L("toolbox.length.length.tip"))
                         Stepper("", value: $length, in: 0...LengthString.maximum).labelsHidden()
-                            .accessibilityLabel("Change length")
-                            .tip("Make the string one character longer or shorter")
-                        PillPicker(options: LengthString.Style.allCases, selection: $style) { value in value.rawValue }
+                            .accessibilityLabel(L("toolbox.length.change"))
+                            .tip(L("toolbox.length.change.tip"))
+                        PillPicker(options: LengthString.Style.allCases, selection: $style) { value in styleTitle(value) }
                             .frame(width: 380)
-                            .tip("What to fill the string with: a counterstring shows where a field cuts it, Cyrillic and emoji test byte limits")
+                            .tip(L("toolbox.length.style.tip"))
                         Spacer()
-                        CopyButton(text: generated, title: "Copy", primary: false, name: "Copy string")
+                        CopyButton(text: generated, title: L("toolbox.button.copy"), primary: false, name: L("toolbox.length.copyString"))
                     }
                     HStack(spacing: 8) {
                         ForEach(quickLengths, id: \.self) { value in
@@ -418,12 +416,12 @@ struct LengthTool: View {
                                 .buttonStyle(.plain)
                                 .font(.system(size: 12, design: .monospaced))
                                 .foregroundStyle(length == value ? Theme.text : Theme.link)
-                                .tip("Set the length to \(value), a common field limit")
+                                .tip(L("toolbox.length.quick.tip", value))
                         }
-                        Text("±1 around a limit: 254, 255, 256").font(.system(size: 11)).foregroundStyle(Theme.textSecondary)
+                        Text(L("toolbox.length.aroundLimit")).font(.system(size: 11)).foregroundStyle(Theme.textSecondary)
                     }
                     if style == .counter {
-                        Text("Counterstring: every * sits at the position written before it, so where the field cuts the text shows the limit.")
+                        Text(L("toolbox.length.counterNote"))
                             .font(.system(size: 11))
                             .foregroundStyle(Theme.textSecondary)
                     }
@@ -438,12 +436,12 @@ struct LengthTool: View {
                 }
 
                 VStack(alignment: .leading, spacing: 10) {
-                    SectionLabel("Count any text")
+                    SectionLabel(L("toolbox.length.count"))
                     CodeTextView(text: $input)
                         .frame(height: 120)
                         .clipShape(RoundedRectangle(cornerRadius: 8))
                     countRow(inputCounts)
-                    Text("Backends limit differently: characters (most UIs), UTF-16 units (JavaScript, Java), or UTF-8 bytes (MySQL, many APIs).")
+                    Text(L("toolbox.length.backends"))
                         .font(.system(size: 11))
                         .foregroundStyle(Theme.textSecondary)
                 }
@@ -454,18 +452,27 @@ struct LengthTool: View {
 
     private func preview(_ text: String) -> String {
         if text.count > 2000 {
-            return String(text.prefix(2000)) + " … (\(text.count) characters, Copy takes all)"
+            return String(text.prefix(2000)) + " " + L("toolbox.length.previewCut", text.count)
         }
         return text
     }
 
+    private func styleTitle(_ style: LengthString.Style) -> String {
+        switch style {
+        case .counter: return L("toolbox.length.style.counter")
+        case .cyrillic: return L("toolbox.length.style.cyrillic")
+        case .emoji: return L("toolbox.length.style.emoji")
+        default: return style.rawValue
+        }
+    }
+
     private func countRow(_ counts: LengthString.Counts) -> some View {
         HStack(spacing: 6) {
-            ValueRow(label: "Characters", value: "\(counts.characters)", mono: true)
-            ValueRow(label: "UTF-16 units", value: "\(counts.utf16)", mono: true)
-            ValueRow(label: "UTF-8 bytes", value: "\(counts.utf8Bytes)", mono: true)
-            ValueRow(label: "Words", value: "\(counts.words)", mono: true)
-            ValueRow(label: "Lines", value: "\(counts.lines)", mono: true)
+            ValueRow(label: L("toolbox.length.characters"), value: "\(counts.characters)", mono: true)
+            ValueRow(label: L("toolbox.length.utf16"), value: "\(counts.utf16)", mono: true)
+            ValueRow(label: L("toolbox.length.utf8"), value: "\(counts.utf8Bytes)", mono: true)
+            ValueRow(label: L("toolbox.length.words"), value: "\(counts.words)", mono: true)
+            ValueRow(label: L("toolbox.length.lines"), value: "\(counts.lines)", mono: true)
         }
     }
 }

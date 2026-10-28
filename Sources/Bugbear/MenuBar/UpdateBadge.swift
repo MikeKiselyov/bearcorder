@@ -23,7 +23,7 @@ struct UpdateBadge: View {
             Button {
                 showsDetails = true
             } label: {
-                Label("Update to \(info.version)", systemImage: "arrow.down.circle.fill")
+                Label(L("menubar.update.badge", info.version), systemImage: "arrow.down.circle.fill")
                     .font(.system(size: 11, weight: .semibold))
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)
@@ -32,16 +32,16 @@ struct UpdateBadge: View {
                     .clipShape(Capsule())
             }
             .buttonStyle(.plain)
-            .tip("Version \(info.version) is available, you have \(updater.version)")
+            .tip(L("menubar.update.badge.tip", info.version, updater.version))
             .popover(isPresented: $showsDetails, arrowEdge: .bottom) {
                 details(info)
             }
         case .updating:
             HStack(spacing: 6) {
                 ProgressView().controlSize(.small)
-                Text("Updating…").font(.system(size: 11)).foregroundStyle(Theme.textSecondary)
+                Text(L("menubar.update.updating")).font(.system(size: 11)).foregroundStyle(Theme.textSecondary)
             }
-            .tip("Pulling and building the new version. The app restarts when it is ready.")
+            .tip(L("menubar.update.updating.tip"))
         case .failed(let message):
             Button {
                 showsDetails = true
@@ -49,7 +49,7 @@ struct UpdateBadge: View {
                 Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(Theme.warning)
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("The update failed, show why")
+            .accessibilityLabel(L("menubar.update.failed.accessibility"))
             .tip(message)
             .popover(isPresented: $showsDetails, arrowEdge: .bottom) {
                 failure(message)
@@ -61,9 +61,9 @@ struct UpdateBadge: View {
 
     private func details(_ info: UpdateInfo) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Version \(info.version)")
+            Text(L("menubar.update.details.version", info.version))
                 .font(.system(size: 13, weight: .bold))
-            Text(info.changeCount == 1 ? "You have \(updater.version). 1 change since then:" : "You have \(updater.version). \(info.changeCount) changes since then:")
+            Text(L("menubar.update.details.changes", updater.version, info.changeCount))
                 .font(.system(size: 11))
                 .foregroundStyle(Theme.textSecondary)
             VStack(alignment: .leading, spacing: 5) {
@@ -78,7 +78,7 @@ struct UpdateBadge: View {
                             }
                             .buttonStyle(.plain)
                             .foregroundStyle(Theme.link)
-                            .tip("Open on GitHub: \(url.absoluteString)")
+                            .tip(L("menubar.update.details.change.tip", url.absoluteString))
                         } else {
                             Text(changeLabel(change)).fixedSize(horizontal: false, vertical: true)
                         }
@@ -86,26 +86,26 @@ struct UpdateBadge: View {
                     .font(.system(size: 12))
                 }
                 if info.changeCount > info.changes.count {
-                    Text("and \(info.changeCount - info.changes.count) more")
+                    Text(L("menubar.update.details.more", info.changeCount - info.changes.count))
                         .font(.system(size: 12))
                         .foregroundStyle(Theme.textSecondary)
                 }
             }
-            Text("Pulls the source, builds it on this Mac (1-2 minutes) and restarts the app.")
+            Text(L("menubar.update.details.explain"))
                 .font(.system(size: 11))
                 .foregroundStyle(Theme.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
             HStack {
                 Spacer()
-                Button("Later") { showsDetails = false }
+                Button(L("menubar.update.later")) { showsDetails = false }
                     .buttonStyle(SecondaryButtonStyle())
-                    .tip("Close this and update another time")
-                Button("Update now") {
+                    .tip(L("menubar.update.later.tip"))
+                Button(L("menubar.update.now")) {
                     showsDetails = false
                     updater.update()
                 }
                 .buttonStyle(AccentButtonStyle())
-                .tip("Pull, build and install the new version, then restart \(AppInfo.name)")
+                .tip(L("menubar.update.now.tip", AppInfo.name))
             }
         }
         .padding(16)
@@ -114,19 +114,19 @@ struct UpdateBadge: View {
 
     private func failure(_ message: String) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Update").font(.system(size: 13, weight: .bold))
+            Text(L("menubar.update.failed.title")).font(.system(size: 13, weight: .bold))
             Text(message).font(.system(size: 12)).fixedSize(horizontal: false, vertical: true)
             HStack {
-                Button("Show log") { updater.showLog() }
+                Button(L("menubar.update.showLog")) { updater.showLog() }
                     .buttonStyle(SecondaryButtonStyle())
-                    .tip("Open the update log to see what went wrong")
+                    .tip(L("menubar.update.showLog.tip"))
                 Spacer()
-                Button("Check again") {
+                Button(L("menubar.update.checkAgain")) {
                     showsDetails = false
                     Task { await updater.check(userInitiated: true) }
                 }
                 .buttonStyle(AccentButtonStyle())
-                .tip("Try checking GitHub for a new version again")
+                .tip(L("menubar.update.checkAgain.tip"))
             }
         }
         .padding(16)
@@ -140,31 +140,31 @@ struct UpdateSettingsSection: View {
     @Bindable private var settings = AppSettings.shared
 
     var body: some View {
-        Section("Updates") {
+        Section(L("menubar.updateSettings.title")) {
             HStack {
-                Text("Version")
+                Text(L("menubar.updateSettings.version"))
                 Spacer()
                 Text(updater.versionText).foregroundStyle(Theme.textSecondary).textSelection(.enabled)
             }
             HStack {
-                Text("What's new")
+                Text(L("menubar.updateSettings.whatsNew"))
                 Spacer()
-                Button("Show…") { WhatsNewTracker.openLatest() }
-                    .accessibilityLabel("Show what's new")
-                    .tip("Show what changed in this version")
+                Button(L("menubar.updateSettings.whatsNew.show")) { WhatsNewTracker.openLatest() }
+                    .accessibilityLabel(L("menubar.updateSettings.whatsNew.show.accessibility"))
+                    .tip(L("menubar.updateSettings.whatsNew.show.tip"))
             }
             if updater.canCheck {
-                Toggle("Check GitHub for new versions", isOn: $settings.checkForUpdates)
-                    .tip("Check for a newer \(AppInfo.name) release every 6 hours and show a badge in the menu bar panel")
+                Toggle(L("menubar.updateSettings.autoCheck"), isOn: $settings.checkForUpdates)
+                    .tip(L("menubar.updateSettings.autoCheck.tip", AppInfo.name))
                 HStack {
                     Text(statusText).font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
                     Spacer()
-                    Button("Check now") { Task { await updater.check(userInitiated: true) } }
+                    Button(L("menubar.updateSettings.checkNow")) { Task { await updater.check(userInitiated: true) } }
                         .disabled(updater.state == .checking || updater.state == .updating)
-                        .tip("Check GitHub for a new version right now")
+                        .tip(L("menubar.updateSettings.checkNow.tip"))
                 }
             } else {
-                Text("Updates work for copies built from a git clone of a GitHub repository, as scripts/install.sh does. This copy has no repository or commit to compare.")
+                Text(L("menubar.updateSettings.unavailable"))
                     .font(.system(size: 12))
                     .foregroundStyle(Theme.textSecondary)
             }
@@ -174,16 +174,16 @@ struct UpdateSettingsSection: View {
 
     private var statusText: String {
         switch updater.state {
-        case .checking: return "Checking…"
-        case .upToDate: return "Up to date"
-        case .available(let info): return "\(info.changeCount) new changes, see the menu bar panel"
-        case .updating: return "Updating…"
+        case .checking: return L("menubar.updateSettings.status.checking")
+        case .upToDate: return L("menubar.updateSettings.status.upToDate")
+        case .available(let info): return L("menubar.updateSettings.status.available", info.changeCount)
+        case .updating: return L("menubar.update.updating")
         case .failed(let message): return message
         case .idle:
             if let checked = updater.lastChecked {
-                return "Last checked \(checked.formatted(date: .omitted, time: .shortened))"
+                return L("menubar.updateSettings.status.lastChecked", checked.formatted(date: .omitted, time: .shortened))
             }
-            return "Checks every 6 hours"
+            return L("menubar.updateSettings.status.idle")
         }
     }
 }

@@ -3,6 +3,7 @@ import PackageDescription
 
 let package = Package(
     name: "Bugbear",
+    defaultLocalization: "en",
     platforms: [.macOS(.v14)],
     products: [
         .executable(name: "Bugbear", targets: ["Bugbear"]),
@@ -19,10 +20,23 @@ let package = Package(
         .executableTarget(
             name: "Bugbear",
             dependencies: ["BugbearCore"],
-            swiftSettings: [.swiftLanguageMode(.v5)]
+            resources: [.copy("Resources/WhatsNew"), .process("Resources/Localization")],
+            swiftSettings: [
+                .swiftLanguageMode(.v5),
+                // Automation, self-test and media tools (DevTools/): in debug builds; a release
+                // build gets them only with -Xswiftc -DAUTOMATION (scripts/build-app.sh for tests).
+                .define("AUTOMATION", .when(configuration: .debug)),
+            ]
         ),
+        // The logic in BugbearCore, by area.
         .testTarget(
             name: "BugbearCoreTests",
+            dependencies: ["BugbearCore"],
+            swiftSettings: [.swiftLanguageMode(.v5)]
+        ),
+        // The repository itself: docs and their pictures, scripts, packaging, release notes.
+        .testTarget(
+            name: "RepoTests",
             dependencies: ["BugbearCore"],
             swiftSettings: [.swiftLanguageMode(.v5)]
         ),

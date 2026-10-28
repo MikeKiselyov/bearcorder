@@ -3,8 +3,8 @@
 One command runs everything and prints a summary:
 
 ```bash
-scripts/test-all.sh           # all suites, about 8 minutes
-scripts/test-all.sh --quick   # unit tests and the self-test, about a minute, no permissions needed
+scripts/test-all.sh           # all suites, about 10 minutes (make test-all)
+scripts/test-all.sh --quick   # unit tests, self-test, lint and the release check, about 2 minutes, no permissions (make test)
 ```
 
 | Suite | What it covers | Needs |
@@ -14,6 +14,7 @@ scripts/test-all.sh --quick   # unit tests and the self-test, about a minute, no
 | `scripts/e2e.sh` | the real app: buffer, saves, recording with pause, drawing, editor export, system audio, markers, crash auto-save, update check | Screen Recording, Accessibility |
 | `scripts/e2e-features.sh` | a Chrome page: scrolling screenshot, window resize, ruler, color picker, design overlay, area recording, shortcuts, Jira and Markdown reports, step guide, comparison, editor sizes, switching between displays, the menu panel, What's New, disk space scan and clean-up | Screen Recording, Accessibility, Chrome |
 | `scripts/perf.sh` | CPU and memory idle and while recording, save time | Screen Recording |
+| `make lint` | `shellcheck` on every script, every control has a check | `brew install shellcheck` |
 
 The scripts drive the real app through a local automation hook (off by default, switched on only for
 the run). They move the mouse and open a Chrome window; don't touch the Mac while they run. Logs of

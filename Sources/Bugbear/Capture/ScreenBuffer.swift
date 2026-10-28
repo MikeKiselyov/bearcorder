@@ -21,9 +21,9 @@ enum BufferError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .noDisplay: return "No display available for capture"
-        case .nothingRecorded: return "The buffer has no frames for that range yet"
-        case .exportFailed(let message): return "Export failed: \(message)"
+        case .noDisplay: return L("capture.error.noDisplay")
+        case .nothingRecorded: return L("capture.error.nothingRecorded")
+        case .exportFailed(let message): return L("capture.error.exportFailed", message)
         }
     }
 }

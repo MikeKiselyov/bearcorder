@@ -241,7 +241,7 @@ done_step "Removed settings and caches"
 
 # Temporary files: exports in progress and test leftovers.
 temp_dir="${TMPDIR:-/tmp}"
-rm -rf "${temp_dir%/}/$STORAGE_NAME" "${temp_dir%/}/bugbear-feedback-check" "${temp_dir%/}/bugbear-crash-check"
+rm -rf "${temp_dir%/}/${STORAGE_NAME:?}" "${temp_dir%/}/bugbear-feedback-check" "${temp_dir%/}/bugbear-crash-check"
 done_step "Removed temporary files"
 
 echo

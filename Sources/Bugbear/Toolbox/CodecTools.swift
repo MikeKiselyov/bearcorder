@@ -6,6 +6,13 @@ enum CodecDirection: String, CaseIterable, Identifiable {
     case encode = "Encode"
 
     var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .decode: return L("toolbox.codec.decode")
+        case .encode: return L("toolbox.codec.encode")
+        }
+    }
 }
 
 struct JWTTool: View {
@@ -14,14 +21,14 @@ struct JWTTool: View {
     var body: some View {
         let decoded = Result { try JWTDecoder.decode(input) }
         VStack(spacing: 0) {
-            PaneHeader(title: "Token") {
-                Text("Bearer prefix is fine").font(.system(size: 11)).foregroundStyle(Theme.textSecondary)
+            PaneHeader(title: L("toolbox.jwt.token")) {
+                Text(L("toolbox.jwt.bearer")).font(.system(size: 11)).foregroundStyle(Theme.textSecondary)
             }
             CodeTextView(text: $input)
                 .frame(height: 110)
             Divider().overlay(Theme.border)
             if input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                placeholder("Paste a JWT to see its header, payload and claim dates.")
+                placeholder(L("toolbox.jwt.empty"))
             } else {
                 switch decoded {
                 case .success(let token):
@@ -37,9 +44,9 @@ struct JWTTool: View {
     private func decodedView(_ token: DecodedJWT) -> some View {
         VStack(spacing: 0) {
             HStack(spacing: 12) {
-                Text("alg: \(token.algorithm)").font(.system(size: 12, design: .monospaced))
+                Text(L("toolbox.jwt.algorithm", token.algorithm)).font(.system(size: 12, design: .monospaced))
                 if let expired = token.isExpired {
-                    Text(expired ? "Expired" : "Not expired")
+                    Text(expired ? L("toolbox.jwt.expired") : L("toolbox.jwt.notExpired"))
                         .font(.system(size: 11, weight: .semibold))
                         .foregroundStyle(expired ? Theme.accentText : Theme.accentText)
                         .padding(.horizontal, 8)
@@ -58,14 +65,14 @@ struct JWTTool: View {
             .padding(.horizontal, 16)
             .frame(height: 40)
             SplitPanes {
-                PaneHeader(title: "Header") { CopyButton(text: token.header, title: "Copy", primary: false, name: "Copy header") }
-                CodeTextView(text: .constant(token.header), isEditable: false, highlight: SyntaxHighlighter.json, label: "Header")
+                PaneHeader(title: L("toolbox.jwt.header")) { CopyButton(text: token.header, title: L("toolbox.button.copy"), primary: false, name: L("toolbox.jwt.copyHeader")) }
+                CodeTextView(text: .constant(token.header), isEditable: false, highlight: SyntaxHighlighter.json, label: L("toolbox.jwt.header"))
             } right: {
-                PaneHeader(title: "Payload") { CopyButton(text: token.payload, title: "Copy", primary: false, name: "Copy payload") }
-                CodeTextView(text: .constant(token.payload), isEditable: false, highlight: SyntaxHighlighter.json, label: "Payload")
+                PaneHeader(title: L("toolbox.jwt.payload")) { CopyButton(text: token.payload, title: L("toolbox.button.copy"), primary: false, name: L("toolbox.jwt.copyPayload")) }
+                CodeTextView(text: .constant(token.payload), isEditable: false, highlight: SyntaxHighlighter.json, label: L("toolbox.jwt.payload"))
             }
             ToolFooter {
-                Text("The signature is not verified; decoding only.").foregroundStyle(Theme.textSecondary)
+                Text(L("toolbox.jwt.notVerified")).foregroundStyle(Theme.textSecondary)
                 Spacer()
                 CopyButton(text: token.payload)
             }
@@ -89,10 +96,10 @@ struct Base64Tool: View {
     var body: some View {
         let output = convert()
         CodecLayout(direction: $direction, input: $input, output: output.text, error: output.error) {
-            Toggle("URL-safe alphabet (encode)", isOn: $urlSafe).toggleStyle(.checkbox)
-                .tip("Use - and _ instead of + and / so the result is safe in URLs and file names")
+            Toggle(L("toolbox.base64.urlSafe"), isOn: $urlSafe).toggleStyle(.checkbox)
+                .tip(L("toolbox.base64.urlSafe.tip"))
         } footer: {
-            Text(direction == .decode ? "Accepts standard and URL-safe Base64, with or without padding." : "UTF-8 text in, Base64 out.")
+            Text(direction == .decode ? L("toolbox.base64.footer.decode") : L("toolbox.base64.footer.encode"))
                 .foregroundStyle(Theme.textSecondary)
         }
     }
@@ -119,11 +126,11 @@ struct URLTool: View {
         let output = direction == .decode ? URLCodec.decode(input) : URLCodec.encode(input, componentOnly: componentOnly)
         let items = URLCodec.queryItems(input)
         CodecLayout(direction: $direction, input: $input, output: output, error: nil) {
-            Toggle("Encode as a query component (also / ? & =)", isOn: $componentOnly).toggleStyle(.checkbox)
-                .tip("Also encode / ? & = so the text can go inside a single query parameter")
+            Toggle(L("toolbox.url.component"), isOn: $componentOnly).toggleStyle(.checkbox)
+                .tip(L("toolbox.url.component.tip"))
         } footer: {
             if input.contains("=") && !items.isEmpty {
-                Menu("Query parameters (\(items.count))") {
+                Menu(L("toolbox.url.params", items.count)) {
                     ForEach(Array(items.enumerated()), id: \.offset) { _, item in
                         Button("\(item.name) = \(item.value)") {
                             copyToClipboard(item.value)
@@ -132,10 +139,10 @@ struct URLTool: View {
                 }
                 .menuStyle(.borderlessButton)
                 .fixedSize()
-                .tip("Query parameters found in the URL, pick one to copy its value")
-                Text("Click a parameter to copy its value").foregroundStyle(Theme.textSecondary)
+                .tip(L("toolbox.url.params.tip"))
+                Text(L("toolbox.url.params.hint")).foregroundStyle(Theme.textSecondary)
             } else {
-                Text("Decodes %XX and + as space.").foregroundStyle(Theme.textSecondary)
+                Text(L("toolbox.url.footer")).foregroundStyle(Theme.textSecondary)
             }
         }
     }
@@ -149,10 +156,10 @@ struct EntitiesTool: View {
     var body: some View {
         let output = direction == .decode ? HTMLEntityCodec.decode(input) : HTMLEntityCodec.encode(input, nonASCII: nonASCII)
         CodecLayout(direction: $direction, input: $input, output: output, error: nil) {
-            Toggle("Encode non-ASCII as &#…;", isOn: $nonASCII).toggleStyle(.checkbox)
-                .tip("Also turn non-ASCII characters like ü or emoji into numeric references")
+            Toggle(L("toolbox.entities.nonASCII"), isOn: $nonASCII).toggleStyle(.checkbox)
+                .tip(L("toolbox.entities.nonASCII.tip"))
         } footer: {
-            Text("Named entities like &amp;copy; plus decimal and hex references.").foregroundStyle(Theme.textSecondary)
+            Text(L("toolbox.entities.footer")).foregroundStyle(Theme.textSecondary)
         }
     }
 }
@@ -169,31 +176,31 @@ struct CodecLayout<Options: View, Footer: View>: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 14) {
-                PillPicker(options: CodecDirection.allCases, selection: $direction) { value in value.rawValue }
+                PillPicker(options: CodecDirection.allCases, selection: $direction) { value in value.title }
                     .frame(width: 170)
-                    .tip("Choose whether to decode or encode the input")
+                    .tip(L("toolbox.codec.direction.tip"))
                 options()
                 Spacer()
                 Button {
                     input = output
                     direction = direction == .decode ? .encode : .decode
                 } label: {
-                    Label("Swap", systemImage: "arrow.left.arrow.right")
+                    Label(L("toolbox.codec.swap"), systemImage: "arrow.left.arrow.right")
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(Theme.link)
                 .disabled(output.isEmpty)
-                .tip("Use the output as the new input and flip the direction")
+                .tip(L("toolbox.codec.swap.tip"))
             }
             .font(.system(size: 12))
             .padding(.horizontal, 16)
             .frame(height: 44)
             Divider().overlay(Theme.border)
             SplitPanes {
-                PaneHeader(title: "Input") { EmptyView() }
+                PaneHeader(title: L("toolbox.pane.input")) { EmptyView() }
                 CodeTextView(text: $input)
             } right: {
-                PaneHeader(title: "Output") { EmptyView() }
+                PaneHeader(title: L("toolbox.pane.output")) { EmptyView() }
                 if let message = error {
                     Text(message)
                         .font(.system(size: 12, design: .monospaced))

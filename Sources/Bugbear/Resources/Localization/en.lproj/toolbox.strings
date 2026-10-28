@@ -1,0 +1,387 @@
+/* The Toolbox window (Toolbox/): formatters, codecs, converters, generators and inspectors. %@ is a text, %ld a number unless noted. */
+
+/* Sidebar: sections, search and paste. */
+"toolbox.section.format" = "Format";
+"toolbox.section.decodeEncode" = "Decode · Encode";
+"toolbox.section.convert" = "Convert";
+"toolbox.section.generate" = "Generate";
+"toolbox.section.inspect" = "Inspect";
+"toolbox.search.placeholder" = "Search tools";
+"toolbox.search.tip" = "Find a tool by name or keyword, Return opens the first match";
+"toolbox.pasteDetect" = "Paste & detect";
+"toolbox.pasteDetect.tip" = "Paste the clipboard and open the tool that fits its content, like JSON, JWT or a timestamp";
+"toolbox.note.detected" = "Detected from clipboard";
+"toolbox.note.pasted" = "Pasted from clipboard";
+
+/* Tool names in the sidebar. Format names like JSON, XML or Regex are not translated. */
+"toolbox.tool.url" = "URL encode";
+"toolbox.tool.htmlEntities" = "HTML entities";
+"toolbox.tool.time" = "Time & dates";
+"toolbox.tool.timeZones" = "Time zones";
+"toolbox.tool.quick" = "Numbers, colors, case";
+"toolbox.tool.generate" = "UUID · hash";
+"toolbox.tool.testData" = "Test data";
+"toolbox.tool.qr" = "QR code";
+"toolbox.tool.jsonDiff" = "JSON diff";
+"toolbox.tool.http" = "HTTP message";
+"toolbox.tool.length" = "String length";
+"toolbox.tool.contrast" = "Color & contrast";
+
+/* What each tool does (sidebar tooltips). formatter: the format name, like JSON. */
+"toolbox.purpose.formatter" = "Format, validate and minify %@";
+"toolbox.purpose.jwt" = "Decode a JWT to read its header, claims and expiry";
+"toolbox.purpose.base64" = "Encode or decode Base64 text";
+"toolbox.purpose.url" = "Percent-encode or decode URLs and query strings";
+"toolbox.purpose.htmlEntities" = "Escape or unescape HTML entities like &amp;";
+"toolbox.purpose.time" = "Convert Unix timestamps and dates between formats and time zones";
+"toolbox.purpose.timeZones" = "Compare your time with other cities, for example to plan a call";
+"toolbox.purpose.dataConvert" = "Convert data between JSON, YAML, XML and CSV";
+"toolbox.purpose.quick" = "Convert numbers, colors, text case, sizes and durations";
+"toolbox.purpose.generate" = "Generate UUIDs and hashes like MD5 and SHA";
+"toolbox.purpose.testData" = "Generate fake names, emails, cards and tricky edge-case strings for testing";
+"toolbox.purpose.qr" = "Make a QR code from text or a link, or read one from an image";
+"toolbox.purpose.regex" = "Test a regular expression against text and see the matches";
+"toolbox.purpose.jsonDiff" = "Compare two JSON documents and see what changed";
+"toolbox.purpose.jsonPath" = "Query JSON with a JSONPath expression";
+"toolbox.purpose.http" = "Parse a raw HTTP request or response, headers, cookies and query";
+"toolbox.purpose.cron" = "Explain a cron expression and show the next run times";
+"toolbox.purpose.length" = "Count characters and bytes, and make strings of an exact length to test field limits";
+"toolbox.purpose.contrast" = "Check text and background color contrast against WCAG";
+
+/* The title above the selected tool. formatter: the format name, like JSON. */
+"toolbox.title.formatter" = "%@ formatter";
+"toolbox.title.jwt" = "JWT decoder";
+"toolbox.title.base64" = "Base64";
+"toolbox.title.url" = "URL encode / decode";
+"toolbox.title.htmlEntities" = "HTML entities";
+"toolbox.title.time" = "Time & date converter";
+"toolbox.title.timeZones" = "Time zones · you vs the world";
+"toolbox.title.dataConvert" = "Data converter";
+"toolbox.title.quick" = "Quick converters";
+"toolbox.title.generate" = "UUID & hash generator";
+"toolbox.title.testData" = "Test data generator";
+"toolbox.title.qr" = "QR code: make and read";
+"toolbox.title.regex" = "Regex tester";
+"toolbox.title.jsonDiff" = "JSON diff · what changed";
+"toolbox.title.jsonPath" = "JSONPath query";
+"toolbox.title.http" = "HTTP request / response";
+"toolbox.title.cron" = "Cron explainer";
+"toolbox.title.length" = "String length · field limits";
+"toolbox.title.contrast" = "Color & contrast (WCAG)";
+
+/* Shared buttons, panes and copy buttons. copy.named: what is copied, like a value's label. */
+"toolbox.button.copy" = "Copy";
+"toolbox.button.copyAll" = "Copy all";
+"toolbox.button.generate" = "Generate";
+"toolbox.button.now" = "Now";
+"toolbox.button.paste" = "Paste";
+"toolbox.button.clear" = "Clear";
+"toolbox.pane.input" = "Input";
+"toolbox.pane.output" = "Output";
+"toolbox.copy.primary" = "Copy  ⇧⌘C";
+"toolbox.copy.primary.tip" = "Copy the result to the clipboard (⇧⌘C)";
+"toolbox.copy.tip" = "Copy to the clipboard";
+"toolbox.copy.copied" = "Copied";
+"toolbox.copy.named" = "Copy %@";
+"toolbox.copy.named.tip" = "Copy %@ to the clipboard";
+"toolbox.notRecognised" = "Not recognised";
+"toolbox.example.tip" = "Try the example expression %@";
+
+/* Formatter. valid, parsed and copyAs: the format name. sizes: input bytes, then output bytes. */
+"toolbox.format.pasteHint" = "Paste ⌘V";
+"toolbox.format.invalid" = "Invalid";
+"toolbox.format.valid" = "Valid %@";
+"toolbox.format.parsed" = "Parsed %@";
+"toolbox.format.copyAs" = "Copy as %@";
+"toolbox.format.copyAs.menu" = "Copy as…";
+"toolbox.format.copyAs.tip" = "Convert this JSON to YAML, XML or CSV and copy it";
+"toolbox.format.empty" = "Paste or type on the left";
+"toolbox.format.sizes" = "%1$ld B → %2$ld B";
+"toolbox.format.mode.format" = "Format";
+"toolbox.format.mode.minify" = "Minify";
+"toolbox.format.mode.tip" = "Format pretty-prints with indentation, Minify removes all extra whitespace";
+"toolbox.format.indent" = "Indent";
+"toolbox.format.indent.two" = "2 spaces";
+"toolbox.format.indent.four" = "4 spaces";
+"toolbox.format.indent.tabs" = "Tabs";
+"toolbox.format.indent.tip" = "Indentation used in the formatted output";
+"toolbox.format.sortKeys" = "Sort keys";
+"toolbox.format.sortKeys.tip" = "Sort object keys alphabetically so two documents are easier to compare";
+"toolbox.format.unescape" = "Unescape nested JSON strings";
+"toolbox.format.unescape.tip" = "Expand string values that contain escaped JSON into real nested objects";
+"toolbox.format.clear.tip" = "Clear the input";
+
+/* Data converter. input and output: the format name. */
+"toolbox.convert.source.tip" = "Format of the input";
+"toolbox.convert.target.tip" = "Format to convert to";
+"toolbox.convert.swap" = "Swap formats";
+"toolbox.convert.swap.tip" = "Swap the formats and use the output as the new input";
+"toolbox.convert.input" = "%@ input";
+"toolbox.convert.output" = "%@ output";
+"toolbox.convert.footer" = "Nested objects become dotted CSV columns; repeated XML elements become arrays.";
+
+/* Decode and encode: JWT, Base64, URL, HTML entities. */
+"toolbox.codec.decode" = "Decode";
+"toolbox.codec.encode" = "Encode";
+"toolbox.codec.direction.tip" = "Choose whether to decode or encode the input";
+"toolbox.codec.swap" = "Swap";
+"toolbox.codec.swap.tip" = "Use the output as the new input and flip the direction";
+"toolbox.jwt.token" = "Token";
+/* The token's signing algorithm; "alg" is the JWT header field and stays as is. */
+"toolbox.jwt.algorithm" = "alg: %@";
+"toolbox.jwt.bearer" = "Bearer prefix is fine";
+"toolbox.jwt.empty" = "Paste a JWT to see its header, payload and claim dates.";
+"toolbox.jwt.expired" = "Expired";
+"toolbox.jwt.notExpired" = "Not expired";
+"toolbox.jwt.header" = "Header";
+"toolbox.jwt.payload" = "Payload";
+"toolbox.jwt.copyHeader" = "Copy header";
+"toolbox.jwt.copyPayload" = "Copy payload";
+"toolbox.jwt.notVerified" = "The signature is not verified; decoding only.";
+"toolbox.base64.urlSafe" = "URL-safe alphabet (encode)";
+"toolbox.base64.urlSafe.tip" = "Use - and _ instead of + and / so the result is safe in URLs and file names";
+"toolbox.base64.footer.decode" = "Accepts standard and URL-safe Base64, with or without padding.";
+"toolbox.base64.footer.encode" = "UTF-8 text in, Base64 out.";
+"toolbox.url.component" = "Encode as a query component (also / ? & =)";
+"toolbox.url.component.tip" = "Also encode / ? & = so the text can go inside a single query parameter";
+"toolbox.url.params" = "Query parameters (%ld)";
+"toolbox.url.params.tip" = "Query parameters found in the URL, pick one to copy its value";
+"toolbox.url.params.hint" = "Click a parameter to copy its value";
+/* Shown as is, not formatted: %XX stays. */
+"toolbox.url.footer" = "Decodes %XX and + as space.";
+"toolbox.entities.nonASCII" = "Encode non-ASCII as &#…;";
+"toolbox.entities.nonASCII.tip" = "Also turn non-ASCII characters like ü or emoji into numeric references";
+"toolbox.entities.footer" = "Named entities like &amp;copy; plus decimal and hex references.";
+
+/* Time and dates. */
+"toolbox.time.input" = "Input · any format";
+"toolbox.time.now.tip" = "Use the current time as a Unix timestamp";
+"toolbox.time.input.tip" = "Type a timestamp or date in any format to see it in every other format";
+"toolbox.time.alsoUnderstands" = "Also understands: ms, µs, ns, ISO 8601, RFC 2822, “2026-10-24 13:58”, “in 3 days”, “-90m”, MongoDB ObjectId, UUID v1/v7";
+"toolbox.time.zones" = "Time zones";
+"toolbox.time.searchZones" = "Search all zones & compare…";
+"toolbox.time.addZone" = "Add zone";
+"toolbox.time.addZone.button" = "+ Add zone";
+"toolbox.time.addZone.tip" = "Add a time zone to compare this time with";
+"toolbox.zone.remove" = "Remove %@";
+"toolbox.zone.remove.tip" = "Remove %@ from your time zones";
+
+/* Time zones tool. yourTime and you.title: your city. shift: the sign (+ or −), hours, then minutes. noMatch: the search text. added and add: the zone id. */
+"toolbox.zones.copySummary" = "Copy summary";
+"toolbox.zones.yourTime" = "Your time · %@";
+"toolbox.zones.compareAt" = "Compare at";
+"toolbox.zones.compareAt.tip" = "Move the time forward or back to see what time it will be in every zone, for example to plan a call";
+"toolbox.zones.now.tip" = "Go back to the current time";
+"toolbox.zones.shift.now" = "now";
+"toolbox.zones.shift.hours" = "%1$@%2$ldh";
+"toolbox.zones.shift.hoursMinutes" = "%1$@%2$ldh %3$ldm";
+"toolbox.zones.search.placeholder" = "Search a city, country, abbreviation (PST) or offset (+5:30)";
+"toolbox.zones.search.tip" = "Find a time zone to add, Return adds the first match";
+"toolbox.zones.clearSearch" = "Clear search";
+"toolbox.zones.clearSearch.tip" = "Clear the search";
+"toolbox.zones.noMatch" = "No time zone matches “%@”";
+"toolbox.zones.added" = "%@, added";
+"toolbox.zones.added.tip" = "Already in your time zones";
+"toolbox.zones.add" = "Add %@";
+"toolbox.zones.add.tip" = "Add this time zone to compare with";
+"toolbox.zones.compared" = "Compared zones · %ld";
+"toolbox.zones.you.title" = "You · %@";
+"toolbox.zones.you" = "you";
+"toolbox.zones.empty" = "Search above to add zones to compare.";
+"toolbox.zones.meeting.addZones" = "Add zones to find a shared meeting window";
+"toolbox.zones.meeting.none" = "No hours where everyone is at work (9–18)";
+/* The first shared hour, the hour after the last one, then how many hours. */
+"toolbox.zones.meeting.window" = "Everyone at work: %1$02ld:00–%2$02ld:00 your time (%3$ld h)";
+"toolbox.zones.legend.work" = "Work 9–18";
+"toolbox.zones.legend.morning" = "Morning";
+"toolbox.zones.legend.evening" = "Evening";
+"toolbox.zones.legend.night" = "Night";
+
+/* Quick converters. field.tip: example values for the field. */
+"toolbox.quick.numberBase" = "Number base";
+"toolbox.quick.color" = "Color";
+"toolbox.quick.case" = "Case";
+"toolbox.quick.case.placeholder" = "any identifier or phrase";
+"toolbox.quick.dataSize" = "Data size";
+"toolbox.quick.duration" = "Duration";
+"toolbox.quick.decimal" = "Decimal";
+"toolbox.quick.hex" = "Hex";
+"toolbox.quick.binary" = "Binary";
+"toolbox.quick.octal" = "Octal";
+"toolbox.quick.bytes" = "Bytes";
+"toolbox.quick.components" = "Components";
+"toolbox.quick.seconds" = "Seconds";
+"toolbox.quick.milliseconds" = "Milliseconds";
+"toolbox.quick.field.tip" = "Type a value to see it in other formats, for example %@";
+
+/* UUID and hash generator. */
+"toolbox.uuid.title" = "UUID";
+"toolbox.uuid.version.tip" = "v4 is fully random, v7 starts with a timestamp so IDs sort by creation time";
+"toolbox.uuid.count" = "Count: %ld";
+"toolbox.uuid.count.tip" = "How many UUIDs to generate";
+"toolbox.uuid.uppercase" = "Uppercase";
+"toolbox.uuid.uppercase.tip" = "Use uppercase hex letters in the UUIDs";
+"toolbox.uuid.generate.tip" = "Generate a new batch of UUIDs";
+"toolbox.uuid.v7" = "v7 · time ordered";
+"toolbox.uuid.v4" = "v4 · random";
+"toolbox.hash.title" = "Hash of text";
+
+/* Test data. check.valid and check.invalid: the check's name. */
+"toolbox.testData.people" = "People";
+"toolbox.testData.country.tip" = "Country for names and phone number formats";
+"toolbox.testData.generatePeople" = "Generate people";
+"toolbox.testData.generatePeople.tip" = "Generate five new fake people";
+"toolbox.testData.people.note" = "Emails use reserved test domains, US and UK phones come from ranges set aside for fiction: nothing reaches a real person.";
+"toolbox.testData.name" = "Name";
+"toolbox.testData.email" = "Email";
+"toolbox.testData.phone" = "Phone";
+"toolbox.testData.card" = "Card";
+"toolbox.testData.brand.tip" = "Card brand, sets the number prefix and length";
+"toolbox.testData.generateCard" = "Generate card";
+"toolbox.testData.generateCard.tip" = "Generate a new fake card number, expiry and CVC";
+"toolbox.testData.cardNumber" = "Number · passes Luhn";
+"toolbox.testData.expiry" = "Expiry";
+"toolbox.testData.card.note" = "Random numbers in the right format, not real cards. Payment sandboxes (Stripe, Adyen) need their own test numbers.";
+"toolbox.testData.iban" = "IBAN";
+"toolbox.testData.ibanCountry.tip" = "Country of the IBAN, sets its length and format";
+"toolbox.testData.generateIBAN" = "Generate IBAN";
+"toolbox.testData.generateIBAN.tip" = "Generate a new IBAN with valid check digits";
+"toolbox.testData.validCheckDigits" = "Valid check digits";
+"toolbox.testData.passwords" = "Passwords";
+"toolbox.testData.passwordLength" = "Length: %ld";
+"toolbox.testData.passwordLength.tip" = "Length of the generated passwords";
+"toolbox.testData.uppercase" = "A-Z";
+"toolbox.testData.uppercase.tip" = "Include uppercase letters";
+"toolbox.testData.digits" = "0-9";
+"toolbox.testData.digits.tip" = "Include digits";
+"toolbox.testData.symbols" = "!@#";
+"toolbox.testData.symbols.tip" = "Include symbols";
+"toolbox.testData.generatePasswords" = "Generate passwords";
+"toolbox.testData.generatePasswords.tip" = "Generate three new passwords";
+"toolbox.testData.check" = "Check a card number or IBAN";
+"toolbox.testData.check.placeholder" = "Paste a card number or IBAN";
+"toolbox.testData.check.tip" = "Check whether a card number passes Luhn or an IBAN has valid check digits";
+"toolbox.testData.check.luhn" = "Luhn (cards)";
+"toolbox.testData.check.iban" = "IBAN checksum";
+"toolbox.testData.check.valid" = "%@: valid";
+"toolbox.testData.check.invalid" = "%@: invalid";
+"toolbox.testData.tricky" = "Tricky inputs";
+"toolbox.testData.tricky.note" = "Strings that often break forms, layouts and backends. Copy one into the field you test.";
+
+/* Regex tester. The flags i, m and s are regex syntax. match: the match number, then where it starts. group: the group's name or number. */
+"toolbox.regex.text" = "Text";
+"toolbox.regex.paste.tip" = "Replace the text with the clipboard contents";
+"toolbox.regex.afterReplace" = "After replace";
+"toolbox.regex.pattern" = "Pattern";
+"toolbox.regex.pattern.tip" = "Regular expression to test; matches are highlighted on the right";
+"toolbox.regex.flag.i" = "i";
+"toolbox.regex.flag.i.tip" = "Ignore case: A matches a";
+"toolbox.regex.flag.m" = "m";
+"toolbox.regex.flag.m.tip" = "^ and $ match at every line";
+"toolbox.regex.flag.s" = "s";
+"toolbox.regex.flag.s.tip" = ". matches line breaks";
+"toolbox.regex.replace" = "Replace";
+"toolbox.regex.template" = "Template, e.g. [$1] or ${id}";
+"toolbox.regex.template.tip" = "Optional replacement to preview; use $1 or ${name} for groups";
+"toolbox.regex.match" = "Match %1$ld · at %2$ld";
+"toolbox.regex.group" = "Group %@";
+"toolbox.regex.notMatched" = "(not matched)";
+
+/* QR code. */
+"toolbox.qr.input" = "Text or link";
+"toolbox.qr.readScreen" = "Read from screen…";
+"toolbox.qr.readScreen.tip" = "Select an area of the screen with a QR code and read it";
+"toolbox.qr.readClipboard" = "Read from clipboard image";
+"toolbox.qr.readClipboard.tip" = "Read a QR code from an image on the clipboard";
+"toolbox.qr.footer" = "Open a staging link on your phone: show the code, scan it with the camera.";
+"toolbox.qr.code" = "QR code";
+"toolbox.qr.empty" = "Type a link or text";
+"toolbox.qr.save" = "Save PNG…";
+"toolbox.qr.save.tip" = "Save the QR code as a PNG file";
+"toolbox.qr.copyImage" = "Copy image";
+"toolbox.qr.copyImage.tip" = "Copy the QR code image to paste into a chat or document";
+"toolbox.qr.noImage" = "No image on the clipboard";
+"toolbox.qr.noCode" = "No QR code found";
+
+/* JSON diff. error.before and error.after: the parse error. */
+"toolbox.diff.before" = "Before";
+"toolbox.diff.after" = "After";
+"toolbox.diff.pasteBefore" = "Paste before";
+"toolbox.diff.pasteAfter" = "Paste after";
+"toolbox.diff.paste.tip" = "Replace this side with the JSON on the clipboard";
+"toolbox.diff.error.before" = "Before: %@";
+"toolbox.diff.error.after" = "After: %@";
+"toolbox.diff.copyList" = "Copy list";
+"toolbox.diff.same" = "The documents are the same (key order and 1 vs 1.0 are ignored).";
+"toolbox.diff.empty" = "Paste two JSON responses to see what changed between them.";
+
+/* JSONPath. */
+"toolbox.jsonPath.expression.tip" = "JSONPath expression to select values from the JSON below, for example $..id";
+"toolbox.jsonPath.paste.tip" = "Replace the JSON with the clipboard contents";
+"toolbox.jsonPath.copyValues" = "Copy values";
+
+/* Cron. zoneNote: your time zone id. */
+"toolbox.cron.expression" = "Expression";
+"toolbox.cron.placeholder" = "minute hour day month weekday";
+"toolbox.cron.expression.tip" = "Cron expression to explain: minute, hour, day of month, month, weekday";
+"toolbox.cron.fields" = "minute (0-59) · hour (0-23) · day of month (1-31) · month (1-12 or JAN) · weekday (0-7 or MON, 0 and 7 are Sunday)";
+"toolbox.cron.meaning" = "Meaning";
+"toolbox.cron.nextRuns" = "Next runs";
+"toolbox.cron.never" = "Never runs (for example 30 February).";
+"toolbox.cron.zoneNote" = "Times in your zone (%@); the server may run cron in UTC.";
+
+/* HTTP message. bodyTitle: the body's name, then its size in bytes. response: the status code, then the reason. */
+"toolbox.http.raw" = "Raw request or response";
+"toolbox.http.paste.tip" = "Replace the input with the request or response on the clipboard";
+"toolbox.http.empty" = "Paste a request or response: from devtools (Copy request headers), Charles, Proxyman or a log.";
+"toolbox.http.query" = "Query parameters";
+"toolbox.http.headers" = "Headers";
+"toolbox.http.cookies" = "Cookies";
+"toolbox.http.formBody" = "Form body";
+"toolbox.http.jsonBody" = "JSON body";
+"toolbox.http.body" = "Body";
+"toolbox.http.response" = "Response %1$ld %2$@";
+
+/* String length. */
+"toolbox.length.make" = "Make a string of exact length";
+"toolbox.length.length" = "Length";
+"toolbox.length.length.tip" = "Exact length of the string to generate, in characters";
+"toolbox.length.change" = "Change length";
+"toolbox.length.change.tip" = "Make the string one character longer or shorter";
+"toolbox.length.style.counter" = "Counterstring";
+"toolbox.length.style.cyrillic" = "Cyrillic";
+"toolbox.length.style.emoji" = "Emoji";
+"toolbox.length.style.tip" = "What to fill the string with: a counterstring shows where a field cuts it, Cyrillic and emoji test byte limits";
+"toolbox.length.copyString" = "Copy string";
+"toolbox.length.quick.tip" = "Set the length to %ld, a common field limit";
+"toolbox.length.aroundLimit" = "±1 around a limit: 254, 255, 256";
+"toolbox.length.counterNote" = "Counterstring: every * sits at the position written before it, so where the field cuts the text shows the limit.";
+"toolbox.length.count" = "Count any text";
+"toolbox.length.backends" = "Backends limit differently: characters (most UIs), UTF-16 units (JavaScript, Java), or UTF-8 bytes (MySQL, many APIs).";
+"toolbox.length.characters" = "Characters";
+"toolbox.length.utf16" = "UTF-16 units";
+"toolbox.length.utf8" = "UTF-8 bytes";
+"toolbox.length.words" = "Words";
+"toolbox.length.lines" = "Lines";
+
+/* Color and contrast. colorField and pick: "Text" or "Background" (pick: in lowercase). fail: the ratio needed. */
+"toolbox.color.copied" = "Color copied";
+"toolbox.contrast.text" = "Text";
+"toolbox.contrast.background" = "Background";
+"toolbox.contrast.swap" = "Swap colors";
+"toolbox.contrast.swap.tip" = "Swap the text and background colors";
+"toolbox.contrast.enterColors" = "Enter colors as #RRGGBB, rgb(…) or hsl(…), or pick them from the screen.";
+"toolbox.contrast.colorField" = "%@ color";
+"toolbox.contrast.colorField.tip" = "%@ color as #RRGGBB, rgb(…) or hsl(…)";
+"toolbox.contrast.pick" = "Pick the %@ color";
+"toolbox.contrast.pick.tip" = "Pick the %@ color from anywhere on the screen";
+"toolbox.contrast.ratio" = "contrast ratio";
+"toolbox.contrast.sample.normal" = "The quick brown fox, 14 pt";
+"toolbox.contrast.sample.large" = "Large heading, 24 pt";
+"toolbox.contrast.level.aa" = "AA";
+"toolbox.contrast.level.aaa" = "AAA";
+"toolbox.contrast.row.normal" = "Normal text";
+"toolbox.contrast.row.large" = "Large text (18 pt, or 14 pt bold)";
+"toolbox.contrast.row.ui" = "Icons, borders, focus rings";
+"toolbox.contrast.pass" = "Pass";
+"toolbox.contrast.fail" = "Fail · needs %@";

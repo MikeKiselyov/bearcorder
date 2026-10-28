@@ -13,20 +13,20 @@ struct TimeTool: View {
             VStack(alignment: .leading, spacing: 18) {
                 VStack(alignment: .leading, spacing: 8) {
                     HStack {
-                        SectionLabel("Input · any format")
+                        SectionLabel(L("toolbox.time.input"))
                         Spacer()
-                        Button("Now") {
+                        Button(L("toolbox.button.now")) {
                             now = Date()
                             input = String(Int(now.timeIntervalSince1970))
                         }
                         .buttonStyle(SecondaryButtonStyle())
-                        .tip("Use the current time as a Unix timestamp")
+                        .tip(L("toolbox.time.now.tip"))
                     }
                     HStack(spacing: 10) {
                         TextField("1792839492, 2026-10-24T10:58:12Z, in 3 days…", text: $input)
                             .textFieldStyle(.plain)
                             .font(.system(size: 16, design: .monospaced))
-                            .tip("Type a timestamp or date in any format to see it in every other format")
+                            .tip(L("toolbox.time.input.tip"))
                         if let result = parsed {
                             Text(result.format)
                                 .font(.system(size: 12, weight: .semibold))
@@ -36,7 +36,7 @@ struct TimeTool: View {
                                 .background(Theme.accent)
                                 .clipShape(RoundedRectangle(cornerRadius: 5))
                         } else if !input.isEmpty {
-                            Text("Not recognised")
+                            Text(L("toolbox.notRecognised"))
                                 .font(.system(size: 12))
                                 .foregroundStyle(Theme.accentSoft)
                         }
@@ -46,7 +46,7 @@ struct TimeTool: View {
                     .background(Theme.well)
                     .overlay(RoundedRectangle(cornerRadius: 8).stroke(Theme.borderStrong, lineWidth: 1))
                     .clipShape(RoundedRectangle(cornerRadius: 8))
-                    Text("Also understands: ms, µs, ns, ISO 8601, RFC 2822, “2026-10-24 13:58”, “in 3 days”, “-90m”, MongoDB ObjectId, UUID v1/v7")
+                    Text(L("toolbox.time.alsoUnderstands"))
                         .font(.system(size: 12))
                         .foregroundStyle(Theme.textSecondary)
                 }
@@ -59,7 +59,7 @@ struct TimeTool: View {
                     }
 
                     VStack(alignment: .leading, spacing: 8) {
-                        SectionLabel("Time zones")
+                        SectionLabel(L("toolbox.time.zones"))
                         LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 5), spacing: 8) {
                             ForEach(app.settings.timeZones, id: \.self) { identifier in
                                 if let zone = TimeZone(identifier: identifier) {
@@ -94,8 +94,8 @@ struct TimeTool: View {
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(Theme.textTertiary)
-                .accessibilityLabel("Remove \(city)")
-                .tip("Remove \(city) from your time zones")
+                .accessibilityLabel(L("toolbox.zone.remove", city))
+                .tip(L("toolbox.zone.remove.tip", city))
             }
             HStack(alignment: .firstTextBaseline, spacing: 4) {
                 Text(value.time).font(.system(size: 15, design: .monospaced))
@@ -109,7 +109,7 @@ struct TimeTool: View {
 
     private var addZoneCard: some View {
         Menu {
-            Button("Search all zones & compare…") {
+            Button(L("toolbox.time.searchZones")) {
                 NotificationCenter.default.post(name: .toolboxSelect, object: nil, userInfo: ["tool": ToolKind.timeZones.rawValue])
             }
             Divider()
@@ -121,12 +121,12 @@ struct TimeTool: View {
                 }
             }
         } label: {
-            Text("+ Add zone").font(.system(size: 12))
+            Text(L("toolbox.time.addZone.button")).font(.system(size: 12))
         }
         .menuStyle(.borderlessButton)
-        .accessibilityLabel("Add zone")
+        .accessibilityLabel(L("toolbox.time.addZone"))
         .frame(maxWidth: .infinity, minHeight: 50)
-        .tip("Add a time zone to compare this time with")
+        .tip(L("toolbox.time.addZone.tip"))
         .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color(hex: 0x45484F), style: StrokeStyle(lineWidth: 1, dash: [4, 3])))
     }
 
@@ -152,59 +152,59 @@ struct QuickConvertTool: View {
     var body: some View {
         ScrollView {
             LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
-                card("Number base", text: $number, placeholder: "255, 0xFF, 0b1010") {
+                card(L("toolbox.quick.numberBase"), text: $number, placeholder: "255, 0xFF, 0b1010") {
                     if let bases = NumberBaseConverter.convert(number) {
-                        ValueRow(label: "Decimal", value: bases.decimal)
-                        ValueRow(label: "Hex", value: bases.hex)
-                        ValueRow(label: "Binary", value: bases.binary)
-                        ValueRow(label: "Octal", value: bases.octal)
+                        ValueRow(label: L("toolbox.quick.decimal"), value: bases.decimal)
+                        ValueRow(label: L("toolbox.quick.hex"), value: bases.hex)
+                        ValueRow(label: L("toolbox.quick.binary"), value: bases.binary)
+                        ValueRow(label: L("toolbox.quick.octal"), value: bases.octal)
                     } else {
                         invalid
                     }
                 }
-                card("Color", text: $color, placeholder: "#FF6B4A, rgb(…), hsl(…)") {
+                card(L("toolbox.quick.color"), text: $color, placeholder: "#FF6B4A, rgb(…), hsl(…)") {
                     if let parsed = ColorConverter.parse(color) {
                         let formats = ColorConverter.formats(parsed)
                         RoundedRectangle(cornerRadius: 6)
                             .fill(Color(.sRGB, red: parsed.red, green: parsed.green, blue: parsed.blue, opacity: parsed.alpha))
                             .frame(height: 28)
-                        ValueRow(label: "Hex", value: formats.hex)
+                        ValueRow(label: L("toolbox.quick.hex"), value: formats.hex)
                         ValueRow(label: "RGB", value: formats.rgb)
                         ValueRow(label: "HSL", value: formats.hsl)
                         ValueRow(label: "SwiftUI", value: formats.swiftUI)
                         ValueRow(label: "UIKit", value: formats.uiKit)
-                        ValueRow(label: "Android", value: formats.android)
+                        ValueRow(label: "Android", value: formats.android) // l10n-ignore: a platform name
                     } else {
                         invalid
                     }
                 }
-                card("Case", text: $caseText, placeholder: "any identifier or phrase") {
+                card(L("toolbox.quick.case"), text: $caseText, placeholder: L("toolbox.quick.case.placeholder")) {
                     let variants = CaseConverter.variants(caseText)
                     ValueRow(label: "camelCase", value: variants.camel)
                     ValueRow(label: "PascalCase", value: variants.pascal)
                     ValueRow(label: "snake_case", value: variants.snake)
                     ValueRow(label: "kebab-case", value: variants.kebab)
                     ValueRow(label: "CONSTANT_CASE", value: variants.constant)
-                    ValueRow(label: "Title Case", value: variants.title, mono: false)
+                    ValueRow(label: "Title Case", value: variants.title, mono: false) // l10n-ignore: the name of a text case, like camelCase
                 }
                 VStack(spacing: 12) {
-                    card("Data size", text: $size, placeholder: "5242880, 5 MB, 1.5 GiB") {
+                    card(L("toolbox.quick.dataSize"), text: $size, placeholder: "5242880, 5 MB, 1.5 GiB") {
                         if let bytes = DataSizeConverter.parseBytes(size) {
                             let described = DataSizeConverter.describe(bytes)
-                            ValueRow(label: "Binary", value: described.binary)
-                            ValueRow(label: "Decimal", value: described.decimal)
-                            ValueRow(label: "Bytes", value: described.bytes)
+                            ValueRow(label: L("toolbox.quick.binary"), value: described.binary)
+                            ValueRow(label: L("toolbox.quick.decimal"), value: described.decimal)
+                            ValueRow(label: L("toolbox.quick.bytes"), value: described.bytes)
                         } else {
                             invalid
                         }
                     }
-                    card("Duration", text: $duration, placeholder: "93784, PT26H3M4S, 1d 2h") {
+                    card(L("toolbox.quick.duration"), text: $duration, placeholder: "93784, PT26H3M4S, 1d 2h") {
                         if let seconds = DurationConverter.parseSeconds(duration) {
                             let described = DurationConverter.describe(seconds)
-                            ValueRow(label: "Components", value: described.components)
+                            ValueRow(label: L("toolbox.quick.components"), value: described.components)
                             ValueRow(label: "ISO 8601", value: described.iso)
-                            ValueRow(label: "Seconds", value: String(format: "%.0f", seconds))
-                            ValueRow(label: "Milliseconds", value: described.milliseconds)
+                            ValueRow(label: L("toolbox.quick.seconds"), value: String(format: "%.0f", seconds))
+                            ValueRow(label: L("toolbox.quick.milliseconds"), value: described.milliseconds)
                         } else {
                             invalid
                         }
@@ -228,7 +228,7 @@ struct QuickConvertTool: View {
     }
 
     private var invalid: some View {
-        Text("Not recognised").font(.system(size: 12)).foregroundStyle(Theme.accentSoft)
+        Text(L("toolbox.notRecognised")).font(.system(size: 12)).foregroundStyle(Theme.accentSoft)
     }
 
     private func card<Content: View>(_ title: String, text: Binding<String>, placeholder: String, @ViewBuilder content: () -> Content) -> some View {
@@ -237,7 +237,7 @@ struct QuickConvertTool: View {
             TextField(placeholder, text: text)
                 .textFieldStyle(.plain)
                 .font(.system(size: 14, design: .monospaced))
-                .tip("Type a value to see it in other formats, for example \(placeholder)")
+                .tip(L("toolbox.quick.field.tip", placeholder))
                 .padding(.horizontal, 10)
                 .frame(height: 34)
                 .background(Theme.well)
@@ -263,31 +263,31 @@ struct GenerateTool: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 VStack(alignment: .leading, spacing: 10) {
-                    SectionLabel("UUID")
+                    SectionLabel(L("toolbox.uuid.title"))
                     HStack(spacing: 12) {
                         PillPicker(options: [4, 7], selection: $version) { value in "v\(value)" }
                             .frame(width: 120)
-                            .tip("v4 is fully random, v7 starts with a timestamp so IDs sort by creation time")
-                        Stepper("Count: \(count)", value: $count, in: 1...50)
+                            .tip(L("toolbox.uuid.version.tip"))
+                        Stepper(L("toolbox.uuid.count", count), value: $count, in: 1...50)
                             .font(.system(size: 12))
-                            .tip("How many UUIDs to generate")
-                        Toggle("Uppercase", isOn: $uppercase).toggleStyle(.checkbox).font(.system(size: 12))
-                            .tip("Use uppercase hex letters in the UUIDs")
+                            .tip(L("toolbox.uuid.count.tip"))
+                        Toggle(L("toolbox.uuid.uppercase"), isOn: $uppercase).toggleStyle(.checkbox).font(.system(size: 12))
+                            .tip(L("toolbox.uuid.uppercase.tip"))
                         Spacer()
-                        Button("Generate") { generate() }
+                        Button(L("toolbox.button.generate")) { generate() }
                             .buttonStyle(SecondaryButtonStyle())
-                            .tip("Generate a new batch of UUIDs")
-                        CopyButton(text: uuids.joined(separator: "\n"), title: "Copy all", primary: false)
+                            .tip(L("toolbox.uuid.generate.tip"))
+                        CopyButton(text: uuids.joined(separator: "\n"), title: L("toolbox.button.copyAll"), primary: false)
                     }
                     VStack(spacing: 6) {
                         ForEach(uuids, id: \.self) { uuid in
-                            ValueRow(label: version == 7 ? "v7 · time ordered" : "v4 · random", value: uuid)
+                            ValueRow(label: version == 7 ? L("toolbox.uuid.v7") : L("toolbox.uuid.v4"), value: uuid)
                         }
                     }
                 }
 
                 VStack(alignment: .leading, spacing: 10) {
-                    SectionLabel("Hash of text")
+                    SectionLabel(L("toolbox.hash.title"))
                     CodeTextView(text: $input)
                         .frame(height: 110)
                         .clipShape(RoundedRectangle(cornerRadius: 8))

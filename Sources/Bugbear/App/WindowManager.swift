@@ -42,8 +42,37 @@ final class WindowManager: NSObject, NSWindowDelegate {
         window.setFrameAutosaveName("Bugbear.\(id.components(separatedBy: ":").first ?? id)")
         fitOnScreen(window)
         windows[id] = window
+        let wasActive = NSApp.isActive
         activate()
         window.makeKeyAndOrderFront(nil)
+        if !wasActive {
+            bringForwardWhenActive(window)
+        }
+    }
+
+    /// Becoming active comes a moment later and brings the app's last key window forward again: a
+    /// window opened from an editor (Settings from "Edit") ended up behind that editor. Only for that
+    /// moment: if macOS does not activate the app now, a later activation (a click on an editor)
+    /// must not pull this window over it.
+    private func bringForwardWhenActive(_ window: NSWindow) {
+        var observer: NSObjectProtocol?
+        let stop = {
+            if let registered = observer {
+                NotificationCenter.default.removeObserver(registered)
+                observer = nil
+            }
+        }
+        observer = NotificationCenter.default.addObserver(forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main) { [weak window] _ in
+            stop()
+            MainActor.assumeIsolated {
+                if let shown = window, shown.isVisible {
+                    shown.makeKeyAndOrderFront(nil)
+                }
+            }
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+            stop()
+        }
     }
 
     /// Keeps a window inside the visible part of its screen, also when the saved frame is from a
@@ -177,11 +206,11 @@ final class WindowManager: NSObject, NSWindowDelegate {
     func openEditor(for capture: Capture) {
         switch capture.kind {
         case .screenshot:
-            show(id: "screenshot:\(capture.id)", title: "Screenshot · \(capture.title)", size: CGSize(width: 1280, height: 780), minSize: CGSize(width: 1080, height: 560)) {
+            show(id: "screenshot:\(capture.id)", title: L("app.window.screenshot", capture.title), size: CGSize(width: 1280, height: 780), minSize: CGSize(width: 1080, height: 560)) {
                 ScreenshotEditorView(capture: capture)
             }
         case .video:
-            show(id: "video:\(capture.id)", title: "Clip · \(capture.title)", size: CGSize(width: 1220, height: 800), minSize: CGSize(width: 980, height: 640)) {
+            show(id: "video:\(capture.id)", title: L("app.window.clip", capture.title), size: CGSize(width: 1220, height: 800), minSize: CGSize(width: 980, height: 640)) {
                 VideoEditorView(capture: capture)
             }
         }
@@ -190,7 +219,7 @@ final class WindowManager: NSObject, NSWindowDelegate {
     /// Disk space: clean up, folders by size, largest files.
     func openSpace(section: SpaceView.Section) {
         AppState.shared.closeMenuPanel()
-        show(id: "space", title: "Disk Space", size: CGSize(width: 980, height: 720), minSize: CGSize(width: 760, height: 520)) {
+        show(id: "space", title: L("app.window.space"), size: CGSize(width: 980, height: 720), minSize: CGSize(width: 760, height: 520)) {
             SpaceView(section: section)
         }
     }
@@ -215,26 +244,26 @@ final class WindowManager: NSObject, NSWindowDelegate {
             return
         }
         let detectedFromClipboard = tool == nil && initial != nil
-        show(id: "toolbox", title: "Dev Toolbox", size: CGSize(width: 1220, height: 760), minSize: CGSize(width: 900, height: 560)) {
+        show(id: "toolbox", title: L("app.window.toolbox"), size: CGSize(width: 1220, height: 760), minSize: CGSize(width: 900, height: 560)) {
             ToolboxView(initialTool: initial ?? .json, initialInput: initialInput, detectedFromClipboard: detectedFromClipboard)
         }
     }
 
     func openHistory() {
-        show(id: "history", title: "All captures", size: CGSize(width: 980, height: 680), minSize: CGSize(width: 640, height: 420)) {
+        show(id: "history", title: L("app.window.history"), size: CGSize(width: 980, height: 680), minSize: CGSize(width: 640, height: 420)) {
             HistoryView()
         }
     }
 
     func openOnboarding() {
-        show(id: "onboarding", title: "Welcome to \(AppInfo.name)", size: CGSize(width: 680, height: 600), minSize: CGSize(width: 620, height: 560)) {
+        show(id: "onboarding", title: L("app.window.onboarding", AppInfo.name), size: CGSize(width: 680, height: 600), minSize: CGSize(width: 620, height: 560)) {
             OnboardingView()
         }
     }
 
     func openStepGuide(captures: [Capture]) {
         let model = StepGuideModel(captures: captures)
-        show(id: "step-guide", title: "Step guide", size: CGSize(width: 900, height: 760), minSize: CGSize(width: 720, height: 480)) {
+        show(id: "step-guide", title: L("app.window.stepGuide"), size: CGSize(width: 900, height: 760), minSize: CGSize(width: 720, height: 480)) {
             StepGuideView(model: model)
         }
     }
@@ -248,7 +277,7 @@ final class WindowManager: NSObject, NSWindowDelegate {
             after = first
         }
         close(id: "compare")
-        show(id: "compare", title: "Before and after", size: CGSize(width: 1300, height: 800), minSize: CGSize(width: 900, height: 560)) {
+        show(id: "compare", title: L("app.window.compare"), size: CGSize(width: 1300, height: 800), minSize: CGSize(width: 900, height: 560)) {
             CompareView(before: before, after: after)
         }
     }
@@ -263,7 +292,7 @@ final class WindowManager: NSObject, NSWindowDelegate {
         AppState.shared.closeMenuPanel()
         close(id: "feedback")
         feedbackModel = model
-        show(id: "feedback", title: "Feedback", size: CGSize(width: 560, height: 640), minSize: CGSize(width: 500, height: 560)) {
+        show(id: "feedback", title: L("app.window.feedback"), size: CGSize(width: 560, height: 640), minSize: CGSize(width: 500, height: 560)) {
             FeedbackView(model: model)
         }
     }
@@ -272,7 +301,7 @@ final class WindowManager: NSObject, NSWindowDelegate {
         if let shown = page {
             SettingsNavigation.shared.page = shown
         }
-        show(id: "settings", title: "\(AppInfo.name) Settings", size: CGSize(width: 780, height: 620), minSize: CGSize(width: 700, height: 480)) {
+        show(id: "settings", title: L("app.window.settings", AppInfo.name), size: CGSize(width: 780, height: 620), minSize: CGSize(width: 700, height: 480)) {
             SettingsView()
         }
     }

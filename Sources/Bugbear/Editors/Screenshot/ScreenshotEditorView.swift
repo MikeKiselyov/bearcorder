@@ -15,7 +15,7 @@ struct ScreenshotEditorView: View {
             } else {
                 VStack(spacing: 12) {
                     Image(systemName: "photo.badge.exclamationmark").font(.system(size: 32))
-                    Text("Could not open this screenshot").foregroundStyle(Theme.textSecondary)
+                    Text(L("screenshot.openFailed")).foregroundStyle(Theme.textSecondary)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
@@ -25,7 +25,7 @@ struct ScreenshotEditorView: View {
             if document == nil {
                 let opened = ScreenshotDocument(capture: capture)
                 if AppState.shared.justCopiedScreenshot == capture.id {
-                    opened?.message = "Copied to the clipboard · ⌘V to paste"
+                    opened?.message = L("screenshot.message.copiedOnCapture")
                 }
                 document = opened
             }
@@ -42,7 +42,7 @@ struct ScreenshotEditorView: View {
                 let updated = try await CaptureStore.shared.selectScreen(id, of: current.capture, framesPerSecond: AppState.shared.settings.framesPerSecond)
                 document = ScreenshotDocument(capture: updated)
             } catch {
-                AppState.shared.showError("Could not switch the screen: \(error.localizedDescription)")
+                AppState.shared.showError(L("editors.screen.switchFailed", error.localizedDescription))
             }
             switchingScreen = false
         }
@@ -88,22 +88,22 @@ private struct ScreenshotEditorContent: View {
 
     private var toolbar: some View {
         HStack(spacing: 2) {
-            ToolButton(systemImage: "arrow.uturn.backward", help: "Undo the last change (⌘Z)") { document.undo() }
+            ToolButton(systemImage: "arrow.uturn.backward", help: L("editors.undo.tip")) { document.undo() }
                 .disabled(!document.canUndo)
-            ToolButton(systemImage: "arrow.uturn.forward", help: "Redo what was undone (⇧⌘Z)") { document.redo() }
+            ToolButton(systemImage: "arrow.uturn.forward", help: L("editors.redo.tip")) { document.redo() }
                 .disabled(!document.canRedo)
 
             Rectangle().fill(Theme.borderStrong).frame(width: 1, height: 22).padding(.horizontal, 6)
 
             ForEach(Self.editorTools) { tool in
-                ToolButton(systemImage: tool.symbol, help: "\(tool.title) (\(String(tool.keyboardShortcut ?? " ").uppercased())): \(tool.purpose)", isSelected: document.tool == tool) {
+                ToolButton(systemImage: tool.symbol, help: L("screenshot.tool.tip", tool.title, String(tool.keyboardShortcut ?? " ").uppercased(), tool.purpose), isSelected: document.tool == tool) {
                     document.tool = tool
                 }
             }
-            ToolButton(systemImage: "photo.badge.plus", help: "Insert an image on top of this one: pick a file, paste one with ⌘V (Command + V) or drop it here") {
+            ToolButton(systemImage: "photo.badge.plus", help: L("screenshot.insertImage.tip")) {
                 insertImage()
             }
-            ToolButton(systemImage: "rectangle.split.2x1", help: "Combine with another screenshot: places other images to the right") {
+            ToolButton(systemImage: "rectangle.split.2x1", help: L("screenshot.combine.tip")) {
                 combine()
             }
 
@@ -120,7 +120,7 @@ private struct ScreenshotEditorContent: View {
                 FillToggle(isFilled: document.isFilled, isEnabled: document.fillTarget != nil) { filled in
                     document.setFilled(filled)
                 }
-                SizeStepper(value: "\(document.sizeValue)", name: document.sizeIsText ? "text size" : "line width", symbol: document.sizeIsText ? "textformat.size" : "lineweight") { direction in
+                SizeStepper(value: "\(document.sizeValue)", name: document.sizeIsText ? L("screenshot.size.text") : L("screenshot.size.line"), symbol: document.sizeIsText ? "textformat.size" : "lineweight") { direction in
                     document.changeSize(by: direction)
                 }
             }
@@ -139,9 +139,9 @@ private struct ScreenshotEditorContent: View {
     private var cropHint: some View {
         if document.tool == .crop {
             HStack(spacing: 10) {
-                Text("Drag the edges or corners · drag inside to move · Enter to apply · Esc to leave").font(.system(size: 12))
+                Text(L("screenshot.crop.hint")).font(.system(size: 12))
                 if document.crop != nil {
-                    Button("Reset crop") { document.setCrop(nil) }
+                    Button(L("screenshot.crop.reset")) { document.setCrop(nil) }
                         .buttonStyle(.plain)
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(Theme.link)
@@ -178,21 +178,21 @@ private struct ScreenshotEditorContent: View {
     private var environmentPanel: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                SectionLabel("Environment")
+                SectionLabel(L("editors.environment.title"))
                 Spacer()
-                Button("Edit") {
+                Button(L("editors.environment.edit")) {
                     WindowManager.shared.openSettings(page: .reports)
                 }
                 .buttonStyle(.plain)
                 .font(.system(size: 12))
                 .foregroundStyle(Theme.link)
-                .tip("Choose the fields, their names and your own fields in Settings → Bug reports")
-                Button("Copy") { document.copyEnvironment() }
+                .tip(L("editors.environment.edit.tip"))
+                Button(L("editors.environment.copy")) { document.copyEnvironment() }
                     .buttonStyle(.plain)
                     .font(.system(size: 12))
                     .foregroundStyle(Theme.link)
             }
-            CopyReportButton(help: "Steps from your clicks and keys in the last minute, environment and the saved file", stepCount: BugReportBuilder.stepCount(for: document.capture, timeMap: nil)) { format in
+            CopyReportButton(help: L("screenshot.report.tip"), stepCount: BugReportBuilder.stepCount(for: document.capture, timeMap: nil)) { format in
                 document.copyBugReport(format: format)
             }
             .frame(maxWidth: .infinity)
@@ -207,12 +207,12 @@ private struct ScreenshotEditorContent: View {
                     .font(.system(size: 12))
                 }
             }
-            SettingToggle(title: "Overlay on image", isOn: Binding(get: { document.showBadge }, set: { value in
+            SettingToggle(title: L("screenshot.badge.toggle"), isOn: Binding(get: { document.showBadge }, set: { value in
                 document.showBadge = value
                 document.saveProject()
             }))
             if document.showBadge {
-                Picker("Corner", selection: Binding(get: { document.badgeCorner }, set: { value in
+                Picker(L("editors.badge.corner"), selection: Binding(get: { document.badgeCorner }, set: { value in
                     document.badgeCorner = value
                     document.saveProject()
                 })) {
@@ -229,9 +229,9 @@ private struct ScreenshotEditorContent: View {
 
     private func inspector(_ annotation: Annotation) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            SectionLabel("Selected · \(annotation.tool.title)")
+            SectionLabel(L("editors.selected.title", annotation.tool.title))
             if annotation.tool.hasLabel {
-                TextField("Text", text: Binding(get: {
+                TextField(L("editors.selected.text"), text: Binding(get: {
                     document.selected?.text ?? ""
                 }, set: { value in
                     document.setText(value, for: annotation.id)
@@ -239,7 +239,7 @@ private struct ScreenshotEditorContent: View {
                 .textFieldStyle(.roundedBorder)
             }
             if annotation.tool == .step {
-                Stepper("Number \(annotation.number)", value: Binding(get: {
+                Stepper(L("screenshot.step.number", annotation.number), value: Binding(get: {
                     document.selected?.number ?? 1
                 }, set: { value in
                     var updated = annotation
@@ -253,7 +253,7 @@ private struct ScreenshotEditorContent: View {
             Button(role: .destructive) {
                 document.deleteSelected()
             } label: {
-                Label("Delete", systemImage: "trash").font(.system(size: 12))
+                Label(L("screenshot.selected.delete"), systemImage: "trash").font(.system(size: 12))
             }
             .buttonStyle(.plain)
             .foregroundStyle(Theme.accentSoft)
@@ -263,9 +263,9 @@ private struct ScreenshotEditorContent: View {
 
     private var layersPanel: some View {
         VStack(alignment: .leading, spacing: 8) {
-            SectionLabel("Layers")
+            SectionLabel(L("screenshot.layers.title"))
             if document.annotations.isEmpty {
-                Text("Pick a tool above and draw on the screenshot.")
+                Text(L("screenshot.layers.empty"))
                     .font(.system(size: 12))
                     .foregroundStyle(Theme.textSecondary)
             }
@@ -285,7 +285,7 @@ private struct ScreenshotEditorContent: View {
                     }
                     .buttonStyle(.plain)
                     .foregroundStyle(Theme.textSecondary)
-                    .accessibilityLabel("Delete \(annotation.layerName)")
+                    .accessibilityLabel(L("screenshot.layers.delete", annotation.layerName))
                 }
                 .padding(.horizontal, 8)
                 .frame(height: 32)
@@ -318,7 +318,7 @@ private struct ScreenshotEditorContent: View {
                 Picker(selection: Binding(get: { document.capture.selectedScreen ?? screens[0].id }, set: { id in onSelectScreen(id) })) {
                     ForEach(screens) { screen in
                         Text(screen.name).tag(screen.id)
-                            .accessibilityLabel("Screen: \(screen.name)")
+                            .accessibilityLabel(L("editors.screen.option", screen.name))
                     }
                 } label: {
                     EmptyView()
@@ -330,7 +330,7 @@ private struct ScreenshotEditorContent: View {
                     ProgressView().controlSize(.small)
                 }
             }
-            .tip("Which screen is in the screenshot. Each one keeps its own marks.")
+            .tip(L("screenshot.screen.tip"))
             .padding(.leading, 8)
         }
     }
@@ -339,12 +339,12 @@ private struct ScreenshotEditorContent: View {
         HStack(spacing: 10) {
             Button { setZoom(document.zoom / 1.25) } label: { Image(systemName: "minus.magnifyingglass") }
                 .buttonStyle(.plain)
-                .accessibilityLabel("Zoom out")
+                .accessibilityLabel(L("screenshot.zoom.out"))
             Text("\(zoomPercent)%").font(.system(size: 12, design: .monospaced)).frame(width: 48)
             Button { setZoom(document.zoom * 1.25) } label: { Image(systemName: "plus.magnifyingglass") }
                 .buttonStyle(.plain)
-                .accessibilityLabel("Zoom in")
-            Button("Fit") { document.fitRequest += 1 }
+                .accessibilityLabel(L("screenshot.zoom.in"))
+            Button(L("screenshot.zoom.fit")) { document.fitRequest += 1 }
                 .buttonStyle(.plain)
                 .font(.system(size: 12))
                 .foregroundStyle(Theme.link)
@@ -383,17 +383,17 @@ private struct ScreenshotEditorContent: View {
             .pickerStyle(.menu)
             .frame(width: 210)
             .labelsHidden()
-            .accessibilityLabel("File type")
-            .tip("File type and quality for Save, Drag and the file in Copy, with the size it comes out at. \(document.exportFormat.detail)")
+            .accessibilityLabel(L("screenshot.export.format"))
+            .tip(L("screenshot.export.format.tip", document.exportFormat.detail))
 
-            Button("Save to folder") {
+            Button(L("editors.save")) {
                 if let url = document.saveToFolder() {
                     SystemActions.reveal([url])
                 }
             }
             .buttonStyle(SecondaryButtonStyle())
 
-            Button("Copy  ⌘C") { document.copyToPasteboard() }
+            Button(L("screenshot.copy")) { document.copyToPasteboard() }
                 .buttonStyle(AccentButtonStyle())
                 .keyboardShortcut("c", modifiers: .command)
         }
@@ -403,8 +403,8 @@ private struct ScreenshotEditorContent: View {
 
     /// "JPEG, medium · 240 KB"; the size appears once it is measured.
     private func exportLabel(_ format: ScreenshotDocument.ExportFormat) -> String {
-        guard let size = document.exportSizeText(format) else { return format.rawValue }
-        return "\(format.rawValue) · \(size)"
+        guard let size = document.exportSizeText(format) else { return format.title }
+        return L("screenshot.export.option", format.title, size)
     }
 
     private var sizeLabel: String {
@@ -417,14 +417,14 @@ private struct ScreenshotEditorContent: View {
     }
 
     private func insertImage() {
-        let urls = SystemActions.chooseImages(message: "Pick a screenshot or picture to place on this one", multiple: false, startingAt: AppSettings.shared.outputFolder)
+        let urls = SystemActions.chooseImages(message: L("screenshot.insertImage.choose"), multiple: false, startingAt: AppSettings.shared.outputFolder)
         if let url = urls.first, let image = ImageFiles.load(url) {
             document.insertImage(image)
         }
     }
 
     private func combine() {
-        let urls = SystemActions.chooseImages(message: "Pick screenshots to place to the right", multiple: true, startingAt: AppSettings.shared.outputFolder)
+        let urls = SystemActions.chooseImages(message: L("screenshot.combine.choose"), multiple: true, startingAt: AppSettings.shared.outputFolder)
         for url in urls {
             if let image = ImageFiles.load(url) {
                 document.combine(with: image)
@@ -440,7 +440,7 @@ private struct DragOutHandle: View {
     var body: some View {
         HStack(spacing: 6) {
             Image(systemName: "hand.draw")
-            Text("Drag")
+            Text(L("editors.drag"))
         }
         .font(.system(size: 12))
         .foregroundStyle(Theme.textSecondary)
@@ -448,7 +448,7 @@ private struct DragOutHandle: View {
         .frame(height: 32)
         .overlay(RoundedRectangle(cornerRadius: 7).stroke(Theme.borderStrong, style: StrokeStyle(lineWidth: 1, dash: [4, 3])))
         .contentShape(Rectangle())
-        .tip("Drag the edited image into another app")
+        .tip(L("screenshot.drag.tip"))
         .onDrag {
             guard let url = document.renderToTemporaryFile() else { return NSItemProvider() }
             return NSItemProvider(contentsOf: url) ?? NSItemProvider()

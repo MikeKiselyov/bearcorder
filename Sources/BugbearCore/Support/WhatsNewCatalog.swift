@@ -3,6 +3,12 @@
 /// top entry, the update badge compares it with GitHub, and CI refuses a pull request without one.
 public enum WhatsNewCatalog {
     public static let releases: [WhatsNewRelease] = [
+        WhatsNewRelease(id: 19, version: "0.12.0", title: "Pick the part that matters", items: [
+            WhatsNewRelease.Item(symbol: "crop", title: "Crop a clip", text: "Crop in the video editor shows the whole screen: drag the edges or draw the part to keep, then Done. The saved video is only that part; marks, clicks and blur stay where they were on the picture. Reset brings the whole screen back.", shortcut: "Video editor", image: "video-crop"),
+            WhatsNewRelease.Item(symbol: "textformat", title: "Write on the screen", text: "Drawing on the screen has Text now: click where the note goes and type, in any keyboard layout. Return keeps it, Esc drops it. Like other marks it is in the recording and fades unless pinned.", shortcut: "⌥⇧A", image: "draw-text"),
+            WhatsNewRelease.Item(symbol: "arrow.up.left.and.arrow.down.right", title: "Resize the area while recording", text: "The frame of an area recording has handles now. Drag a corner or an edge to make the area bigger or smaller without stopping; the video gets the area as it is when you stop. After you pick the area, the app you were in is in front again, so you can go on right away.", shortcut: "⌥⇧6", image: "record-area-resize"),
+            WhatsNewRelease.Item(symbol: "arrow.clockwise.circle", title: "Back after a closed lid", text: "When the displays went away (the lid closed, a monitor was unplugged, the Mac went to sleep), the buffer could stay on \"Buffer error: No display available for capture\" until you turned it on again. Now it keeps trying and starts again by itself as soon as a display is back or the Mac wakes up.", shortcut: "Buffer"),
+        ]),
         WhatsNewRelease(id: 18, version: "0.11.0", title: "Steps you can paste", items: [
             WhatsNewRelease.Item(symbol: "sparkles", title: "A new look", text: "Glass panels over a soft gradient, colored icons for every tab, action and section, a glowing 1 min button, a disk ring on the Space tab, and captures sorted by day with apps in a sidebar.", shortcut: "Everywhere", image: "aurora-menu"),
             WhatsNewRelease.Item(symbol: "sidebar.left", title: "Settings in sections", text: "Settings has a sidebar now: General, Buffer and recording, Bug reports, Storage, Shortcuts, Updates and feedback. Each page holds only what belongs together.", shortcut: "Settings"),

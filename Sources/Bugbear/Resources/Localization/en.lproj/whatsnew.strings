@@ -1,0 +1,11 @@
+/* The "What's new" window around the release notes (Onboarding/WhatsNewView.swift). The notes themselves stay in WhatsNewCatalog. */
+
+"whatsnew.window.title" = "What's new";
+/* %@ is the app's name. */
+"whatsnew.header.title" = "What's new in %@";
+/* %@ is the version text, like "0.11.0 (512)". */
+"whatsnew.header.version" = "Version %@";
+"whatsnew.changes.title" = "All changes since your last version";
+"whatsnew.footer.reopen" = "Reopen this from Settings → Updates.";
+"whatsnew.button.gotIt" = "Got it";
+"whatsnew.button.gotIt.tip" = "Close this window (Return)";

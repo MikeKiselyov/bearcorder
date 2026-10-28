@@ -53,7 +53,7 @@ final class ScrollingCapture {
         let mainHeight = NSScreen.screens.first?.frame.maxY ?? screen.frame.maxY
         let center = CGPoint(x: area.global.midX, y: mainHeight - area.global.midY)
         let savedPointer = NSEvent.mouseLocation
-        Toast.shared.show("Scrolling… Esc stops", symbol: "arrow.down.to.line", seconds: 30)
+        Toast.shared.show(L("capture.scrolling.inProgress"), symbol: "arrow.down.to.line", seconds: 30)
         movePointer(to: center)
         try? await Task.sleep(nanoseconds: 200_000_000)
         defer {

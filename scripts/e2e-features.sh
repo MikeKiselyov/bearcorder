@@ -10,8 +10,8 @@
 # Needs Screen Recording and Accessibility for Bugbear. Restores the settings it changes.
 set -uo pipefail
 
-cd "$(dirname "$0")/.."
-ROOT="$(pwd)"
+# shellcheck source=lib/common.sh
+source "$(dirname "$0")/lib/common.sh"
 if [ -f "$ROOT/.env" ]; then
     set -a
     # shellcheck disable=SC1091
@@ -146,7 +146,7 @@ esac
 # Resizing, moving and scrolling act on the front window: only ever on the test page. A new window
 # is "Untitled" until the page loads, so its title is given a moment.
 title=""
-for attempt in $(seq 30); do
+for _ in $(seq 30); do
     title=$($R front-title 10 | sed -n 's/^title=//p')
     case "$title" in "Scroll test"*) break ;; esac
     sleep 0.5
@@ -187,7 +187,7 @@ sleep 1
 # The page area from Accessibility: normalized on its display, global frame, display width.
 # Chrome builds its accessibility tree for a page on the first requests, so ask a few times.
 web=""
-for attempt in 1 2 3 4 5; do
+for _ in 1 2 3 4 5; do
     web=$($R web-area 10)
     if [ "$web" != "no web area" ] && [ -n "$web" ]; then
         break
@@ -202,7 +202,7 @@ area=$(echo "$normalized" | awk -F, -v width="$screen_width" '{ printf "%.4f,%.4
 # The capture picks the display under the pointer: put it in the middle of the page.
 page_center=$(echo "$global" | awk -F, '{ printf "%d,%d", $1 + $3 / 2, $2 + $4 / 2 }')
 $R "move-pointer:$page_center" 10 >/dev/null
-result=$($R scroll-capture:$area 300)
+result=$($R "scroll-capture:$area" 300)
 file=$(echo "$result" | sed -n 's/.*file=//p')
 height=$(field "$result" height)
 if [ -n "$file" ] && [ "${height:-0}" -gt 5000 ]; then pass "long screenshot ${height}px"; else fail "long screenshot" "$result"; fi
@@ -233,7 +233,7 @@ sleep 2
 # The middle of the sticky footer: 20 pt above the bottom of the page area.
 if [ -n "$global" ] && echo "$global" | grep -q ","; then
     footer_point=$(echo "$global" | awk -F, '{ printf "%d,%d", $1 + $3 / 2, $2 + $4 - 20 }')
-    $R post-click:$footer_point 10 >/dev/null
+    $R "post-click:$footer_point" 10 >/dev/null
     wait
     if grep -q "hex=#FF6B4A" "$WORK/pick.txt"; then pass "picks #FF6B4A from the footer"; else fail "color picker" "$(cat "$WORK/pick.txt")"; fi
 else
@@ -266,7 +266,7 @@ sleep 1
 $R record-area-picker 10 >/dev/null
 sleep 1.5
 chip=$($R picker-chips 10 | tr ';' '\n' | grep "^720p@" | cut -d@ -f2)
-$R post-click:$chip 10 >/dev/null
+$R "post-click:$chip" 10 >/dev/null
 sleep 0.5
 $R post-key:36:none 10 >/dev/null
 sleep 3
@@ -278,6 +278,42 @@ sleep 2
 $R record-stop 60 >/dev/null
 result=$($R "frame-of-latest:1:$WORK/area-frame.png" 30)
 if [ "$result" = "frame=1280x720" ]; then pass "area clip is 1280×720"; else fail "area clip size" "$result"; fi
+$R close-windows 10 >/dev/null
+
+echo "==> resizing the area while recording"
+# The frame has handles: dragging the bottom-right one makes the area bigger, and the clip gets
+# the area as it is when the recording stops.
+$R "activate-app:$BROWSER" 10 >/dev/null
+sleep 1
+$R record-area-picker 10 >/dev/null
+sleep 1.5
+chip=$($R picker-chips 10 | tr ';' '\n' | grep "^720p@" | cut -d@ -f2)
+$R "post-click:$chip" 10 >/dev/null
+sleep 0.5
+$R post-key:36:none 10 >/dev/null
+sleep 3
+handles=$($R area-handles 10)
+handle_count=$(echo "$handles" | tr ';' '\n' | grep -c ",")
+corner=$(echo "$handles" | cut -d';' -f2)
+corner_x=${corner%,*}
+corner_y=${corner#*,}
+if [ "$handle_count" = "8" ]; then pass "the recording frame has 8 handles"; else fail "recording frame handles" "$handles"; fi
+# The picker took the focus for Return; once the recording runs, the browser is in front again.
+front_before=$($R front-app 10)
+if [ "$front_before" = "$BROWSER" ]; then pass "after picking the area $BROWSER is in front again"; else fail "the area picker kept the focus" "$front_before"; fi
+$R "post-drag:$corner_x,$corner_y:$((corner_x + 100)),$((corner_y + 50))" 15 >/dev/null
+sleep 1
+result=$($R recording-region 10)
+if echo "$result" | grep -q "region=740x410 recording=true"; then pass "dragging the corner while recording makes the area 740×410 pt"; else fail "resize the area while recording" "$result"; fi
+moved=$($R area-handles 10 | cut -d';' -f2)
+if [ "$moved" = "$((corner_x + 100)),$((corner_y + 50))" ]; then pass "the handle follows the frame"; else fail "the handle follows the frame" "$moved, expected $((corner_x + 100)),$((corner_y + 50))"; fi
+front=$($R front-app 10)
+if [ "$front_before" = "$BROWSER" ] && [ "$front" = "$BROWSER" ]; then pass "dragging a handle leaves $BROWSER in front"; else fail "dragging a handle took the focus" "before=$front_before after=$front"; fi
+sleep 2
+$R record-stop 60 >/dev/null
+result=$($R "frame-of-latest:1:$WORK/area-resized.png" 30)
+if [ "$result" = "frame=1480x820" ]; then pass "the clip has the resized area, 1480×820"; else fail "resized area clip size" "$result"; fi
+if [ -z "$($R area-handles 10)" ]; then pass "the handles go when the recording stops"; else fail "the handles go when the recording stops"; fi
 $R close-windows 10 >/dev/null
 
 echo "==> area picker buttons"
@@ -394,7 +430,7 @@ if [ "$display_count" -ge 2 ]; then
     if [ -n "$first_name" ] && [ "$picked_all" = all ] && [ "$picked_one" = "$first" ]; then pass "video \"Screen\" segments show side by side and one display"; else fail "video screen segments" "$first_name: $picked_all / $picked_one"; fi
     $R screenshot-full 40 >/dev/null
     # The editor opens a moment after the capture: wait for its display picker before pressing it.
-    for attempt in $(seq 20); do
+    for _ in $(seq 20); do
         if $R controls:screenshot: 30 | grep -q "|Screen: Side by side"; then break; fi
         sleep 0.5
     done
@@ -648,7 +684,7 @@ sleep 1
 $R screenshot-full 40 >/dev/null
 sleep 1
 $R close-windows 10 >/dev/null
-read -r own_id own_kind <<< "$($R latest-capture 10)"
+read -r own_id _ <<< "$($R latest-capture 10)"
 cards_now() { $R controls:history 30 | sed 's/ ;; /\n/g' | grep -E "^AXButton\|(Screenshot|Clip): " | cut -d'|' -f2-; }
 press_menu Recent "All captures" >/dev/null
 sleep 1
@@ -1135,6 +1171,8 @@ matches_case=$(tb_controls | grep -c "|Copy Match ")
 tb_press i
 matches_any=$(tb_controls | grep -c "|Copy Match ")
 tb_press i
+# '[$1]' is the regex template itself, not a shell variable.
+# shellcheck disable=SC2016
 tb_set "Template, e.g. [\$1] or \${id}" '[$1]'
 replaced=$(tb_copies "Copy After replace")
 tb_every_copy Regex
@@ -1524,6 +1562,41 @@ press_in recording-bar "Close the drawing bar" >/dev/null
 sleep 0.5
 if [[ "$picked" == *"liveTool=rectangle"* && "$picked" == *"liveColor=yellow"* && "$picked" == *"fade=true"* && "$fade_flipped" == *"fade=false"* && "$(tools_now)" == *"fade=true"* ]]; then pass "drawing bar tool, color and fade buttons"; else fail "drawing bar tool, color, fade" "$picked / $fade_flipped"; fi
 if [ "$undo" = pressed ] && [ "$clear" = pressed ] && [[ "$not_drawing" == *"drawing=false"* && "$(windows_now)" != *"recording-bar"* ]]; then pass "drawing bar undo, clear, stop drawing and close"; else fail "drawing bar" "$undo $clear $not_drawing $(windows_now)"; fi
+live_field() { echo "$1" | tr ' ' '\n' | grep "^$2=" | cut -d= -f2-; }
+# Text on the screen: with Text, a click puts a field there; Return keeps the text as a mark,
+# Esc drops it. Typed with real keys, so any keyboard layout works.
+$R "activate-app:$BROWSER" 10 >/dev/null
+sleep 0.5
+$R draw-toggle 10 >/dev/null
+sleep 0.5
+press_in recording-bar "Text" >/dev/null
+press_in recording-bar "coral" >/dev/null
+# Marks stay for this check: a mark that fades after 3.8 s must not make it flaky.
+press_in recording-bar "Marks fade after 3 s (click to keep)" >/dev/null
+live=$($R live-state 10)
+lx=$(live_field "$live" x); ly=$(live_field "$live" y); lw=$(live_field "$live" w); lh=$(live_field "$live" h)
+text_x=$((lx + lw / 3))
+text_y=$((ly + lh / 3))
+$R "post-click:$text_x,$text_y" 10 >/dev/null
+sleep 0.5
+typing=$($R live-state 10)
+$R post-text:Login 10 >/dev/null
+$R post-key:36:none 10 >/dev/null
+sleep 0.5
+typed=$($R live-state 10)
+text_pixels=$(live_field "$($R "screen-color:$text_x,$text_y,160,50:FF6B4A" 20)" coral)
+if [ "$(live_field "$typing" typing)" = "true" ] && [ "$(live_field "$typed" lastKind)" = "text" ] && [ "$(live_field "$typed" lastText)" = "Login" ] && [ "$(live_field "$typed" typing)" = "false" ]; then pass "drawing bar \"Text\": a click and typing put text on the screen"; else fail "drawing text on the screen" "$typing / $typed"; fi
+if [ "${text_pixels:-0}" -gt 150 ] 2>/dev/null; then pass "the text shows on the screen"; else fail "the text shows on the screen" "$text_pixels"; fi
+marks_before=$(live_field "$typed" marks)
+$R "post-click:$((text_x + 200)),$((text_y + 150))" 10 >/dev/null
+sleep 0.5
+$R post-text:Dropped 10 >/dev/null
+$R post-key:53:none 10 >/dev/null
+sleep 0.5
+cancelled=$($R live-state 10)
+if [ "$(live_field "$cancelled" typing)" = "false" ] && [ "$(live_field "$cancelled" drawing)" = "true" ] && [ "$(live_field "$cancelled" lastText)" = "Login" ] && [ "$(live_field "$cancelled" marks)" -le "$marks_before" ]; then pass "Esc drops the text being typed and keeps drawing"; else fail "Esc while typing text" "$cancelled"; fi
+press_in recording-bar "Marks stay (click to fade)" >/dev/null
+$R draw-hide 10 >/dev/null
 before=$(capture_count)
 press_menu Record "Start recording" >/dev/null
 sleep 2
@@ -1999,7 +2072,7 @@ $R "setting-write:outputFolderPath=$out_dir" 10 >/dev/null
 video_state() { $R video-state 10; }
 vfield() { echo "$1" | tr ' ' '\n' | grep "^$2=" | cut -d= -f2-; }
 # A 10 s clip: right after the app starts the buffer holds less, so wait and save again.
-for attempt in 1 2 3; do
+for _ in 1 2 3; do
     $R close-windows 10 >/dev/null
     $R save:10 60 >/dev/null
     sleep 3
@@ -2042,8 +2115,9 @@ click_control() {
     local frame
     frame=$($R "control-frame:video:$1" 10 | sed -n 's/^frame=\([0-9-]*\),\([0-9-]*\) \([0-9]*\)x\([0-9]*\).*/\1 \2 \3 \4/p')
     if [ -z "$frame" ]; then echo "no frame"; return; fi
-    set -- $frame
-    $R "post-click:$(( $1 + $3 / 2 )),$(( $2 + $4 / 2 ))" 10 >/dev/null
+    local left top width height
+    read -r left top width height <<< "$frame"
+    $R "post-click:$(( left + width / 2 )),$(( top + height / 2 ))" 10 >/dev/null
     sleep 0.5
     echo "clicked"
 }
@@ -2086,6 +2160,50 @@ if [ "$(vfield "$last_drawn" overlays)" = "$((before_count + 2))" ] && [ "$(vfie
 press_in video: "Undo the last change (⌘Z)" >/dev/null
 press_in video: "Undo the last change (⌘Z)" >/dev/null
 press_in video: "Undo the last change (⌘Z)" >/dev/null
+# Crop: the whole frame shows while picking, a drag draws the part to keep, a handle resizes it,
+# and Done shows (and saves) only that part.
+between() { awk "BEGIN { exit !($1 >= $2 && $1 <= $3) }"; }
+click_control "Crop" >/dev/null
+sleep 1
+picking=$(video_state)
+if [ "$(vfield "$picking" tool)" = "crop" ] && [ "$(vfield "$picking" render)" = "$(vfield "$picking" source)" ]; then pass "video \"Crop\" shows the whole frame to pick from"; else fail "video crop tool" "$picking"; fi
+$R "post-drag:$(at 0.25 0.25):$(at 0.75 0.75)" 10 >/dev/null
+sleep 0.8
+drawn_crop=$(vfield "$(video_state)" crop)
+$R "post-drag:$(at 0.75 0.75):$(at 0.9 0.75)" 10 >/dev/null
+sleep 0.8
+resized_crop=$(vfield "$(video_state)" crop)
+IFS=, read -r crop_left crop_top crop_right crop_bottom <<< "$resized_crop"
+if [ "$drawn_crop" != "none" ] && between "$crop_left" 0.23 0.27 && between "$crop_top" 0.23 0.27 && between "$crop_right" 0.87 0.93 && between "$crop_bottom" 0.73 0.77; then pass "video a drag draws the crop and its corner handle resizes it"; else fail "video draw and resize the crop" "$drawn_crop → $resized_crop"; fi
+# Saving while Crop is still on writes the cropped video, not the whole frame shown.
+crop_out="$WORK/crop-out"
+rm -rf "$crop_out"
+mkdir -p "$crop_out"
+$R "setting-write:outputFolderPath=$crop_out" 10 >/dev/null
+press_in video: "Save to folder" >/dev/null
+waited=0
+while [ -z "$(ls "$crop_out" 2>/dev/null)" ] && [ "$waited" -lt 60 ]; do sleep 1; waited=$((waited + 1)); done
+sleep 1
+crop_file="$crop_out/$(ls "$crop_out" | head -1)"
+crop_dimensions=$(avmediainfo "$crop_file" 2>/dev/null | grep -m1 "Dimensions:" | sed -E 's/.*Dimensions: ([0-9]+) x ([0-9]+).*/\1 \2/')
+$R "setting-write:outputFolderPath=$out_dir" 10 >/dev/null
+read -r crop_file_width crop_file_height <<< "$crop_dimensions"
+if [ -n "$crop_file_width" ] && awk "BEGIN { exit !($crop_file_width / $crop_file_height > 1.15 * $(vfield "$picking" source | tr x /)) }"; then pass "video saving while cropping writes only the cropped part (${crop_file_width}x${crop_file_height})"; else fail "video save while cropping" "$crop_dimensions"; fi
+click_control "Done" >/dev/null
+sleep 1.5
+cropped_state=$(video_state)
+render=$(vfield "$cropped_state" render)
+source_size=$(vfield "$cropped_state" source)
+render_width=${render%x*}
+source_width=${source_size%x*}
+if [ "$(vfield "$cropped_state" tool)" = "select" ] && between "$render_width" "$(( source_width * 62 / 100 ))" "$(( source_width * 68 / 100 ))"; then pass "video \"Done\" shows only the cropped part ($render of $source_size)"; else fail "video cropped preview" "$cropped_state"; fi
+click_control "Crop" >/dev/null
+sleep 0.8
+click_control "Reset" >/dev/null
+click_control "Done" >/dev/null
+sleep 1.5
+reset_state=$(video_state)
+if [ "$(vfield "$reset_state" crop)" = "none" ] && [ "$(vfield "$reset_state" render)" = "$(vfield "$reset_state" source)" ]; then pass "video \"Reset\" keeps the whole frame again"; else fail "video reset the crop" "$reset_state"; fi
 # Text by a click, typed right on the video: a click with Text used to play the video instead.
 area_at() { awk "BEGIN { printf \"%d,%d,%d,%d\", $sx + $sw * $1, $sy + $sh * $2, $sw * $3, $sh * $4 }"; }
 $R video-seek:2 10 >/dev/null
@@ -2102,9 +2220,11 @@ text_pixels=$(vfield "$($R "screen-color:$(area_at 0.27 0.27 0.2 0.12):$(vfield 
 if [ "$(vfield "$typed" typing)" = "false" ] && [ "${text_pixels:-0}" -gt 150 ] 2>/dev/null; then pass "video the typed text shows on the video in the editor"; else fail "video text not shown" "$text_pixels"; fi
 # An arrow drawn with the mouse shows in the editor window, not only in the saved file.
 click_control "Arrow" >/dev/null
+arrow_front=$($R front-app 10)
+arrow_hit=$($R "windows-at:$(at 0.55 0.3)" 10)
 $R "post-drag:$(at 0.55 0.3):$(at 0.75 0.6)" 10 >/dev/null
 sleep 1.5
-arrow_state=$(video_state)
+arrow_state="front=$arrow_front windows=$arrow_hit $(video_state)"
 arrow_pixels=$(vfield "$($R "screen-color:$(area_at 0.53 0.28 0.24 0.34):$(vfield "$arrow_state" lastColor)" 20)" coral)
 if [ "${arrow_pixels:-0}" -gt 150 ] 2>/dev/null; then pass "video the arrow drawn shows on the video in the editor"; else fail "video arrow not shown in the editor" "$arrow_pixels $arrow_state"; fi
 # Its bar on the timeline: the right edge makes it longer, the middle moves it.
@@ -2193,9 +2313,14 @@ press_in video: "Copy" >/dev/null
 if pbpaste | grep -q "Environment"; then pass "video environment \"Copy\" puts the environment on the clipboard"; else fail "video environment copy"; fi
 $R settings-page:General 10 >/dev/null
 edit_result=$(press_in video: Edit)
-sleep 1
-shown=$($R controls:settings 30)
-if [ "$edit_result" = "pressed" ] && [[ "$shown" == *"|Include Device"* ]]; then pass "video \"Edit\" next to Environment opens Settings on Bug reports"; else fail "video Edit environment" "$edit_result"; fi
+# Opened for the first time in a run, the window lists its controls after a moment.
+shown=""
+for _ in 1 2 3 4 5; do
+    sleep 1
+    shown=$($R controls:settings 30)
+    if [[ "$shown" == *"|Include Device"* ]]; then break; fi
+done
+if [ "$edit_result" = "pressed" ] && [[ "$shown" == *"|Include Device"* ]]; then pass "video \"Edit\" next to Environment opens Settings on Bug reports"; else fail "video Edit environment" "$edit_result windows=$(windows_now) edits=$($R controls:video 30 | sed 's/ ;; /\n/g' | grep -c '|Edit$') settings=$($R controls:settings 30 | cut -c1-200)"; fi
 report_start=$(setting_value bugReportFormat)
 printf '' | pbcopy
 $R "choose:video:Copy bug report as => Copy as Markdown" 10 >/dev/null
@@ -2335,11 +2460,12 @@ folder=$($R "space-folder:$relative > videos" 10)
 if echo "$folder" | grep -q "videos=6[45]"; then pass "folder sizes ($folder)"; else fail "folder sizes" "$folder"; fi
 top=$($R space-top:1 10)
 if echo "$top" | grep -q "big.mov"; then pass "largest file first"; else fail "largest file" "$top"; fi
+# The stopped scan is of videos (2 files), the new one of notes (1 file): a stale result would say 2.
+result=$($R "space-stop-test:$relative/videos:$relative/notes" 60)
+if echo "$result" | grep -q "afterStop=idle final=done.* files=1$"; then pass "stopped scan leaves no stale result"; else fail "stop scan" "$result"; fi
 rm -rf "$fixture"
 result=$($R space-clean-test 60)
 if echo "$result" | grep -q "cacheGone=true homebrewKept=true otherLogGone=true ownLogKept=true cachesFolderKept=true crashReportsKept=true"; then pass "clean-up deletes caches and keeps what it must"; else fail "clean-up" "$result"; fi
-result=$($R space-stop-test 120)
-if echo "$result" | grep -q "afterStop=idle final=done"; then pass "stopped scan leaves no stale result"; else fail "stop scan" "$result"; fi
 result=$($R space-measure 120)
 if echo "$result" | grep -q "^free="; then pass "categories measured"; else fail "measure" "$result"; fi
 $R open-space:Folders 10 >/dev/null

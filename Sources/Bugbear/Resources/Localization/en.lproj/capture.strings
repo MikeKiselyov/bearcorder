@@ -1,0 +1,30 @@
+/* Captures (Capture/). */
+
+/* The bug report button. copy.accessibility, copyAs: the format (Markdown or Jira). copy.tip: what the button does, then the format. */
+"capture.bugReport.copy.accessibility" = "Copy bug report · %@";
+"capture.bugReport.copy.tip" = "%1$@. Copies as %2$@";
+"capture.bugReport.copyAs" = "Copy as %@";
+"capture.bugReport.formatMenu" = "Copy bug report as";
+"capture.bugReport.formatMenu.tip" = "Copy as Markdown or Jira wiki; the choice stays for next time";
+
+/* Default capture titles when the app is unknown. */
+"capture.title.screenshot" = "Screenshot";
+"capture.title.clip" = "Clip";
+
+/* Scrolling screenshot. */
+"capture.scrolling.inProgress" = "Scrolling… Esc stops";
+
+/* Errors. exportFailed: the reason. */
+"capture.error.noDisplay" = "No display available for capture";
+"capture.error.nothingRecorded" = "The buffer has no frames for that range yet";
+"capture.error.exportFailed" = "Export failed: %@";
+"capture.export.noVideo" = "No video in the clip";
+"capture.export.cannotRead" = "Cannot read video";
+"capture.export.readerFailed" = "reader failed";
+"capture.export.writerFailed" = "writer failed";
+"capture.export.readingFailed" = "reading failed";
+"capture.export.writingFailed" = "writing failed";
+
+/* Window size presets: the width, then the height. */
+"capture.resize.phone" = "Phone · %1$ld × %2$ld";
+"capture.resize.tablet" = "Tablet · %1$ld × %2$ld";

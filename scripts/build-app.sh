@@ -12,6 +12,9 @@
 #                            one a certificate made for this Mac (scripts/local-signing.sh).
 #                            "local": always that certificate. "-": ad-hoc signing (macOS asks for
 #                            permissions again after each rebuild).
+#
+# BUGBEAR_AUTOMATION=1 builds the app the tests drive: with automation, the self-test and the media
+# tools (Sources/Bugbear/DevTools). A release never has them. scripts/test-app.sh sets it.
 set -euo pipefail
 
 # Bugbear stops its screen capture before it quits (up to 2 s), so wait for it to be gone.
@@ -28,8 +31,8 @@ wait_for_bugbear_to_quit() {
     fi
 }
 
-cd "$(dirname "$0")/.."
-ROOT="$(pwd)"
+# shellcheck source=lib/common.sh
+source "$(dirname "$0")/lib/common.sh"
 if [ -f "$ROOT/.env" ]; then
     set -a
     # shellcheck disable=SC1091
@@ -49,8 +52,14 @@ BRANCH="$(git -C "$ROOT" symbolic-ref --short --quiet HEAD 2>/dev/null || true)"
 REMOTE="$(git -C "$ROOT" remote get-url origin 2>/dev/null || true)"
 REPOSITORY="$(echo "$REMOTE" | sed -nE 's#.*github\.com[:/]([^/]+/[^/]+)$#\1#p' | sed -E 's#\.git$##')"
 
-echo "==> swift build (release)"
-swift build -c release --product Bugbear
+SWIFT_FLAGS=()
+if [ "${BUGBEAR_AUTOMATION:-}" = "1" ]; then
+    SWIFT_FLAGS=(-Xswiftc -DAUTOMATION)
+    echo "==> swift build (release, with automation for the tests)"
+else
+    echo "==> swift build (release)"
+fi
+swift build -c release --product Bugbear "${SWIFT_FLAGS[@]+"${SWIFT_FLAGS[@]}"}"
 BIN_DIR="$(swift build -c release --show-bin-path)"
 BINARY="$BIN_DIR/Bugbear"
 # The version is the newest release in WhatsNewCatalog.swift; the build number counts commits.
@@ -62,10 +71,8 @@ echo "==> assembling $APP_DIR"
 rm -rf "$APP_DIR"
 mkdir -p "$APP_DIR/Contents/MacOS" "$APP_DIR/Contents/Resources"
 cp "$BINARY" "$APP_DIR/Contents/MacOS/Bugbear"
-# Pictures for "What's new".
-if [ -d "$ROOT/Resources/WhatsNew" ]; then
-    cp -R "$ROOT/Resources/WhatsNew" "$APP_DIR/Contents/Resources/WhatsNew"
-fi
+# The resources SwiftPM bundled (Sources/Bugbear/Resources): read through AppResources.
+cp -R "$BIN_DIR/Bugbear_Bugbear.bundle" "$APP_DIR/Contents/Resources/"
 # Debug symbols are not needed to run the app; without them it is a few MB lighter.
 strip -x "$APP_DIR/Contents/MacOS/Bugbear" 2>/dev/null || true
 
@@ -76,35 +83,25 @@ rm -rf "$ICONSET"
 iconutil -c icns "$ICONSET" -o "$APP_DIR/Contents/Resources/AppIcon.icns"
 rm -rf "$ICONSET"
 
-cat > "$APP_DIR/Contents/Info.plist" <<PLIST
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>CFBundleDevelopmentRegion</key><string>en</string>
-    <key>CFBundleExecutable</key><string>Bugbear</string>
-    <key>CFBundleIconFile</key><string>AppIcon</string>
-    <key>CFBundleIdentifier</key><string>$BUNDLE_ID</string>
-    <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
-    <key>CFBundleName</key><string>$APP_NAME</string>
-    <key>CFBundleDisplayName</key><string>$APP_NAME</string>
-    <key>CFBundlePackageType</key><string>APPL</string>
-    <key>CFBundleShortVersionString</key><string>$VERSION</string>
-    <key>CFBundleVersion</key><string>$BUILD_NUMBER</string>
-    <key>LSMinimumSystemVersion</key><string>14.0</string>
-    <key>LSUIElement</key><true/>
-    <key>LSApplicationCategoryType</key><string>public.app-category.developer-tools</string>
-    <key>NSHighResolutionCapable</key><true/>
-    <key>NSCameraUsageDescription</key><string>$APP_NAME shows your webcam in a bubble on screen so it can be part of your recordings.</string>
-    <key>NSMicrophoneUsageDescription</key><string>$APP_NAME records your voice with screen recordings when the microphone is turned on.</string>
-    <key>BugbearCommit</key><string>$COMMIT</string>
-    <key>BugbearBranch</key><string>$BRANCH</string>
-    <key>BugbearRepository</key><string>$REPOSITORY</string>
-    <key>BugbearSourcePath</key><string>$ROOT</string>
-    <key>NSAppleEventsUsageDescription</key><string>$APP_NAME reads the current browser tab URL to add it to the bug environment.</string>
-</dict>
-</plist>
-PLIST
+# Packaging/Info.plist holds the fixed keys; the values that depend on this build go in here.
+PLIST="$APP_DIR/Contents/Info.plist"
+cp "$ROOT/Packaging/Info.plist" "$PLIST"
+set_plist() {
+    plutil -replace "$1" -string "$2" "$PLIST"
+}
+set_plist CFBundleIdentifier "$BUNDLE_ID"
+set_plist CFBundleName "$APP_NAME"
+set_plist CFBundleDisplayName "$APP_NAME"
+set_plist CFBundleShortVersionString "$VERSION"
+set_plist CFBundleVersion "$BUILD_NUMBER"
+set_plist NSCameraUsageDescription "$APP_NAME shows your webcam in a bubble on screen so it can be part of your recordings."
+set_plist NSMicrophoneUsageDescription "$APP_NAME records your voice with screen recordings when the microphone is turned on."
+set_plist NSAppleEventsUsageDescription "$APP_NAME reads the current browser tab URL to add it to the bug environment."
+set_plist BugbearCommit "$COMMIT"
+set_plist BugbearBranch "$BRANCH"
+set_plist BugbearRepository "$REPOSITORY"
+set_plist BugbearSourcePath "$ROOT"
+plutil -lint "$PLIST" >/dev/null
 
 # Signing order: BUGBEAR_SIGN_IDENTITY, then an Apple Development certificate, then a certificate
 # made for this Mac (scripts/local-signing.sh). All three stay the same between builds, so macOS
@@ -131,7 +128,7 @@ codesign --verify --verbose=1 "$APP_DIR"
 
 # macOS caches app icons: re-register the bundle so the Dock, the screen recording indicator and
 # Finder show the current icon instead of an old one.
-touch "$APP_DIR" "$APP_DIR/Contents/Info.plist"
+touch "$APP_DIR" "$PLIST"
 /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "$APP_DIR" 2>/dev/null || true
 
 echo "==> done: $APP_DIR"

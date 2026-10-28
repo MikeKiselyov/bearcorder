@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Texts with a count: the word changes with the number (one/other in English; other languages add few, many...). -->
+<plist version="1.0">
+<dict>
+    <key>menubar.buffer.activity.accessibility</key>
+    <dict>
+        <key>NSStringLocalizedFormatKey</key>
+        <string>Buffer holds %#@seconds@</string>
+        <key>seconds</key>
+        <dict>
+            <key>NSStringFormatSpecTypeKey</key>
+            <string>NSStringPluralRuleType</string>
+            <key>NSStringFormatValueTypeKey</key>
+            <string>ld</string>
+            <key>one</key>
+            <string>%ld second</string>
+            <key>other</key>
+            <string>%ld seconds</string>
+        </dict>
+    </dict>
+    <key>menubar.buffer.detail.displays</key>
+    <dict>
+        <key>NSStringLocalizedFormatKey</key>
+        <string>%#@displays@</string>
+        <key>displays</key>
+        <dict>
+            <key>NSStringFormatSpecTypeKey</key>
+            <string>NSStringPluralRuleType</string>
+            <key>NSStringFormatValueTypeKey</key>
+            <string>ld</string>
+            <key>one</key>
+            <string>%ld display</string>
+            <key>other</key>
+            <string>%ld displays</string>
+        </dict>
+    </dict>
+    <key>menubar.update.details.changes</key>
+    <dict>
+        <key>NSStringLocalizedFormatKey</key>
+        <string>You have %1$@. %2$#@changes@ since then:</string>
+        <key>changes</key>
+        <dict>
+            <key>NSStringFormatSpecTypeKey</key>
+            <string>NSStringPluralRuleType</string>
+            <key>NSStringFormatValueTypeKey</key>
+            <string>ld</string>
+            <key>one</key>
+            <string>%ld change</string>
+            <key>other</key>
+            <string>%ld changes</string>
+        </dict>
+    </dict>
+    <key>menubar.updateSettings.status.available</key>
+    <dict>
+        <key>NSStringLocalizedFormatKey</key>
+        <string>%#@changes@, see the menu bar panel</string>
+        <key>changes</key>
+        <dict>
+            <key>NSStringFormatSpecTypeKey</key>
+            <string>NSStringPluralRuleType</string>
+            <key>NSStringFormatValueTypeKey</key>
+            <string>ld</string>
+            <key>one</key>
+            <string>%ld new change</string>
+            <key>other</key>
+            <string>%ld new changes</string>
+        </dict>
+    </dict>
+</dict>
+</plist>

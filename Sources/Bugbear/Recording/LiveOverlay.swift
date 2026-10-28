@@ -8,7 +8,9 @@ import QuartzCore
 @MainActor
 @Observable
 final class LiveOverlay {
-    static let liveTools: [AnnotationTool] = [.arrow, .rectangle, .ellipse, .pen, .highlighter, .step]
+    static let liveTools: [AnnotationTool] = [.arrow, .text, .rectangle, .ellipse, .pen, .highlighter, .step]
+    /// Text typed on the screen, in points.
+    static let textSize: CGFloat = 26
 
     var isDrawing = false {
         didSet { applyDrawingState() }
@@ -57,6 +59,7 @@ final class LiveOverlay {
     }
 
     func hide() {
+        drawingView?.endText(keeping: false)
         isDrawing = false
         annotations.removeAll()
         drawingView?.needsDisplay = true
@@ -79,11 +82,16 @@ final class LiveOverlay {
         let mainHeight = NSScreen.screens.first?.frame.maxY ?? 0
         let frame = panel.frame
         let viewSize = drawingView?.bounds.size ?? .zero
-        return "visible=\(panel.isVisible) drawing=\(isDrawing) key=\(panel.isKeyWindow) mouse=\(!panel.ignoresMouseEvents) x=\(Int(frame.minX)) y=\(Int(mainHeight - frame.maxY)) w=\(Int(frame.width)) h=\(Int(frame.height)) view=\(Int(viewSize.width))x\(Int(viewSize.height)) marks=\(annotations.count)"
+        let lastText = (annotations.last?.annotation.text ?? "").replacingOccurrences(of: " ", with: "_")
+        return "visible=\(panel.isVisible) drawing=\(isDrawing) key=\(panel.isKeyWindow) mouse=\(!panel.ignoresMouseEvents) x=\(Int(frame.minX)) y=\(Int(mainHeight - frame.maxY)) w=\(Int(frame.width)) h=\(Int(frame.height)) view=\(Int(viewSize.width))x\(Int(viewSize.height)) marks=\(annotations.count) lastKind=\(annotations.last?.annotation.tool.rawValue ?? "none") lastText=\(lastText) typing=\(drawingView?.isTyping ?? false)"
     }
 
     private func applyDrawingState() {
         guard let panel = window else { return }
+        if !isDrawing {
+            // Text being typed stays on the screen when drawing ends.
+            drawingView?.endText(keeping: true)
+        }
         panel.ignoresMouseEvents = !isDrawing
         // The tint shows at once, and the window is no longer fully clear: macOS lets clicks pass
         // through fully clear windows, and nothing was drawn.
@@ -168,9 +176,16 @@ final class LiveOverlay {
     }
 }
 
-final class OverlayDrawingView: NSView {
+final class OverlayDrawingView: NSView, NSTextFieldDelegate {
     weak var overlay: LiveOverlay?
     private var draft: Annotation?
+    /// The text being typed with the Text tool, where it was clicked.
+    private var textField: NSTextField?
+    private var textStart: CGPoint = .zero
+
+    var isTyping: Bool {
+        return textField != nil
+    }
 
     override var isFlipped: Bool { true }
     override var acceptsFirstResponder: Bool { true }
@@ -206,12 +221,25 @@ final class OverlayDrawingView: NSView {
         if let current = draft {
             AnnotationRenderer.draw([current], baseImage: nil, in: context)
         }
+        // The label as it will be, drawn by the same code; the field on top only takes the keys.
+        if let typing = typingAnnotation() {
+            AnnotationRenderer.draw([typing], baseImage: nil, in: context)
+        }
     }
 
     override func mouseDown(with event: NSEvent) {
         guard let overlay = overlay, overlay.isDrawing else { return }
+        // A click away from the text being typed keeps it, the way Return does.
+        let wasTyping = isTyping
+        endText(keeping: true)
         window?.makeFirstResponder(self)
         let point = convert(event.locationInWindow, from: nil)
+        if overlay.tool == .text {
+            if !wasTyping {
+                beginText(at: point)
+            }
+            return
+        }
         var annotation = Annotation(tool: overlay.tool, start: point, end: point, color: overlay.color, lineWidth: overlay.lineWidth)
         annotation.fontSize = 22
         if overlay.tool == .pen || overlay.tool == .highlighter {
@@ -245,6 +273,86 @@ final class OverlayDrawingView: NSView {
             overlay.add(current)
         }
         needsDisplay = true
+    }
+
+    // MARK: Text
+
+    /// The text mark being typed, as it will be kept.
+    private func typingAnnotation() -> Annotation? {
+        guard let field = textField, let overlay = overlay else { return nil }
+        var annotation = Annotation(tool: .text, start: textStart, end: textStart, color: overlay.color, lineWidth: overlay.lineWidth)
+        annotation.fontSize = LiveOverlay.textSize
+        annotation.text = field.stringValue
+        return annotation
+    }
+
+    /// Typing goes into a real text field, so any keyboard layout, input method and paste work.
+    /// The field itself is clear and sits exactly on the label's text: what shows is the label
+    /// drawn by the renderer, the same as after Return, plus the field's caret.
+    private func beginText(at point: CGPoint) {
+        guard let overlay = overlay else { return }
+        textStart = point
+        let field = NSTextField(frame: .zero)
+        field.isBordered = false
+        field.isBezeled = false
+        field.focusRingType = .none
+        field.drawsBackground = false
+        field.textColor = .clear
+        field.font = NSFont.systemFont(ofSize: LiveOverlay.textSize, weight: .bold)
+        field.delegate = self
+        field.setAccessibilityLabel(L("recording.drawing.textField"))
+        addSubview(field)
+        textField = field
+        placeTextField()
+        window?.makeFirstResponder(field)
+        if let editor = field.currentEditor() as? NSTextView {
+            editor.insertionPointColor = overlay.color.contrastingText
+        }
+        needsDisplay = true
+    }
+
+    /// Over the label's text: the renderer pads it by 0.45 of the font size (0.27 at the top); the
+    /// field's own inset is 2 pt.
+    private func placeTextField() {
+        guard let field = textField, let typing = typingAnnotation() else { return }
+        let size = AnnotationRenderer.textSize(typing)
+        let padding = LiveOverlay.textSize * 0.45
+        let width = min(size.width, max(40, bounds.maxX - textStart.x))
+        field.frame = CGRect(x: textStart.x + padding - 2, y: textStart.y + padding * 0.6 - 1, width: width, height: size.height - padding * 0.6)
+    }
+
+    /// Ends typing: the text becomes a mark (empty text is dropped), or goes with `keeping` false.
+    func endText(keeping: Bool) {
+        guard let field = textField else { return }
+        textField = nil
+        let text = field.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        field.delegate = nil
+        field.removeFromSuperview()
+        if keeping && !text.isEmpty, let overlay = overlay {
+            var annotation = Annotation(tool: .text, start: textStart, end: textStart, color: overlay.color, lineWidth: overlay.lineWidth)
+            annotation.fontSize = LiveOverlay.textSize
+            annotation.text = text
+            overlay.add(annotation)
+        }
+        window?.makeFirstResponder(self)
+        needsDisplay = true
+    }
+
+    func controlTextDidChange(_ notification: Notification) {
+        placeTextField()
+        needsDisplay = true
+    }
+
+    func control(_ control: NSControl, textView: NSTextView, doCommandBy selector: Selector) -> Bool {
+        if selector == #selector(NSResponder.insertNewline(_:)) {
+            endText(keeping: true)
+            return true
+        }
+        if selector == #selector(NSResponder.cancelOperation(_:)) {
+            endText(keeping: false)
+            return true
+        }
+        return false
     }
 
     override func keyDown(with event: NSEvent) {

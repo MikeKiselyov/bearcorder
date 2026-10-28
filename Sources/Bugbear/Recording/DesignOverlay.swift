@@ -29,7 +29,7 @@ final class DesignOverlay {
 
     func openFromFile() {
         NSApp.activate(ignoringOtherApps: true)
-        let chosen = SystemActions.chooseImages(message: "Choose a design export (PNG from Figma works best)", multiple: false, startingAt: nil, types: [.png, .jpeg, .tiff, .heic, .pdf])
+        let chosen = SystemActions.chooseImages(message: L("recording.design.choose"), multiple: false, startingAt: nil, types: [.png, .jpeg, .tiff, .heic, .pdf])
         if let url = chosen.first, let loaded = NSImage(contentsOf: url) {
             show(loaded)
         }
@@ -177,7 +177,7 @@ struct DesignOverlayControls: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Text("Design overlay").font(.system(size: 13, weight: .semibold))
+                Text(L("recording.design.title")).font(.system(size: 13, weight: .semibold))
                 Spacer()
                 Button {
                     overlay.close()
@@ -185,28 +185,28 @@ struct DesignOverlayControls: View {
                     Image(systemName: "xmark.circle.fill").foregroundStyle(Theme.textSecondary)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("Close the overlay")
-                .tip("Close the overlay")
+                .accessibilityLabel(L("recording.design.close"))
+                .tip(L("recording.design.close"))
             }
             HStack(spacing: 8) {
-                Text("Opacity").font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
+                Text(L("recording.design.opacity")).font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
                 Slider(value: $overlay.opacity, in: 0.1...1)
-                    .accessibilityLabel("Opacity")
+                    .accessibilityLabel(L("recording.design.opacity"))
                     .frame(width: 140)
-                    .tip("How see-through the design is, so you can compare it with the real UI under it")
+                    .tip(L("recording.design.opacity.tip"))
                 Text("\(Int(overlay.opacity * 100))%").font(.system(size: 12, design: .monospaced)).frame(width: 40)
             }
             HStack(spacing: 8) {
-                Text("Export").font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
+                Text(L("recording.design.exportScale")).font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
                 PillPicker(options: [1.0, 2.0, 3.0], selection: $overlay.scale) { value in "@\(Int(value))x" }
                     .frame(width: 150)
-                    .tip("Scale the design was exported at, so it shows at its real size in points")
+                    .tip(L("recording.design.exportScale.tip"))
             }
-            Toggle("Click through to the app", isOn: $overlay.clickThrough)
+            Toggle(L("recording.design.clickThrough"), isOn: $overlay.clickThrough)
                 .toggleStyle(.switch)
                 .font(.system(size: 12))
-                .tip("Let clicks pass through the design to the app underneath")
-            Text("Drag the design to line it up; arrows nudge 1 pt, Shift 10 pt.")
+                .tip(L("recording.design.clickThrough.tip"))
+            Text(L("recording.design.hint"))
                 .font(.system(size: 11))
                 .foregroundStyle(Theme.textSecondary)
         }

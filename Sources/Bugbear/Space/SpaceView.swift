@@ -11,9 +11,9 @@ struct DiskBar: View {
         let fraction = total > 0 ? Double(used) / Double(total) : 0
         VStack(alignment: .leading, spacing: 6) {
             HStack {
-                Text("\(SpaceModel.format(free)) free").font(.system(size: 13, weight: .semibold))
+                Text(L("space.bar.free", SpaceModel.format(free))).font(.system(size: 13, weight: .semibold))
                 Spacer()
-                Text("\(SpaceModel.format(used)) of \(SpaceModel.format(total)) used")
+                Text(L("space.bar.used", SpaceModel.format(used), SpaceModel.format(total)))
                     .font(.system(size: 12))
                     .foregroundStyle(Theme.textSecondary)
             }
@@ -53,12 +53,12 @@ struct DiskRing: View {
             }
             VStack(spacing: 1) {
                 Text(SpaceModel.format(free)).font(.system(size: 20, weight: .bold))
-                Text("free of \(SpaceModel.format(total))").font(.system(size: 11)).foregroundStyle(Theme.textSecondary)
+                Text(L("space.ring.freeOf", SpaceModel.format(total))).font(.system(size: 11)).foregroundStyle(Theme.textSecondary)
             }
         }
         .frame(width: 140, height: 140)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(SpaceModel.format(free)) free of \(SpaceModel.format(total))")
+        .accessibilityLabel(L("space.ring.label", SpaceModel.format(free), SpaceModel.format(total)))
     }
 
     private var segments: [(start: CGFloat, end: CGFloat, style: AnyShapeStyle)] {
@@ -126,20 +126,20 @@ struct CleanupRow: View {
     private var confirmation: some View {
         let size = SpaceModel.format(model.sizes[category.id] ?? 0)
         return VStack(alignment: .leading, spacing: 8) {
-            Text("Delete \(size) from \(category.title)? This cannot be undone.")
+            Text(L("space.clean.question", size, category.title))
                 .font(.system(size: 12))
                 .fixedSize(horizontal: false, vertical: true)
             HStack(spacing: 8) {
                 Spacer(minLength: 0)
-                Button("Cancel") { model.confirmingID = nil }
+                Button(L("space.clean.cancel")) { model.confirmingID = nil }
                     .buttonStyle(SecondaryButtonStyle())
                     .keyboardShortcut(.cancelAction)
-                    .tip("Keep these files")
-                Button("Delete \(size)") {
+                    .tip(L("space.clean.cancel.tip"))
+                Button(L("space.clean.confirm", size)) {
                     Task { await model.clean(category) }
                 }
                 .buttonStyle(AccentButtonStyle())
-                .tip("Delete for good; this cannot be undone")
+                .tip(L("space.clean.confirm.tip"))
             }
         }
         .padding(10)
@@ -151,20 +151,20 @@ struct CleanupRow: View {
     private var actions: some View {
         switch category.action {
         case .openCaptures:
-            Button("Open") {
+            Button(L("space.captures.open")) {
                 WindowManager.shared.openHistory()
             }
             .buttonStyle(SecondaryButtonStyle())
-            .tip("Open the captures history to delete screenshots and clips you no longer need")
+            .tip(L("space.captures.open.tip"))
         case .deleteContents:
             if model.cleaningID == category.id {
                 ProgressView().controlSize(.small).frame(width: 60)
             } else {
-                Button("Clean") { model.confirmingID = category.id }
+                Button(L("space.clean")) { model.confirmingID = category.id }
                     .buttonStyle(SecondaryButtonStyle())
-                    .accessibilityLabel("Clean \(category.title)")
+                    .accessibilityLabel(L("space.clean.label", category.title))
                     .disabled((model.sizes[category.id] ?? 0) == 0 || model.cleaningID != nil || model.confirmingID == category.id)
-                    .tip("Delete the contents of \(category.title) to free space; asks to confirm first")
+                    .tip(L("space.clean.tip", category.title))
             }
         }
     }
@@ -178,6 +178,14 @@ struct SpaceView: View {
         case largest = "Largest files"
 
         var id: String { rawValue }
+
+        var title: String {
+            switch self {
+            case .cleanUp: return L("space.section.cleanUp")
+            case .folders: return L("space.section.folders")
+            case .largest: return L("space.section.largest")
+            }
+        }
     }
 
     @State private var model = SpaceModel.shared
@@ -193,14 +201,14 @@ struct SpaceView: View {
             HStack {
                 Picker(selection: $section) {
                     ForEach(Section.allCases) { item in
-                        Text(item.rawValue).tag(item)
+                        Text(item.title).tag(item)
                     }
                 } label: {
                     EmptyView()
                 }
                 .pickerStyle(.segmented)
                 .fixedSize()
-                .tip("Switch between safe clean-up, folders by size and the largest files")
+                .tip(L("space.section.tip"))
                 Spacer()
                 if let message = model.message {
                     Text(message)
@@ -235,20 +243,20 @@ struct SpaceView: View {
     private var cleanUp: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Text("\(SpaceModel.format(model.cleanableBytes)) can be cleaned safely")
+                Text(L("space.cleanable", SpaceModel.format(model.cleanableBytes)))
                     .font(.system(size: 15, weight: .semibold))
                 Spacer()
                 if model.isMeasuring {
                     ProgressView().controlSize(.small)
                 }
-                Button("Measure again") {
+                Button(L("space.measureAgain")) {
                     Task { await model.measure(force: true) }
                 }
                 .buttonStyle(SecondaryButtonStyle())
                 .disabled(model.isMeasuring)
-                .tip("Measure the clean-up categories again to get fresh sizes")
+                .tip(L("space.measureAgain.tip"))
             }
-            Text("Caches are made again by apps when they need them. Deleting them cannot be undone, so each one asks first.")
+            Text(L("space.cleanUp.note"))
                 .font(.system(size: 12))
                 .foregroundStyle(Theme.textSecondary)
             ScrollView {
@@ -278,18 +286,18 @@ struct SpaceView: View {
 
     private var scanPrompt: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("See what takes space on this Mac").font(.system(size: 15, weight: .semibold))
-            Text("\(AppInfo.name) adds up every folder and finds the biggest files. It takes a minute or two. macOS may ask once for Desktop, Documents and Downloads; other apps' private data, Apple's own folders and the Photos and Music libraries are skipped.")
+            Text(L("space.scan.title")).font(.system(size: 15, weight: .semibold))
+            Text(L("space.scan.note", AppInfo.name))
                 .font(.system(size: 12))
                 .foregroundStyle(Theme.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
-            Toggle("Include other apps' private data (Docker, Slack, Telegram…). macOS asks once.", isOn: $model.includeAppData)
+            Toggle(L("space.scan.includeAppData"), isOn: $model.includeAppData)
                 .toggleStyle(.checkbox)
                 .font(.system(size: 12))
-                .tip("Also count other apps' data folders in the scan; macOS asks for permission once")
-            Button("Scan home folder and Applications") { model.startScan() }
+                .tip(L("space.scan.includeAppData.tip"))
+            Button(L("space.scan.start")) { model.startScan() }
                 .buttonStyle(AccentButtonStyle())
-                .tip("Add up every folder and find the biggest files; takes a minute or two")
+                .tip(L("space.scan.start.tip"))
         }
     }
 
@@ -304,7 +312,7 @@ struct SpaceView: View {
         return VStack(alignment: .leading, spacing: 14) {
             HStack(spacing: 10) {
                 ProgressView().controlSize(.small)
-                Text(isPreparing ? "Checking access…" : "Scanning…").font(.system(size: 15, weight: .semibold))
+                Text(isPreparing ? L("space.scan.checkingAccess") : L("space.scan.scanning")).font(.system(size: 15, weight: .semibold))
                 Spacer()
                 TimelineView(.periodic(from: .now, by: 1)) { context in
                     let seconds = Int(context.date.timeIntervalSince(model.scanStartedAt))
@@ -312,40 +320,40 @@ struct SpaceView: View {
                         .font(.system(size: 13, design: .monospaced))
                         .foregroundStyle(Theme.textSecondary)
                 }
-                Button("Stop") { model.cancelScan() }
+                Button(L("space.scan.stop")) { model.cancelScan() }
                     .buttonStyle(SecondaryButtonStyle())
-                    .tip("Stop the scan")
+                    .tip(L("space.scan.stop.tip"))
             }
             VStack(alignment: .leading, spacing: 8) {
                 if !model.accessChecks.isEmpty {
-                    stepRow("Access to protected folders", done: !isPreparing, active: isPreparing)
+                    stepRow(L("space.scan.step.access"), done: !isPreparing, active: isPreparing)
                     ForEach(model.accessChecks) { check in
                         accessRow(check)
                     }
                 }
-                stepRow("Home folder", done: !isPreparing && progress.folder.hasPrefix("Applications"), active: !isPreparing && !progress.folder.hasPrefix("Applications"))
-                stepRow("Applications", done: false, active: progress.folder.hasPrefix("Applications"))
+                stepRow(L("space.scan.step.home"), done: !isPreparing && progress.folder.hasPrefix("Applications"), active: !isPreparing && !progress.folder.hasPrefix("Applications"))
+                stepRow(L("space.scan.step.applications"), done: false, active: progress.folder.hasPrefix("Applications"))
             }
             if !isPreparing {
                 VStack(alignment: .leading, spacing: 3) {
-                    Text("\(progress.files) files · \(SpaceModel.format(progress.bytes))")
+                    Text(L("space.scan.progress", progress.files, SpaceModel.format(progress.bytes)))
                         .font(.system(size: 13, design: .monospaced))
                     if !progress.folder.isEmpty {
-                        Text("In \(progress.folder)")
+                        Text(L("space.scan.folder", progress.folder))
                             .font(.system(size: 12))
                             .foregroundStyle(Theme.textSecondary)
                     }
                 }
             }
             if isPreparing {
-                Text("macOS asks once for each folder. Allow the ones you want counted; the scan then runs on its own.")
+                Text(L("space.scan.accessNote"))
                     .font(.system(size: 12))
                     .foregroundStyle(Theme.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
             } else {
                 TimelineView(.periodic(from: .now, by: 1)) { context in
                     if context.date.timeIntervalSince(model.lastScanProgress) > 10 {
-                        Label("No progress for a while: macOS is probably asking for permission. Look for a dialog on your screens and answer it; the scan goes on right after.", systemImage: "exclamationmark.bubble")
+                        Label(L("space.scan.stalled"), systemImage: "exclamationmark.bubble")
                             .font(.system(size: 12))
                             .foregroundStyle(Theme.warning)
                             .fixedSize(horizontal: false, vertical: true)
@@ -373,16 +381,16 @@ struct SpaceView: View {
             switch check.state {
             case .waiting:
                 Image(systemName: "circle.dotted").foregroundStyle(Theme.textTertiary).frame(width: 16)
-                Text(check.id).font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
+                Text(check.title).font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
             case .asking:
                 ProgressView().controlSize(.mini).frame(width: 16)
-                Text("\(check.id): answer the macOS dialog").font(.system(size: 12, weight: .semibold))
+                Text(L("space.access.asking", check.title)).font(.system(size: 12, weight: .semibold))
             case .allowed:
                 Image(systemName: "checkmark").foregroundStyle(Theme.success).frame(width: 16)
-                Text("\(check.id): allowed").font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
+                Text(L("space.access.allowed", check.title)).font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
             case .denied:
                 Image(systemName: "xmark").foregroundStyle(Theme.warning).frame(width: 16)
-                Text("\(check.id): not allowed, left out").font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
+                Text(L("space.access.denied", check.title)).font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
             }
         }
         .padding(.leading, 24)
@@ -393,30 +401,30 @@ struct SpaceView: View {
         if let folder = model.currentFolder {
             VStack(alignment: .leading, spacing: 10) {
                 HStack(spacing: 4) {
-                    Button("This Mac") { model.folderPath = [] }
+                    Button(L("space.folders.top")) { model.folderPath = [] }
                         .buttonStyle(.plain)
                         .foregroundStyle(Theme.link)
-                        .tip("Go back to the top level")
+                        .tip(L("space.folders.top.tip"))
                     ForEach(Array(model.folderPath.enumerated()), id: \.offset) { item in
                         Image(systemName: "chevron.right").font(.system(size: 10)).foregroundStyle(Theme.textTertiary)
                         Button(item.element) {
                             model.folderPath = Array(model.folderPath.prefix(item.offset + 1))
                         }
                         .buttonStyle(.plain)
-                        .accessibilityLabel("Back to \(item.element)")
+                        .accessibilityLabel(L("space.folders.back", item.element))
                         .foregroundStyle(item.offset == model.folderPath.count - 1 ? Theme.text : Theme.link)
-                        .tip("Go back to \(item.element)")
+                        .tip(L("space.folders.back.tip", item.element))
                     }
                     Spacer()
                     Text(SpaceModel.format(folder.bytes)).font(.system(size: 13, design: .monospaced))
                     if let url = model.url(forFolder: model.folderPath) {
-                        Button("Show in Finder") { model.reveal(url) }
+                        Button(L("space.folders.showInFinder")) { model.reveal(url) }
                             .buttonStyle(SecondaryButtonStyle())
-                            .tip("Open this folder in Finder")
+                            .tip(L("space.folders.showInFinder.tip"))
                     }
-                    Button("Scan again") { model.startScan() }
+                    Button(L("space.folders.scanAgain")) { model.startScan() }
                         .buttonStyle(SecondaryButtonStyle())
-                        .tip("Scan the disk again to get fresh numbers")
+                        .tip(L("space.folders.scanAgain.tip"))
                 }
                 .font(.system(size: 13))
                 ScrollView {
@@ -429,8 +437,8 @@ struct SpaceView: View {
                             HStack(spacing: 12) {
                                 Image(systemName: "questionmark.folder").foregroundStyle(Theme.textTertiary)
                                 VStack(alignment: .leading, spacing: 1) {
-                                    Text("Not counted").font(.system(size: 13))
-                                    Text("macOS itself, other users, skipped folders, local Time Machine snapshots")
+                                    Text(L("space.folders.notCounted")).font(.system(size: 13))
+                                    Text(L("space.folders.notCounted.detail"))
                                         .font(.system(size: 11))
                                         .foregroundStyle(Theme.textSecondary)
                                 }
@@ -442,7 +450,7 @@ struct SpaceView: View {
                         let inFiles = folder.bytes - childrenBytes(folder)
                         if inFiles > 0 {
                             HStack {
-                                Text("Files directly in this folder").font(.system(size: 13)).foregroundStyle(Theme.textSecondary)
+                                Text(L("space.folders.filesHere")).font(.system(size: 13)).foregroundStyle(Theme.textSecondary)
                                 Spacer()
                                 Text(SpaceModel.format(inFiles)).font(.system(size: 13, design: .monospaced)).foregroundStyle(Theme.textSecondary)
                             }
@@ -451,12 +459,12 @@ struct SpaceView: View {
                     }
                 }
                 if !model.deniedFolders.isEmpty {
-                    Text("Not counted, access not allowed: \(model.deniedFolders.joined(separator: ", ")). Allow it in System Settings → Privacy & Security → Files and Folders → \(AppInfo.name), then scan again.")
+                    Text(L("space.folders.denied", model.deniedFolders.joined(separator: ", "), AppInfo.name))
                         .font(.system(size: 11))
                         .foregroundStyle(Theme.warning)
                         .fixedSize(horizontal: false, vertical: true)
                 }
-                Text("In Library only app data, caches, developer files and logs are counted\(model.includeAppData ? ", plus other apps' private data" : ""). Skipped, because it is macOS's own data or macOS asks for permission: Apple's folders, the Photos and Music libraries, Contacts, Calendars, Mail, Messages, the Trash.")
+                Text(model.includeAppData ? L("space.folders.libraryNote.withAppData") : L("space.folders.libraryNote"))
                     .font(.system(size: 11))
                     .foregroundStyle(Theme.textTertiary)
             }
@@ -501,8 +509,8 @@ struct SpaceView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("Folder \(child.name), \(SpaceModel.format(child.bytes))")
-        .tip(canOpen ? "Open this folder to see what is inside" : "\(child.name) has no subfolders")
+        .accessibilityLabel(L("space.folders.row.label", child.name, SpaceModel.format(child.bytes)))
+        .tip(canOpen ? L("space.folders.row.open.tip") : L("space.folders.row.noSubfolders.tip", child.name))
     }
 
     // MARK: Largest files
@@ -516,10 +524,10 @@ struct SpaceView: View {
             scanStatus
         case .done:
             if model.topFiles.isEmpty {
-                Text("No files over 50 MB.").foregroundStyle(Theme.textSecondary)
+                Text(L("space.largest.empty")).foregroundStyle(Theme.textSecondary)
             } else {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Files over 50 MB, biggest first. Move to Trash keeps them in the Trash until you empty it.")
+                    Text(L("space.largest.note"))
                         .font(.system(size: 12))
                         .foregroundStyle(Theme.textSecondary)
                     ScrollView {
@@ -554,24 +562,24 @@ struct SpaceView: View {
             Text(SpaceModel.format(file.bytes))
                 .font(.system(size: 13, design: .monospaced))
                 .frame(width: 90, alignment: .trailing)
-            Button("Show") { model.reveal(url) }
+            Button(L("space.largest.show")) { model.reveal(url) }
                 .buttonStyle(SecondaryButtonStyle())
-                .accessibilityLabel("Show \(url.lastPathComponent) in Finder")
-                .tip("Show this file in Finder")
+                .accessibilityLabel(L("space.largest.show.label", url.lastPathComponent))
+                .tip(L("space.largest.show.tip"))
             if model.confirmingFile == file.path {
-                Button("Cancel") { model.confirmingFile = nil }
+                Button(L("space.largest.keep")) { model.confirmingFile = nil }
                     .buttonStyle(SecondaryButtonStyle())
-                    .accessibilityLabel("Keep \(url.lastPathComponent)")
-                    .tip("Keep this file")
-                Button("Move") { model.moveToTrash(file.path) }
+                    .accessibilityLabel(L("space.largest.keep.label", url.lastPathComponent))
+                    .tip(L("space.largest.keep.tip"))
+                Button(L("space.largest.move")) { model.moveToTrash(file.path) }
                     .buttonStyle(AccentButtonStyle())
-                    .accessibilityLabel("Move \(url.lastPathComponent) to the Trash now")
-                    .tip("Confirm: move the file to the Trash")
+                    .accessibilityLabel(L("space.largest.move.label", url.lastPathComponent))
+                    .tip(L("space.largest.move.tip"))
             } else {
-                Button("Move to Trash") { model.confirmingFile = file.path }
+                Button(L("space.largest.trash")) { model.confirmingFile = file.path }
                     .buttonStyle(SecondaryButtonStyle())
-                    .accessibilityLabel("Move \(url.lastPathComponent) to Trash")
-                    .tip("Move this file to the Trash; asks to confirm first and you can still restore it from the Trash")
+                    .accessibilityLabel(L("space.largest.trash.label", url.lastPathComponent))
+                    .tip(L("space.largest.trash.tip"))
             }
         }
         .padding(.vertical, 8)
@@ -592,7 +600,7 @@ struct SpaceTabSection: View {
                 .frame(maxWidth: .infinity)
                 .padding(.top, 2)
             HStack {
-                SectionLabel("Can be cleaned")
+                SectionLabel(L("space.tab.canBeCleaned"))
                 Spacer()
                 if model.isMeasuring {
                     ProgressView().controlSize(.mini)
@@ -613,13 +621,13 @@ struct SpaceTabSection: View {
                 Text(message).font(.system(size: 11)).foregroundStyle(Theme.success).fixedSize(horizontal: false, vertical: true)
             }
             HStack(spacing: 8) {
-                Button("All categories") { WindowManager.shared.openSpace(section: .cleanUp) }
+                Button(L("space.tab.allCategories")) { WindowManager.shared.openSpace(section: .cleanUp) }
                     .buttonStyle(SecondaryButtonStyle())
-                    .tip("Open the Disk Space window with every clean-up category")
+                    .tip(L("space.tab.allCategories.tip"))
                 Spacer()
-                Button("What takes space…") { WindowManager.shared.openSpace(section: .folders) }
+                Button(L("space.tab.whatTakesSpace")) { WindowManager.shared.openSpace(section: .folders) }
                     .buttonStyle(AccentButtonStyle())
-                    .tip("Scan folders to see what takes the most space on this Mac")
+                    .tip(L("space.tab.whatTakesSpace.tip"))
             }
         }
         .padding(16)

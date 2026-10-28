@@ -1,0 +1,191 @@
+/* The menu bar panel (MenuBar/). %@ is the app's name unless noted. */
+
+/* Tabs: names under the icons and their tooltips. */
+"menubar.tab.capture" = "Capture";
+"menubar.tab.record" = "Record";
+"menubar.tab.tools" = "Tools";
+"menubar.tab.recent" = "Recent";
+"menubar.tab.space" = "Space";
+"menubar.tab.capture.tip" = "Save clips from the buffer, take screenshots and see the environment info";
+"menubar.tab.record.tip" = "Record the screen and check layouts: resize, measure, pick colors, overlay a design";
+"menubar.tab.tools.tip" = "Open the dev toolbox and the world clock";
+"menubar.tab.recent.tip" = "Your latest screenshots and clips, click one to open it in the editor";
+"menubar.tab.space.tip" = "Find and clean up what takes disk space";
+
+/* Header under the app's name. */
+"menubar.header.tagline" = "Catch the bug that already happened";
+
+/* Buffer card. stoppedRetrying, error: the error message. length: the buffer length like 2:00. displays: how many displays. accessibility: seconds held. */
+"menubar.buffer.status.running" = "Buffer recording";
+"menubar.buffer.status.starting" = "Starting buffer…";
+"menubar.buffer.status.paused" = "Buffer paused";
+"menubar.buffer.status.needsPermission" = "Screen Recording permission needed";
+"menubar.buffer.status.stoppedRetrying" = "Buffer stopped: %@. It starts again by itself.";
+"menubar.buffer.status.error" = "Buffer error: %@";
+"menubar.buffer.report" = "Report this problem";
+"menubar.buffer.report.tip" = "Open a GitHub issue about this error with the version, macOS and logs filled in";
+"menubar.buffer.timeline.now" = "now";
+"menubar.buffer.detail.length" = "Last %@";
+
+/* Screen Recording permission, in the buffer card. */
+"menubar.permission.explain" = "Allow %@ in System Settings › Privacy & Security › Screen & System Audio Recording, then reopen the app.";
+"menubar.permission.grant" = "Grant access";
+"menubar.permission.grant.tip" = "Ask macOS for Screen Recording access so the buffer can run";
+"menubar.permission.relaunch" = "Relaunch";
+"menubar.permission.relaunch.tip" = "Restart %@ so a newly granted permission takes effect";
+
+/* Save from buffer (Capture tab). minutes: the buffer length without ":00", like 5 or 2:30. */
+"menubar.save.title" = "Save from buffer";
+"menubar.save.saving" = "Saving…";
+"menubar.save.option.30s" = "30 s";
+"menubar.save.option.1min" = "1 min";
+"menubar.save.option.minutes" = "%@ min";
+/* Tooltip of a save button: 1 the length (like "1 min"), 2 its shortcut. */
+"menubar.save.option.tip" = "Save the last %1$@ of the screen from the buffer as a clip (%2$@)";
+
+/* Capture rows (Capture tab). %@ in tips is the shortcut. */
+"menubar.capture.area" = "Screenshot area";
+"menubar.capture.area.tip" = "Select an area of the screen and capture it (%@)";
+"menubar.capture.window" = "Screenshot window";
+"menubar.capture.window.tip" = "Click a window to capture just that window (%@)";
+"menubar.capture.allDisplays" = "Screenshot all displays";
+"menubar.capture.allDisplays.tip" = "Capture every connected display in one image";
+"menubar.capture.fullScreen" = "Screenshot full screen";
+"menubar.capture.fullScreen.tip" = "Capture the whole screen";
+"menubar.capture.scrolling" = "Scrolling screenshot";
+"menubar.capture.scrolling.tip" = "Capture a long page by scrolling it into one tall image (%@)";
+"menubar.capture.copyText" = "Copy text from screen";
+"menubar.capture.copyText.tip" = "Select an area and copy the text in it to the clipboard (%@)";
+
+/* Record tab. %@ in tips is the shortcut. */
+"menubar.record.title" = "Record";
+/* Shortcuts next to the title: 1 start/stop shortcut, 2 pause shortcut. */
+"menubar.record.shortcuts" = "%1$@ start/stop · %2$@ pause";
+"menubar.record.state.paused" = "Paused";
+"menubar.record.state.recording" = "Recording";
+"menubar.record.resume" = "Resume";
+"menubar.record.pause" = "Pause";
+"menubar.record.pause.tip" = "Pause or resume the recording (%@)";
+"menubar.record.stop" = "Stop";
+"menubar.record.stop.tip" = "Stop and save the recording (%@)";
+"menubar.record.target.allDisplays" = "All displays";
+"menubar.record.target.fullScreen" = "Full screen";
+"menubar.record.target.area" = "Area…";
+"menubar.record.target.tip" = "Choose what to record: the full screen or an area you select";
+"menubar.record.mic" = "Mic";
+"menubar.record.mic.tip" = "Record your microphone together with the screen";
+"menubar.record.systemAudio" = "System audio";
+"menubar.record.systemAudio.tip" = "Record the sound your Mac plays together with the screen";
+"menubar.record.camera" = "Camera";
+"menubar.record.camera.tip" = "Show your camera in a bubble on screen so it gets into the recording";
+"menubar.record.start" = "Start recording";
+"menubar.record.start.tip" = "Start recording the screen to a video (%@)";
+"menubar.record.draw" = "Draw";
+"menubar.record.draw.tip" = "Draw arrows and boxes on screen (%@)";
+
+/* Toggle chips (Mic, System audio, Camera): their state for VoiceOver. */
+"menubar.chip.on" = "On";
+"menubar.chip.off" = "Off";
+
+/* Check the screen (Record tab). */
+"menubar.checks.title" = "Check the screen";
+"menubar.checks.resize" = "Resize the window you test";
+"menubar.checks.resize.tip" = "Resize the last app window to a desktop or mobile preset to test responsive layouts";
+"menubar.checks.resize.desktop" = "Desktop";
+"menubar.checks.resize.mobile" = "Mobile and tablet width";
+"menubar.checks.measure" = "Measure on screen";
+"menubar.checks.measure.tip" = "Measure distances in pixels between points on the screen";
+"menubar.checks.pickColor" = "Pick a color";
+"menubar.checks.pickColor.detail" = "copies hex";
+"menubar.checks.pickColor.tip" = "Pick any color on the screen and copy its hex value";
+"menubar.checks.overlay" = "Overlay a design";
+"menubar.checks.overlay.tip" = "Lay a design mockup over the screen to compare it with the real UI";
+"menubar.checks.overlay.fromFile" = "From a file…";
+"menubar.checks.overlay.fromClipboard" = "From the clipboard";
+
+/* Dev toolbox (Tools tab). Chips with words; JSON, XML and other format names stay in code. chip.tip: the chip's text. all.tip: the shortcut. */
+"menubar.toolbox.title" = "Dev toolbox";
+"menubar.toolbox.chip.entities" = "&; Entities";
+"menubar.toolbox.chip.time" = "Time";
+"menubar.toolbox.chip.timeZones" = "Time zones";
+"menubar.toolbox.chip.convert" = "⇄ Convert";
+"menubar.toolbox.chip.quick" = "0x · Color · Case";
+"menubar.toolbox.chip.generate" = "UUID · Hash";
+"menubar.toolbox.chip.testData" = "Test data";
+"menubar.toolbox.chip.tip" = "Open %@ in the dev toolbox";
+"menubar.toolbox.all" = "All tools";
+"menubar.toolbox.all.tip" = "Open the dev toolbox window with every tool (%@)";
+
+/* World clock (Tools tab). you: the city of your time zone. */
+"menubar.worldClock.title" = "World clock";
+"menubar.worldClock.compare" = "Compare…";
+"menubar.worldClock.compare.tip" = "Open the time zones tool to compare times across cities";
+"menubar.worldClock.you" = "You · %@";
+
+/* Environment card (Capture tab). */
+"menubar.environment.title" = "Environment · auto";
+"menubar.environment.edit" = "Edit";
+"menubar.environment.edit.tip" = "Choose the fields, their names and your own fields in Settings → Bug reports";
+"menubar.environment.empty" = "No fields to show";
+"menubar.environment.chooseFields" = "Choose fields";
+"menubar.environment.collecting" = "Collecting…";
+
+/* Recent tab. age.*: how long ago a capture was taken, %ld is the count. */
+"menubar.recent.title" = "Recent";
+"menubar.recent.all" = "All captures";
+"menubar.recent.all.tip" = "Open the history window with all your screenshots and clips";
+/* Empty state: 1 the screenshot shortcut, 2 the save-last-minute shortcut. */
+"menubar.recent.empty" = "Nothing captured yet. Press %1$@ for a screenshot or %2$@ to save the last minute.";
+"menubar.recent.open.tip" = "Open this capture in the editor";
+"menubar.recent.age.justNow" = "just now";
+"menubar.recent.age.minutes" = "%ld min ago";
+"menubar.recent.age.hours" = "%ld h ago";
+"menubar.recent.age.days" = "%ld d ago";
+
+/* Footer of the panel. */
+"menubar.footer.pauseBuffer" = "Pause buffer";
+"menubar.footer.startBuffer" = "Start buffer";
+"menubar.footer.buffer.tip" = "The buffer keeps the last minutes of the screen so you can save a bug after it happened";
+"menubar.footer.feedback.tip" = "Report a problem with %@ or suggest a feature on GitHub";
+"menubar.footer.settings.tip" = "Open settings: buffer, shortcuts, storage and more";
+"menubar.footer.quit.tip" = "Quit %@";
+
+/* Update badge in the panel's header and its popover. %@ in badge, details.version: the new version. */
+"menubar.update.badge" = "Update to %@";
+/* 1 the new version, 2 the installed version. */
+"menubar.update.badge.tip" = "Version %1$@ is available, you have %2$@";
+"menubar.update.updating" = "Updating…";
+"menubar.update.updating.tip" = "Pulling and building the new version. The app restarts when it is ready.";
+"menubar.update.failed.accessibility" = "The update failed, show why";
+"menubar.update.failed.title" = "Update";
+"menubar.update.details.version" = "Version %@";
+/* changes.one: the installed version. */
+/* 1 the installed version, 2 how many changes. */
+"menubar.update.details.change.tip" = "Open on GitHub: %@";
+"menubar.update.details.more" = "and %ld more";
+"menubar.update.details.explain" = "Pulls the source, builds it on this Mac (1-2 minutes) and restarts the app.";
+"menubar.update.later" = "Later";
+"menubar.update.later.tip" = "Close this and update another time";
+"menubar.update.now" = "Update now";
+"menubar.update.now.tip" = "Pull, build and install the new version, then restart %@";
+"menubar.update.showLog" = "Show log";
+"menubar.update.showLog.tip" = "Open the update log to see what went wrong";
+"menubar.update.checkAgain" = "Check again";
+"menubar.update.checkAgain.tip" = "Try checking GitHub for a new version again";
+
+/* Settings → Updates section. available: how many changes. lastChecked: the time. */
+"menubar.updateSettings.title" = "Updates";
+"menubar.updateSettings.version" = "Version";
+"menubar.updateSettings.whatsNew" = "What's new";
+"menubar.updateSettings.whatsNew.show" = "Show…";
+"menubar.updateSettings.whatsNew.show.accessibility" = "Show what's new";
+"menubar.updateSettings.whatsNew.show.tip" = "Show what changed in this version";
+"menubar.updateSettings.autoCheck" = "Check GitHub for new versions";
+"menubar.updateSettings.autoCheck.tip" = "Check for a newer %@ release every 6 hours and show a badge in the menu bar panel";
+"menubar.updateSettings.checkNow" = "Check now";
+"menubar.updateSettings.checkNow.tip" = "Check GitHub for a new version right now";
+"menubar.updateSettings.unavailable" = "Updates work for copies built from a git clone of a GitHub repository, as scripts/install.sh does. This copy has no repository or commit to compare.";
+"menubar.updateSettings.status.checking" = "Checking…";
+"menubar.updateSettings.status.upToDate" = "Up to date";
+"menubar.updateSettings.status.lastChecked" = "Last checked %@";
+"menubar.updateSettings.status.idle" = "Checks every 6 hours";

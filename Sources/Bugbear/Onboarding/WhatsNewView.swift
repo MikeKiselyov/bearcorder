@@ -33,7 +33,7 @@ enum WhatsNewTracker {
     }
 
     static func open(releases: [WhatsNewRelease], changes: [String]) {
-        WindowManager.shared.show(id: "whats-new", title: "What's new", size: CGSize(width: 720, height: 640), minSize: CGSize(width: 620, height: 480)) {
+        WindowManager.shared.show(id: "whats-new", title: L("whatsnew.window.title"), size: CGSize(width: 720, height: 640), minSize: CGSize(width: 620, height: 480)) {
             WhatsNewView(releases: releases, changes: changes)
         }
     }
@@ -114,14 +114,14 @@ struct WhatsNewView: View {
                 .padding(.bottom, 24)
             }
             HStack {
-                Text("Reopen this from Settings → Updates.")
+                Text(L("whatsnew.footer.reopen"))
                     .font(.system(size: 12))
                     .foregroundStyle(Theme.textSecondary)
                 Spacer()
-                Button("Got it") { WindowManager.shared.close(id: "whats-new") }
+                Button(L("whatsnew.button.gotIt")) { WindowManager.shared.close(id: "whats-new") }
                     .buttonStyle(AccentButtonStyle())
                     .keyboardShortcut(.defaultAction)
-                    .tip("Close this window (Return)")
+                    .tip(L("whatsnew.button.gotIt.tip"))
             }
             .padding(.horizontal, 32)
             .padding(.vertical, 16)
@@ -140,34 +140,18 @@ struct WhatsNewView: View {
                 .frame(width: 52, height: 47)
                 .foregroundStyle(Theme.text)
             VStack(alignment: .leading, spacing: 4) {
-                Text("What's new in \(AppInfo.name)").font(.system(size: 24, weight: .bold))
-                Text("Version \(Updater.shared.versionText)")
+                Text(L("whatsnew.header.title", AppInfo.name)).font(.system(size: 24, weight: .bold))
+                Text(L("whatsnew.header.version", Updater.shared.versionText))
                     .font(.system(size: 13))
                     .foregroundStyle(Theme.textSecondary)
             }
         }
     }
 
-    /// The picture of an item, a PNG, a JPEG or an animated GIF: from the app bundle, or from the source
-    /// folder for builds run from .build (self-test, snapshots).
+    /// The picture of an item, a PNG, a JPEG or an animated GIF, from the app's resources.
     static func imageURL(named name: String) -> URL? {
         if name.isEmpty { return nil }
-        for ext in ["png", "gif", "jpg"] {
-            if let url = Bundle.main.url(forResource: name, withExtension: ext, subdirectory: "WhatsNew") {
-                return url
-            }
-        }
-        var root = URL(fileURLWithPath: #filePath)
-        for _ in 0..<4 {
-            root.deleteLastPathComponent()
-        }
-        for ext in ["png", "gif", "jpg"] {
-            let url = root.appendingPathComponent(WhatsNew.imageFolder).appendingPathComponent("\(name).\(ext)")
-            if FileManager.default.fileExists(atPath: url.path) {
-                return url
-            }
-        }
-        return nil
+        return AppResources.url(named: name, extensions: ["png", "gif", "jpg"], in: "WhatsNew")
     }
 
     /// Loaded once: a new NSImage on every redraw would restart an animation.
@@ -221,7 +205,7 @@ struct WhatsNewView: View {
 
     private var changeList: some View {
         VStack(alignment: .leading, spacing: 8) {
-            SectionLabel("All changes since your last version")
+            SectionLabel(L("whatsnew.changes.title"))
             VStack(alignment: .leading, spacing: 5) {
                 ForEach(Array(changes.enumerated()), id: \.offset) { _, change in
                     HStack(alignment: .firstTextBaseline, spacing: 8) {

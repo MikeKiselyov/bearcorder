@@ -22,6 +22,19 @@ jobs:
           fetch-depth: 0
       - run: scripts/check-release.sh "origin/${{ github.base_ref }}"
 
+  lint:
+    name: Lint scripts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # The same shellcheck as on the Mac (brew): older ones read the directives differently.
+      - name: Install shellcheck 0.11.0
+        run: |
+          curl -fsSL https://github.com/koalaman/shellcheck/releases/download/v0.11.0/shellcheck-v0.11.0.linux.x86_64.tar.xz | tar -xJ
+          sudo install shellcheck-v0.11.0/shellcheck /usr/local/bin/shellcheck
+          shellcheck --version
+      - run: shellcheck -x scripts/*.sh scripts/lib/*.sh
+
   test:
     name: Build and test
     runs-on: macos-15
@@ -42,6 +55,20 @@ jobs:
           .build/debug/Bugbear --self-test build/self-test
       - name: Every control has a check
         run: python3 -I scripts/control-coverage.py
+      - name: A release has no automation
+        run: scripts/check-no-automation.sh
+      - name: The app bundle (resources, Info.plist, signature)
+        env:
+          BUGBEAR_SIGN_IDENTITY: "-"
+        run: |
+          scripts/build-app.sh
+          source scripts/app-name.sh
+          app="build/$APP_NAME.app"
+          test -f "$app/Contents/Resources/Bugbear_Bugbear.bundle/en.lproj/menubar.strings"
+          test -d "$app/Contents/Resources/Bugbear_Bugbear.bundle/WhatsNew"
+          plutil -lint "$app/Contents/Info.plist"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$app/Contents/Info.plist")" = "$("$app/Contents/MacOS/Bugbear" --version)"
+          codesign --verify --strict "$app"
       - name: Release
         if: github.event_name == 'push'
         env:

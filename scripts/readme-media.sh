@@ -7,8 +7,8 @@
 # Needs ffmpeg for the GIFs: brew install ffmpeg
 set -euo pipefail
 
-cd "$(dirname "$0")/.."
-ROOT="$(pwd)"
+# shellcheck source=lib/common.sh
+source "$(dirname "$0")/lib/common.sh"
 WORK="$ROOT/build/readme-media"
 OUT="$ROOT/docs/images"
 
@@ -22,19 +22,22 @@ mkdir -p "$OUT"
 # A GIF from numbered frames. Every frame shows for $3 seconds, the last one for $4.
 make_gif() {
     local frames="$1" output="$2" step="$3" last="$4" width="$5"
-    local list="$WORK/$(basename "$output").txt"
+    local list
+    list="$WORK/$(basename "$output").txt"
     : > "$list"
     local previous=""
-    for frame in "$frames"/frame-*.png; do
-        if [ -n "$previous" ]; then
-            echo "file '$previous'" >> "$list"
-            echo "duration $step" >> "$list"
-        fi
-        previous="$frame"
-    done
-    echo "file '$previous'" >> "$list"
-    echo "duration $last" >> "$list"
-    echo "file '$previous'" >> "$list"
+    {
+        for frame in "$frames"/frame-*.png; do
+            if [ -n "$previous" ]; then
+                echo "file '$previous'"
+                echo "duration $step"
+            fi
+            previous="$frame"
+        done
+        echo "file '$previous'"
+        echo "duration $last"
+        echo "file '$previous'"
+    } >> "$list"
     ffmpeg -loglevel error -y -f concat -safe 0 -i "$list" \
         -vf "scale=$width:-1:flags=lanczos,split[a][b];[a]palettegen=max_colors=128:stats_mode=diff[p];[b][p]paletteuse=dither=none:diff_mode=rectangle" \
         -loop 0 "$output"
@@ -62,6 +65,7 @@ picture video-editor 1220
 picture history 980
 picture record-area-picker 1200
 picture record-outline-area 1200
+picture video-crop 960
 picture toolbox-json 1220
 picture toolbox-timezones 1220
 picture toolbox-testdata 1220

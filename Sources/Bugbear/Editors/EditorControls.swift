@@ -164,8 +164,8 @@ struct ColorPalette: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .tip("Any color: opens the color panel. The picked color takes the first slot, the others move right")
-            .accessibilityLabel("Pick any color")
+            .tip(L("editors.color.any.tip"))
+            .accessibilityLabel(L("editors.color.any"))
         }
         .onReceive(NotificationCenter.default.publisher(for: RecentColors.changed)) { _ in
             colors = RecentColors.load()
@@ -186,7 +186,7 @@ struct ColorPalette: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .tip("Color \(color.name): for new marks and the selected one")
+        .tip(L("editors.color.swatch.tip", color.name))
         .accessibilityLabel(color.name)
     }
 }
@@ -200,8 +200,8 @@ struct FillToggle: View {
 
     var body: some View {
         HStack(spacing: 2) {
-            option(filled: false, symbol: "square.dashed", title: "No fill", help: "No fill: text without a label behind it, shapes as outlines only")
-            option(filled: true, symbol: "square.fill", title: "Fill", help: "Fill: text on a colored label, shapes with a see-through fill")
+            option(filled: false, symbol: "square.dashed", title: L("editors.fill.none"), help: L("editors.fill.none.tip"))
+            option(filled: true, symbol: "square.fill", title: L("editors.fill.filled"), help: L("editors.fill.filled.tip"))
         }
         .padding(3)
         .background(Theme.control)
@@ -225,7 +225,7 @@ struct FillToggle: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .tip(isEnabled ? help : "\(help). Pick Text, Rectangle or Ellipse to use it")
+        .tip(isEnabled ? help : L("editors.fill.disabled.tip", help))
         .accessibilityLabel(title)
     }
 }
@@ -245,8 +245,8 @@ struct SizeStepper: View {
                 Image(systemName: "minus").font(.system(size: 11, weight: .semibold)).frame(width: 24, height: 28).contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .tip("Smaller \(name) (-)")
-            .accessibilityLabel("Smaller \(name)")
+            .tip(L("editors.size.smaller.tip", name))
+            .accessibilityLabel(L("editors.size.smaller", name))
             HStack(spacing: 4) {
                 if !symbol.isEmpty {
                     Image(systemName: symbol).font(.system(size: 10)).foregroundStyle(Theme.textSecondary)
@@ -254,15 +254,15 @@ struct SizeStepper: View {
                 Text(value).font(.system(size: 12, design: .monospaced))
             }
             .frame(minWidth: 40)
-            .tip("\(name.capitalized): \(value)")
+            .tip(L("editors.size.value.tip", name.capitalized, value))
             Button {
                 onStep(1)
             } label: {
                 Image(systemName: "plus").font(.system(size: 11, weight: .semibold)).frame(width: 24, height: 28).contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .tip("Bigger \(name) (+)")
-            .accessibilityLabel("Bigger \(name)")
+            .tip(L("editors.size.bigger.tip", name))
+            .accessibilityLabel(L("editors.size.bigger", name))
         }
         .padding(.horizontal, 3)
         .background(Theme.control)

@@ -1,0 +1,7 @@
+/* Shared UI pieces (UI/). */
+
+/* Toast after copying. */
+"ui.toast.pasteHint" = "Paste with ⌘V (Command + V)";
+
+/* The logo. %@ is the app's name. */
+"ui.logo.accessibility" = "%@ logo";

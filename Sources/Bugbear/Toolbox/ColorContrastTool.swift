@@ -28,7 +28,7 @@ enum ColorPick {
         let hex = ColorConverter.formats(color).hex
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(hex, forType: .string)
-        Toast.shared.showCopied("Color copied", preview: hex, symbol: "eyedropper")
+        Toast.shared.showCopied(L("toolbox.color.copied"), preview: hex, symbol: "eyedropper")
     }
 }
 
@@ -42,7 +42,7 @@ struct ColorContrastTool: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 HStack(alignment: .top, spacing: 16) {
-                    colorInput("Text", value: $foreground, parsed: text)
+                    colorInput(L("toolbox.contrast.text"), value: $foreground, parsed: text)
                     Button {
                         let swap = foreground
                         foreground = background
@@ -52,14 +52,14 @@ struct ColorContrastTool: View {
                     }
                     .buttonStyle(.plain)
                     .padding(.top, 34)
-                    .accessibilityLabel("Swap colors")
-                    .tip("Swap the text and background colors")
-                    colorInput("Background", value: $background, parsed: back)
+                    .accessibilityLabel(L("toolbox.contrast.swap"))
+                    .tip(L("toolbox.contrast.swap.tip"))
+                    colorInput(L("toolbox.contrast.background"), value: $background, parsed: back)
                 }
                 if let textColor = text, let backColor = back {
                     result(Contrast.verdict(foreground: textColor, background: backColor), text: textColor, back: backColor)
                 } else {
-                    Text("Enter colors as #RRGGBB, rgb(…) or hsl(…), or pick them from the screen.")
+                    Text(L("toolbox.contrast.enterColors"))
                         .font(.system(size: 12))
                         .foregroundStyle(Theme.warning)
                 }
@@ -79,8 +79,8 @@ struct ColorContrastTool: View {
                 TextField("#RRGGBB", text: value)
                     .textFieldStyle(.roundedBorder)
                     .font(.system(size: 13, design: .monospaced))
-                    .accessibilityLabel("\(title) color")
-                    .tip("\(title) color as #RRGGBB, rgb(…) or hsl(…)")
+                    .accessibilityLabel(L("toolbox.contrast.colorField", title))
+                    .tip(L("toolbox.contrast.colorField.tip", title))
                 Button {
                     Task {
                         if let picked = await ColorPick.pick() {
@@ -90,8 +90,8 @@ struct ColorContrastTool: View {
                 } label: {
                     Image(systemName: "eyedropper")
                 }
-                .accessibilityLabel("Pick the \(title.lowercased()) color")
-                .tip("Pick the \(title.lowercased()) color from anywhere on the screen")
+                .accessibilityLabel(L("toolbox.contrast.pick", title.lowercased()))
+                .tip(L("toolbox.contrast.pick.tip", title.lowercased()))
             }
         }
         .frame(maxWidth: .infinity)
@@ -107,12 +107,12 @@ struct ColorContrastTool: View {
             HStack(alignment: .firstTextBaseline, spacing: 10) {
                 Text(String(format: "%.2f : 1", verdict.ratio))
                     .font(.system(size: 34, weight: .bold, design: .rounded))
-                Text("contrast ratio").foregroundStyle(Theme.textSecondary)
+                Text(L("toolbox.contrast.ratio")).foregroundStyle(Theme.textSecondary)
             }
             VStack(alignment: .leading, spacing: 10) {
-                Text("The quick brown fox, 14 pt")
+                Text(L("toolbox.contrast.sample.normal"))
                     .font(.system(size: 14))
-                Text("Large heading, 24 pt")
+                Text(L("toolbox.contrast.sample.large"))
                     .font(.system(size: 24, weight: .semibold))
             }
             .foregroundStyle(swatch(text))
@@ -123,21 +123,21 @@ struct ColorContrastTool: View {
             Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 8) {
                 GridRow {
                     Text("")
-                    Text("AA").font(.system(size: 12, weight: .semibold))
-                    Text("AAA").font(.system(size: 12, weight: .semibold))
+                    Text(L("toolbox.contrast.level.aa")).font(.system(size: 12, weight: .semibold))
+                    Text(L("toolbox.contrast.level.aaa")).font(.system(size: 12, weight: .semibold))
                 }
                 GridRow {
-                    Text("Normal text").font(.system(size: 12))
+                    Text(L("toolbox.contrast.row.normal")).font(.system(size: 12))
                     badge(verdict.passesAANormal, need: "4.5")
                     badge(verdict.passesAAANormal, need: "7")
                 }
                 GridRow {
-                    Text("Large text (18 pt, or 14 pt bold)").font(.system(size: 12))
+                    Text(L("toolbox.contrast.row.large")).font(.system(size: 12))
                     badge(verdict.passesAALarge, need: "3")
                     badge(verdict.passesAAALarge, need: "4.5")
                 }
                 GridRow {
-                    Text("Icons, borders, focus rings").font(.system(size: 12))
+                    Text(L("toolbox.contrast.row.ui")).font(.system(size: 12))
                     badge(verdict.passesUIComponents, need: "3")
                     Text("")
                 }
@@ -146,7 +146,7 @@ struct ColorContrastTool: View {
     }
 
     private func badge(_ passes: Bool, need: String) -> some View {
-        Label(passes ? "Pass" : "Fail · needs \(need)", systemImage: passes ? "checkmark.circle.fill" : "xmark.circle.fill")
+        Label(passes ? L("toolbox.contrast.pass") : L("toolbox.contrast.fail", need), systemImage: passes ? "checkmark.circle.fill" : "xmark.circle.fill")
             .font(.system(size: 12, weight: .medium))
             .foregroundStyle(passes ? Theme.success : Theme.warning)
     }

@@ -64,7 +64,8 @@ struct CopyReportButton: View {
             Button {
                 copy(BugReportBuilder.preferredFormat)
             } label: {
-                Label(BugReport.copyButtonTitle(stepCount: stepCount), systemImage: "list.number")
+                // Says how many steps the report has before it is pasted; short enough for the side panels.
+                Label(L("capture.copyReport.title", stepCount), systemImage: "list.number")
                     .font(.system(size: 12, weight: .medium))
                     .padding(.leading, 10)
                     .padding(.trailing, 8)
@@ -73,17 +74,17 @@ struct CopyReportButton: View {
             }
             .buttonStyle(.plain)
             // The name stays short and fixed for VoiceOver and the tests; the count is on the button.
-            .accessibilityLabel("Copy bug report · \(BugReportBuilder.preferredFormat.rawValue)")
-            .tip("\(help). Copies as \(BugReportBuilder.preferredFormat.rawValue)")
+            .accessibilityLabel(L("capture.bugReport.copy.accessibility", BugReportBuilder.preferredFormat.rawValue))
+            .tip(L("capture.bugReport.copy.tip", help, BugReportBuilder.preferredFormat.rawValue))
             Divider()
                 .frame(height: 14)
             Menu {
                 ForEach(BugReport.Format.allCases) { format in
                     // The format a click on the button copies in is ticked.
                     if format == BugReportBuilder.preferredFormat {
-                        Button("Copy as \(format.rawValue)", systemImage: "checkmark") { copy(format) }
+                        Button(L("capture.bugReport.copyAs", format.rawValue), systemImage: "checkmark") { copy(format) }
                     } else {
-                        Button("Copy as \(format.rawValue)") { copy(format) }
+                        Button(L("capture.bugReport.copyAs", format.rawValue)) { copy(format) }
                     }
                 }
             } label: {
@@ -94,8 +95,8 @@ struct CopyReportButton: View {
             .menuIndicator(.hidden)
             .tint(Theme.text)
             .frame(width: 26, height: 24)
-            .accessibilityLabel("Copy bug report as")
-            .tip("Copy as Markdown or Jira wiki; the choice stays for next time")
+            .accessibilityLabel(L("capture.bugReport.formatMenu"))
+            .tip(L("capture.bugReport.formatMenu.tip"))
         }
         .foregroundStyle(Theme.text)
         .background(Theme.control)

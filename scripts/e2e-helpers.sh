@@ -1,3 +1,4 @@
+# shellcheck shell=bash
 # Sourced by scripts/e2e-features.sh and scripts/e2e-section.sh: pressing controls and reading
 # what they did. Needs R (scripts/bugbear-run.sh).
 

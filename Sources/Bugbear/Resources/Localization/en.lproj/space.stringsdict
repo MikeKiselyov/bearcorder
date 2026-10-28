@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Texts with a count: the word changes with the number (one/other in English; other languages add few, many...). -->
+<plist version="1.0">
+<dict>
+    <key>space.scan.progress</key>
+    <dict>
+        <key>NSStringLocalizedFormatKey</key>
+        <string>%1$#@files@ · %2$@</string>
+        <key>files</key>
+        <dict>
+            <key>NSStringFormatSpecTypeKey</key>
+            <string>NSStringPluralRuleType</string>
+            <key>NSStringFormatValueTypeKey</key>
+            <string>ld</string>
+            <key>one</key>
+            <string>%ld file</string>
+            <key>other</key>
+            <string>%ld files</string>
+        </dict>
+    </dict>
+</dict>
+</plist>

@@ -130,14 +130,19 @@ final class CameraBubbleView: NSView {
 
     override func menu(for event: NSEvent) -> NSMenu? {
         let menu = NSMenu()
-        for (title, value) in [("Small", 140.0), ("Medium", 200.0), ("Large", 300.0)] {
+        let sizes: [(title: String, value: Double)] = [
+            (L("recording.camera.size.small"), 140.0),
+            (L("recording.camera.size.medium"), 200.0),
+            (L("recording.camera.size.large"), 300.0),
+        ]
+        for (title, value) in sizes {
             let item = NSMenuItem(title: title, action: #selector(choseSize(_:)), keyEquivalent: "")
             item.target = self
             item.representedObject = value
             menu.addItem(item)
         }
         menu.addItem(.separator())
-        let hide = NSMenuItem(title: "Hide camera", action: #selector(hideBubble), keyEquivalent: "")
+        let hide = NSMenuItem(title: L("recording.camera.hide"), action: #selector(hideBubble), keyEquivalent: "")
         hide.target = self
         menu.addItem(hide)
         return menu

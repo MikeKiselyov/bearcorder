@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Texts with a count: the word changes with the number (one/other in English; other languages add few, many...). -->
+<plist version="1.0">
+<dict>
+    <key>feedback.preview.log</key>
+    <dict>
+        <key>NSStringLocalizedFormatKey</key>
+        <string>Log (up to the last %#@lines@; fewer if the link gets too long):</string>
+        <key>lines</key>
+        <dict>
+            <key>NSStringFormatSpecTypeKey</key>
+            <string>NSStringPluralRuleType</string>
+            <key>NSStringFormatValueTypeKey</key>
+            <string>ld</string>
+            <key>one</key>
+            <string>%ld line</string>
+            <key>other</key>
+            <string>%ld lines</string>
+        </dict>
+    </dict>
+</dict>
+</plist>

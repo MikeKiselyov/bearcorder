@@ -33,14 +33,14 @@ struct FormatterTool: View {
             optionsBar
             Divider().overlay(Theme.border)
             SplitPanes {
-                PaneHeader(title: "Input") {
-                    Text("Paste ⌘V").font(.system(size: 11)).foregroundStyle(Theme.textSecondary)
+                PaneHeader(title: L("toolbox.pane.input")) {
+                    Text(L("toolbox.format.pasteHint")).font(.system(size: 11)).foregroundStyle(Theme.textSecondary)
                 }
                 CodeTextView(text: $input)
             } right: {
-                PaneHeader(title: "Output") {
+                PaneHeader(title: L("toolbox.pane.output")) {
                     if !input.isEmpty {
-                        Text(current.isValid ? statusTitle : "Invalid")
+                        Text(current.isValid ? statusTitle : L("toolbox.format.invalid"))
                             .font(.system(size: 11, weight: .medium))
                             .foregroundStyle(current.isValid ? Theme.success : Theme.accentSoft)
                     }
@@ -57,18 +57,18 @@ struct FormatterTool: View {
                 if kind == .json && current.isValid && !input.isEmpty {
                     Menu {
                         ForEach([DataFormat.yaml, .xml, .csv]) { format in
-                            Button("Copy as \(format.rawValue)") {
+                            Button(L("toolbox.format.copyAs", format.rawValue)) {
                                 if let converted = try? DataConverter.convert(input, from: .json, to: format) {
                                     copyToClipboard(converted)
                                 }
                             }
                         }
                     } label: {
-                        Text("Copy as…")
+                        Text(L("toolbox.format.copyAs.menu"))
                     }
                     .menuStyle(.borderlessButton)
                     .fixedSize()
-                    .tip("Convert this JSON to YAML, XML or CSV and copy it")
+                    .tip(L("toolbox.format.copyAs.tip"))
                 }
                 CopyButton(text: current.isValid ? current.output : "")
             }
@@ -77,10 +77,10 @@ struct FormatterTool: View {
 
     private var statusTitle: String {
         switch kind {
-        case .json: return "Valid JSON"
-        case .xml: return "Valid XML"
-        case .yaml: return "Valid YAML"
-        case .html: return "Parsed HTML"
+        case .json: return L("toolbox.format.valid", "JSON")
+        case .xml: return L("toolbox.format.valid", "XML")
+        case .yaml: return L("toolbox.format.valid", "YAML")
+        case .html: return L("toolbox.format.parsed", "HTML")
         case .sql: return "SQL"
         case .graphql: return "GraphQL"
         }
@@ -95,22 +95,22 @@ struct FormatterTool: View {
     }
 
     private func footerText(_ current: FormatResult) -> String {
-        if input.isEmpty { return "Paste or type on the left" }
+        if input.isEmpty { return L("toolbox.format.empty") }
         let inputBytes = input.utf8.count
         let outputBytes = current.output.utf8.count
         var text = current.message
         if current.isValid {
-            text += " · \(inputBytes) B → \(outputBytes) B"
+            text += " · " + L("toolbox.format.sizes", inputBytes, outputBytes)
         }
         return text
     }
 
     private var optionsBar: some View {
         HStack(spacing: 14) {
-            PillPicker(options: FormatMode.allCases, selection: $mode) { value in value.rawValue }
+            PillPicker(options: FormatMode.allCases, selection: $mode) { value in modeTitle(value) }
                 .frame(width: 170)
-                .tip("Format pretty-prints with indentation, Minify removes all extra whitespace")
-            Picker("Indent", selection: Binding(get: { useTabs ? 0 : indentWidth }, set: { value in
+                .tip(L("toolbox.format.mode.tip"))
+            Picker(L("toolbox.format.indent"), selection: Binding(get: { useTabs ? 0 : indentWidth }, set: { value in
                 if value == 0 {
                     useTabs = true
                 } else {
@@ -118,31 +118,38 @@ struct FormatterTool: View {
                     indentWidth = value
                 }
             })) {
-                Text("2 spaces").tag(2)
-                Text("4 spaces").tag(4)
-                Text("Tabs").tag(0)
+                Text(L("toolbox.format.indent.two")).tag(2)
+                Text(L("toolbox.format.indent.four")).tag(4)
+                Text(L("toolbox.format.indent.tabs")).tag(0)
             }
             .pickerStyle(.menu)
             .fixedSize()
             .disabled(mode == .minify)
-            .tip("Indentation used in the formatted output")
+            .tip(L("toolbox.format.indent.tip"))
             if kind == .json || kind == .yaml {
-                Toggle("Sort keys", isOn: $sortKeys).toggleStyle(.checkbox)
-                    .tip("Sort object keys alphabetically so two documents are easier to compare")
+                Toggle(L("toolbox.format.sortKeys"), isOn: $sortKeys).toggleStyle(.checkbox)
+                    .tip(L("toolbox.format.sortKeys.tip"))
             }
             if kind == .json {
-                Toggle("Unescape nested JSON strings", isOn: $unescape).toggleStyle(.checkbox)
-                    .tip("Expand string values that contain escaped JSON into real nested objects")
+                Toggle(L("toolbox.format.unescape"), isOn: $unescape).toggleStyle(.checkbox)
+                    .tip(L("toolbox.format.unescape.tip"))
             }
             Spacer()
-            Button("Clear") { input = "" }
+            Button(L("toolbox.button.clear")) { input = "" }
                 .buttonStyle(.plain)
                 .foregroundStyle(Theme.link)
-                .tip("Clear the input")
+                .tip(L("toolbox.format.clear.tip"))
         }
         .font(.system(size: 12))
         .padding(.horizontal, 16)
         .frame(height: 44)
+    }
+
+    private func modeTitle(_ mode: FormatMode) -> String {
+        switch mode {
+        case .format: return L("toolbox.format.mode.format")
+        case .minify: return L("toolbox.format.mode.minify")
+        }
     }
 
     private func errorView(_ message: String) -> some View {
@@ -171,7 +178,7 @@ struct DataConvertTool: View {
             HStack(spacing: 12) {
                 PillPicker(options: DataFormat.allCases, selection: $source) { value in value.rawValue }
                     .frame(width: 240)
-                    .tip("Format of the input")
+                    .tip(L("toolbox.convert.source.tip"))
                 Button {
                     let previous = source
                     source = target
@@ -183,21 +190,21 @@ struct DataConvertTool: View {
                     Image(systemName: "arrow.left.arrow.right")
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("Swap formats")
-                .tip("Swap the formats and use the output as the new input")
+                .accessibilityLabel(L("toolbox.convert.swap"))
+                .tip(L("toolbox.convert.swap.tip"))
                 PillPicker(options: DataFormat.allCases, selection: $target) { value in value.rawValue }
                     .frame(width: 240)
-                    .tip("Format to convert to")
+                    .tip(L("toolbox.convert.target.tip"))
                 Spacer()
             }
             .padding(.horizontal, 16)
             .frame(height: 44)
             Divider().overlay(Theme.border)
             SplitPanes {
-                PaneHeader(title: "\(source.rawValue) input") { EmptyView() }
+                PaneHeader(title: L("toolbox.convert.input", source.rawValue)) { EmptyView() }
                 CodeTextView(text: $input)
             } right: {
-                PaneHeader(title: "\(target.rawValue) output") { EmptyView() }
+                PaneHeader(title: L("toolbox.convert.output", target.rawValue)) { EmptyView() }
                 switch output {
                 case .success(let text):
                     CodeTextView(text: .constant(text), isEditable: false, highlight: target == .json ? SyntaxHighlighter.json : (target == .xml ? SyntaxHighlighter.markup : nil))
@@ -211,7 +218,7 @@ struct DataConvertTool: View {
                 }
             }
             ToolFooter {
-                Text("Nested objects become dotted CSV columns; repeated XML elements become arrays.")
+                Text(L("toolbox.convert.footer"))
                     .foregroundStyle(Theme.textSecondary)
                 Spacer()
                 if case .success(let text) = output {
