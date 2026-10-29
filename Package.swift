@@ -9,7 +9,7 @@ let package = Package(
         .executable(name: "Bugbear", targets: ["Bugbear"]),
     ],
     dependencies: [
-        .package(url: "https://github.com/jpsim/Yams.git", from: "5.1.0"),
+        .package(url: "https://github.com/jpsim/Yams.git", from: "6.2.2"),
     ],
     targets: [
         .target(
