@@ -1,18 +1,18 @@
 #!/usr/bin/env python3
-"""Every control has a check that presses it (scripts/controls.txt).
+"""Every control has a check that presses it (scripts/check/controls.txt).
 
-  scripts/control-coverage.py              each row's check exists in the tests
-  scripts/control-coverage.py <listing>    each control in a live listing has a row; a listing
+  scripts/check/control-coverage.py              each row's check exists in the tests
+  scripts/check/control-coverage.py <listing>    each control in a live listing has a row; a listing
                                            line is "area|role|label", from the e2e tests
 """
 import re
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).resolve().parents[2]
 TEST_FILES = [
-    ROOT / "scripts" / "e2e.sh",
-    ROOT / "scripts" / "e2e-features.sh",
+    ROOT / "scripts" / "test" / "e2e.sh",
+    ROOT / "scripts" / "test" / "e2e-features.sh",
     ROOT / "Sources" / "Bugbear" / "DevTools" / "DevChecks.swift",
 ]
 
@@ -29,7 +29,7 @@ def app_name():
 def read_rows():
     name = re.escape(app_name())
     rows = []
-    for number, line in enumerate((ROOT / "scripts" / "controls.txt").read_text().splitlines(), start=1):
+    for number, line in enumerate((ROOT / "scripts" / "check" / "controls.txt").read_text().splitlines(), start=1):
         if not line.strip() or line.startswith("#"):
             continue
         parts = line.split("\t")
@@ -79,7 +79,7 @@ def check_live_controls(rows, listing):
                 covered = True
                 break
         if not covered:
-            print(f"no check for {area}: \"{label}\" ({parts[1]}); add a row to scripts/controls.txt and a test")
+            print(f"no check for {area}: \"{label}\" ({parts[1]}); add a row to scripts/check/controls.txt and a test")
             uncovered += 1
     return uncovered
 

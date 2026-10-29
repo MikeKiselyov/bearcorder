@@ -1,0 +1,25 @@
+name: Why I uninstalled
+description: Bugbear was not for you? Tell us what got in the way, so it gets better.
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Sorry to see you go, and thank you for taking a minute to say why. Every answer is read.
+  - type: textarea
+    id: reason
+    attributes:
+      label: What did you not like
+      description: What was missing, got in the way or did not work. A few words are enough.
+    validations:
+      required: true
+  - type: textarea
+    id: instead
+    attributes:
+      label: What do you use instead
+      description: Optional. Another app, or what would have made you stay.
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Optional. Bugbear version and macOS version, if it matters.
+      render: text

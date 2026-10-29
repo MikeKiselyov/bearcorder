@@ -8,13 +8,13 @@ new release:
    higher version: a patch (`0.5.1`) for fixes, a minor (`0.6.0`) for new features. Write the items
    for people, the way they appear in "What's new". The app's version comes from this entry.
 3. Open a pull request. [CI](.github/workflows/ci.yml) checks that the release is there
-   (`scripts/check-release.sh origin/main`), runs the unit tests and the self-test. Changes only to
+   (`scripts/check/release.sh origin/main`), runs the unit tests and the self-test. Changes only to
    docs or CI need no release.
 4. After the merge CI tags the commit `v<version>` and publishes a GitHub release with the same notes.
    Installed apps see the new version within 6 hours.
 
 The suites that need permissions (`e2e`, `features`, `perf`) can't run on GitHub's Macs; run
-`scripts/test-all.sh` before opening the pull request.
+`scripts/test/all.sh` before opening the pull request.
 
 
 More for developers:

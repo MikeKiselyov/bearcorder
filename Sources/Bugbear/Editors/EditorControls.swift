@@ -230,11 +230,13 @@ struct FillToggle: View {
     }
 }
 
-/// "− value +" for one size, with a symbol saying what the size is of.
+/// "− value +" for one size, with a symbol saying what the size is of. `compact` (a narrow window)
+/// keeps only − and +, with the value in the tooltip.
 struct SizeStepper: View {
     var value: String
     var name: String
     var symbol: String = ""
+    var compact = false
     var onStep: (Int) -> Void
 
     var body: some View {
@@ -247,14 +249,16 @@ struct SizeStepper: View {
             .buttonStyle(.plain)
             .tip(L("editors.size.smaller.tip", name))
             .accessibilityLabel(L("editors.size.smaller", name))
-            HStack(spacing: 4) {
-                if !symbol.isEmpty {
-                    Image(systemName: symbol).font(.system(size: 10)).foregroundStyle(Theme.textSecondary)
+            if !compact {
+                HStack(spacing: 4) {
+                    if !symbol.isEmpty {
+                        Image(systemName: symbol).font(.system(size: 10)).foregroundStyle(Theme.textSecondary)
+                    }
+                    Text(value).font(.system(size: 12, design: .monospaced))
                 }
-                Text(value).font(.system(size: 12, design: .monospaced))
+                .frame(minWidth: 40)
+                .tip(L("editors.size.value.tip", name.capitalized, value))
             }
-            .frame(minWidth: 40)
-            .tip(L("editors.size.value.tip", name.capitalized, value))
             Button {
                 onStep(1)
             } label: {

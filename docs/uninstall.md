@@ -12,6 +12,10 @@ From a clone: `scripts/uninstall.sh` (add `--yes` to skip the question).
 
 Screenshots and clips you saved or exported stay where you saved them (`~/Desktop/Bugbear` by default).
 
+We are sorry to see you go. At the end the command links a short form,
+[Why I uninstalled](https://github.com/MikeKiselyov/bugbear-app/issues/new?template=uninstall_feedback.yml):
+if you can, tell us what you did not like. In a terminal it offers to open the form for you.
+
 ## Where Bugbear keeps things
 
 | What | Where |

@@ -95,16 +95,12 @@ extension AppState {
     }
 
     func requestScreenRecordingAccess() {
-        SystemActions.askPermission("Screen Recording") { ScreenBuffer.requestScreenRecordingAccess() }
-        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture") {
-            SystemActions.open(url)
-        }
+        // After the welcome guide the buffer starts, and starting it asks macOS for the screen.
+        let guideDone = UserDefaults.standard.bool(forKey: OnboardingView.completedKey)
+        SystemActions.askOnceThenOpenSettings("Screen Recording", pane: "Privacy_ScreenCapture", askedBefore: guideDone) { ScreenBuffer.requestScreenRecordingAccess() }
     }
 
     func requestAccessibilityAccess() {
-        SystemActions.askPermission("Accessibility") { InputEventRecorder.requestAccessibilityAccess() }
-        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
-            SystemActions.open(url)
-        }
+        SystemActions.askOnceThenOpenSettings("Accessibility", pane: "Privacy_Accessibility") { InputEventRecorder.requestAccessibilityAccess() }
     }
 }

@@ -64,6 +64,23 @@ enum SystemActions {
         try FileManager.default.trashItem(at: url, resultingItemURL: nil)
     }
 
+    /// Allow… for Screen Recording or Accessibility. macOS shows its own window with Open System
+    /// Settings only the first time an app asks, so the first press only asks and later presses
+    /// open System Settings: both at once put two windows on the screen. `askedBefore` is for what
+    /// asked before this button kept count (the buffer asks for the screen once the guide is done),
+    /// so that press is not spent on a window macOS no longer shows.
+    static func askOnceThenOpenSettings(_ name: String, pane: String, askedBefore: Bool = false, defaults: UserDefaults = .standard, prompt: () -> Void) {
+        let key = "askedPermission.\(pane)"
+        if !askedBefore && !defaults.bool(forKey: key) {
+            defaults.set(true, forKey: key)
+            askPermission(name, prompt: prompt)
+            return
+        }
+        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?\(pane)") {
+            open(url)
+        }
+    }
+
     /// macOS's own prompt for a permission, e.g. Screen Recording.
     static func askPermission(_ name: String, prompt: () -> Void) {
         if isRecording {

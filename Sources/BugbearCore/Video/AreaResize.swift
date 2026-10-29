@@ -26,6 +26,40 @@ public struct AreaEdges: Equatable {
         AreaEdges(maxY: true),
     ]
 
+    /// All four sides: the whole area moves.
+    public static let all = AreaEdges(minX: true, minY: true, maxX: true, maxY: true)
+
+    /// What a press at `point` takes hold of: a handle within `reach` of it (corners before edges),
+    /// the whole area inside it, nothing outside.
+    public static func grabbed(at point: CGPoint, area: CGRect, reach: CGFloat) -> AreaEdges? {
+        for edges in handles {
+            let handle = edges.point(on: area)
+            if hypot(point.x - handle.x, point.y - handle.y) <= reach {
+                return edges
+            }
+        }
+        if area.contains(point) {
+            return .all
+        }
+        return nil
+    }
+
+    /// The pointer that says what a drag from here does.
+    public var cursor: AreaCursor {
+        if self == .all {
+            return .move
+        }
+        let horizontal = minX || maxX
+        let vertical = minY || maxY
+        if horizontal && vertical {
+            return .corner
+        }
+        if horizontal {
+            return .leftRight
+        }
+        return .upDown
+    }
+
     /// Where this handle sits on `area`.
     public func point(on area: CGRect) -> CGPoint {
         var x = area.midX
@@ -35,6 +69,23 @@ public struct AreaEdges: Equatable {
         if minY { y = area.minY }
         if maxY { y = area.maxY }
         return CGPoint(x: x, y: y)
+    }
+}
+
+/// The pointer over a picked area: a hand to move it, arrows on the handles, a crosshair to draw a new one.
+public enum AreaCursor: Equatable {
+    case move
+    case leftRight
+    case upDown
+    case corner
+    case draw
+
+    /// For a press at `point`: what `AreaEdges.grabbed` takes hold of, or a crosshair outside.
+    public static func at(_ point: CGPoint, area: CGRect, reach: CGFloat) -> AreaCursor {
+        guard let edges = AreaEdges.grabbed(at: point, area: area, reach: reach) else {
+            return .draw
+        }
+        return edges.cursor
     }
 }
 
@@ -60,6 +111,47 @@ public enum AreaResize {
             maxY = clamp(maxY + dy, low: minY + minimum, high: bounds.maxY)
         }
         return CGRect(x: minX, y: minY, width: maxX - minX, height: maxY - minY)
+    }
+
+    /// A drag on what `AreaEdges.grabbed` took hold of: all four sides move the area, the others resize it.
+    public static func dragged(_ area: CGRect, edges: AreaEdges, dx: CGFloat, dy: CGFloat, bounds: CGRect, minimum: CGFloat) -> CGRect {
+        if edges == .all {
+            return moved(area, dx: dx, dy: dy, bounds: bounds)
+        }
+        return resized(area, edges: edges, dx: dx, dy: dy, bounds: bounds, minimum: minimum)
+    }
+
+    /// A drag across several screens: the area stays in their bounding box and keeps a part on one
+    /// of them. Between screens of different sizes part of that box is no screen; there the area
+    /// slides along the edge (only across, or only up and down) instead of stopping. Nil when no
+    /// part of the drag can stay on a screen.
+    public static func dragged(_ area: CGRect, edges: AreaEdges, dx: CGFloat, dy: CGFloat, screens: [CGRect], minimum: CGFloat) -> CGRect? {
+        var reach = CGRect.null
+        for screen in screens {
+            reach = reach.union(screen)
+        }
+        if reach.isNull {
+            return nil
+        }
+        let tries = [(dx, dy), (dx, 0), (0, dy)]
+        for (tryX, tryY) in tries {
+            let candidate = dragged(area, edges: edges, dx: tryX, dy: tryY, bounds: reach, minimum: minimum)
+            for screen in screens where screen.intersects(candidate) {
+                return candidate
+            }
+        }
+        return nil
+    }
+
+    /// A size label next to the grip that moves the area: moved left when they would overlap, as
+    /// on a narrow area.
+    public static func label(_ label: CGRect, clearOf grip: CGRect, gap: CGFloat) -> CGRect {
+        if !label.insetBy(dx: -gap, dy: -gap).intersects(grip) {
+            return label
+        }
+        var moved = label
+        moved.origin.x = grip.minX - gap - label.width
+        return moved
     }
 
     /// The whole area shifted, stopping at the edges of `bounds`.

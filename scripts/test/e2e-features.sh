@@ -3,15 +3,15 @@
 # browser page, window resizing, ruler, color picker, design overlay, area recording through the
 # picker, shortcuts, reports, step guide, comparison, editor sizes.
 #
-#   scripts/e2e-features.sh                     # in Google Chrome
-#   E2E_BROWSER=Safari scripts/e2e-features.sh  # or another browser
+#   scripts/test/e2e-features.sh                     # in Google Chrome
+#   E2E_BROWSER=Safari scripts/test/e2e-features.sh  # or another browser
 #
 # Opens a local test page in a new browser window and moves the mouse; don't touch the Mac while it runs (~2 min).
 # Needs Screen Recording and Accessibility for Bugbear. Restores the settings it changes.
 set -uo pipefail
 
-# shellcheck source=lib/common.sh
-source "$(dirname "$0")/lib/common.sh"
+# shellcheck source=../lib/common.sh
+source "$(dirname "$0")/../lib/common.sh"
 if [ -f "$ROOT/.env" ]; then
     set -a
     # shellcheck disable=SC1091
@@ -20,8 +20,8 @@ if [ -f "$ROOT/.env" ]; then
 fi
 BUNDLE_ID="${BUGBEAR_BUNDLE_ID:-io.github.bugbear.app}"
 # shellcheck disable=SC1091
-source "$ROOT/scripts/test-app.sh"
-R=scripts/bugbear-run.sh
+source "$ROOT/scripts/test/lib/test-app.sh"
+R=scripts/dev/bugbear-run.sh
 BROWSER="${E2E_BROWSER:-Google Chrome}"
 WORK="$ROOT/build/e2e-features"
 FAILURES=0
@@ -31,7 +31,7 @@ pass() { echo "PASS  $1"; PASSES=$((PASSES + 1)); }
 fail() { echo "FAIL  $1 ${2:-}"; FAILURES=$((FAILURES + 1)); }
 field() { echo "$1" | tr ' ' '\n' | grep "^$2=" | head -1 | cut -d= -f2-; }
 # shellcheck disable=SC1091
-source "$ROOT/scripts/e2e-helpers.sh"
+source "$ROOT/scripts/test/lib/e2e-helpers.sh"
 
 echo "==> build and launch"
 scripts/build-app.sh >/dev/null 2>&1 || { echo "build failed"; exit 1; }
@@ -316,6 +316,194 @@ if [ "$result" = "frame=1480x820" ]; then pass "the clip has the resized area, 1
 if [ -z "$($R area-handles 10)" ]; then pass "the handles go when the recording stops"; else fail "the handles go when the recording stops"; fi
 $R close-windows 10 >/dev/null
 
+echo "==> moving the area"
+# In the picker a drag inside the area or by its grip moves it and an edge handle moves one side; while recording,
+# the grip above the frame moves the whole area without resizing it, and the clip gets that place.
+$R "activate-app:$BROWSER" 10 >/dev/null
+sleep 1
+$R record-area-picker 10 >/dev/null
+sleep 1.5
+chip=$($R picker-chips 10 | tr ';' '\n' | grep "^720p@" | cut -d@ -f2)
+$R "post-click:$chip" 10 >/dev/null
+sleep 0.5
+picked=$($R picker-selection 10)
+IFS=, read -r pick_x pick_y pick_width pick_height <<< "$picked"
+$R "post-drag:$((pick_x + pick_width / 2)),$((pick_y + pick_height / 2)):$((pick_x + pick_width / 2 + 100)),$((pick_y + pick_height / 2 + 60))" 15 >/dev/null
+sleep 0.5
+result=$($R picker-selection 10)
+if [ "$result" = "$((pick_x + 100)),$((pick_y + 60)),$pick_width,$pick_height" ]; then pass "dragging inside the picked area moves it by 100,60 pt and keeps its size"; else fail "move the area in the picker" "$picked -> $result"; fi
+pick_x=$((pick_x + 100))
+pick_y=$((pick_y + 60))
+$R "post-drag:$((pick_x + pick_width)),$((pick_y + pick_height / 2)):$((pick_x + pick_width + 80)),$((pick_y + pick_height / 2 + 40))" 15 >/dev/null
+sleep 0.5
+result=$($R picker-selection 10)
+if [ "$result" = "$pick_x,$pick_y,$((pick_width + 80)),$pick_height" ]; then pass "the right edge handle in the picker makes the area 80 pt wider and nothing else"; else fail "edge handle in the picker" "$result"; fi
+pick_width=$((pick_width + 80))
+grip=$($R picker-grip 10)
+grip_x=${grip%,*}
+grip_y=${grip#*,}
+result="no grip"
+if [ -n "$grip" ]; then
+    $R "post-drag:$grip_x,$grip_y:$((grip_x - 60)),$((grip_y + 40))" 15 >/dev/null
+    sleep 0.5
+    result=$($R picker-selection 10)
+fi
+if [ "$result" = "$((pick_x - 60)),$((pick_y + 40)),$pick_width,$pick_height" ]; then pass "the grip above the picked area moves it by -60,40 pt and keeps its size"; else fail "grip in the picker" "$grip: $result"; fi
+pick_x=$((pick_x - 60))
+pick_y=$((pick_y + 40))
+$R post-key:36:none 10 >/dev/null
+sleep 3
+result=$($R recording-region 10)
+if echo "$result" | grep -q "region=${pick_width}x${pick_height} recording=true .* at=$pick_x,$pick_y$"; then pass "the recording takes the moved and widened area"; else fail "area from the picker" "$result, expected ${pick_width}x${pick_height} at $pick_x,$pick_y"; fi
+grip=$($R area-grip 10)
+grip_x=${grip%,*}
+grip_y=${grip#*,}
+$R "post-drag:$grip_x,$grip_y:$((grip_x - 120)),$((grip_y + 50))" 15 >/dev/null
+sleep 1
+result=$($R recording-region 10)
+if echo "$result" | grep -q "region=${pick_width}x${pick_height} recording=true .* at=$((pick_x - 120)),$((pick_y + 50))$"; then pass "dragging the grip while recording moves the area by -120,50 pt and keeps its size"; else fail "move the area while recording" "$result, expected at $((pick_x - 120)),$((pick_y + 50))"; fi
+result=$($R area-grip 10)
+if [ "$result" = "$((grip_x - 120)),$((grip_y + 50))" ]; then pass "the grip follows the frame"; else fail "the grip follows the frame" "$result"; fi
+front=$($R front-app 10)
+if [ "$front" = "$BROWSER" ]; then pass "dragging the grip leaves $BROWSER in front"; else fail "dragging the grip took the focus" "$front"; fi
+sleep 2
+$R record-stop 60 >/dev/null
+result=$($R "frame-of-latest:1:$WORK/area-moved.png" 30)
+if [ "$result" = "frame=$((pick_width * 2))x$((pick_height * 2))" ]; then pass "the clip of the moved area is $((pick_width * 2))×$((pick_height * 2))"; else fail "moved area clip size" "$result"; fi
+if [ -z "$($R area-grip 10)" ]; then pass "the grip goes when the recording stops"; else fail "the grip goes when the recording stops"; fi
+$R close-windows 10 >/dev/null
+
+echo "==> an area across displays"
+# With two displays the area can be picked across them, or moved onto the seam while recording; the
+# clip has both displays in their places (no half left black) at the sharper display's density.
+across_screens=$($R screens 10 | tr ';' '\n' | grep -c ':')
+if [ "$across_screens" -lt 2 ]; then
+    echo "  (one display: skipped)"
+else
+    # Where the area goes: its middle on the seam between the picker's first screen and a screen
+    # beside it (or above or below), halfway along the part of the seam both share. Top-left screen
+    # points. The clip's density is the sharper of the two screens'.
+    seam_target() {
+        local screens home candidate
+        screens=$($R picker-screens 10 | tr ';' '\n')
+        home=$(echo "$screens" | head -1)
+        IFS=, read -r home_x home_y home_width home_height <<< "${home%@*}"
+        seam_axis=""
+        for candidate in $(echo "$screens" | tail -n +2); do
+            IFS=, read -r other_x other_y other_width other_height <<< "${candidate%@*}"
+            if [ "$other_x" = $((home_x + home_width)) ] || [ $((other_x + other_width)) = "$home_x" ]; then
+                seam_axis=x
+                seam_x=$other_x
+                if [ "$other_x" -lt "$home_x" ]; then seam_x=$home_x; fi
+                low=$home_y; if [ "$other_y" -gt "$low" ]; then low=$other_y; fi
+                high=$((home_y + home_height)); if [ $((other_y + other_height)) -lt "$high" ]; then high=$((other_y + other_height)); fi
+                target_x=$seam_x
+                target_y=$(((low + high) / 2))
+            elif [ "$other_y" = $((home_y + home_height)) ] || [ $((other_y + other_height)) = "$home_y" ]; then
+                seam_axis=y
+                seam_y=$other_y
+                if [ "$other_y" -lt "$home_y" ]; then seam_y=$home_y; fi
+                low=$home_x; if [ "$other_x" -gt "$low" ]; then low=$other_x; fi
+                high=$((home_x + home_width)); if [ $((other_x + other_width)) -lt "$high" ]; then high=$((other_x + other_width)); fi
+                target_x=$(((low + high) / 2))
+                target_y=$seam_y
+            fi
+            if [ -n "$seam_axis" ]; then
+                clip_scale=${home#*@}
+                if [ "${candidate#*@}" -gt "$clip_scale" ]; then clip_scale=${candidate#*@}; fi
+                return 0
+            fi
+        done
+        return 1
+    }
+    # Both halves across the seam show a display: little pure black (the stitch's empty background).
+    check_both_halves() {
+        local halves first second
+        halves=$($R "png-black:$1" 30)
+        if [ "$seam_axis" = x ]; then
+            first=$(echo "$halves" | sed -n 's/.*left=\([0-9]*\).*/\1/p')
+            second=$(echo "$halves" | sed -n 's/.*right=\([0-9]*\).*/\1/p')
+        else
+            first=$(echo "$halves" | sed -n 's/.*top=\([0-9]*\).*/\1/p')
+            second=$(echo "$halves" | sed -n 's/.*bottom=\([0-9]*\).*/\1/p')
+        fi
+        if [ -n "$first" ] && [ -n "$second" ] && [ "$first" -lt 50 ] && [ "$second" -lt 50 ]; then pass "$2: both displays are in the clip ($halves)"; else fail "$2: a display is missing from the clip" "$halves"; fi
+    }
+
+    # Displays that touch no other one (a gap between them) have no seam to cross.
+    $R record-area-picker 10 >/dev/null
+    sleep 1.5
+    has_seam=0
+    if seam_target; then has_seam=1; fi
+    $R post-key:53:none 10 >/dev/null
+    sleep 1
+fi
+if [ "$across_screens" -ge 2 ] && [ "$has_seam" = 0 ]; then
+    echo "  (no display touches the one with the pointer: skipped)"
+elif [ "$across_screens" -ge 2 ]; then
+    $R "activate-app:$BROWSER" 10 >/dev/null
+    sleep 1
+    $R record-area-picker 10 >/dev/null
+    sleep 1.5
+    picker_count=$($R picker-screens 10 | tr ';' '\n' | grep -c ',')
+    if [ "$picker_count" = "$across_screens" ]; then pass "the area picker covers all $across_screens displays"; else fail "picker on every display" "$picker_count of $across_screens"; fi
+    chip=$($R picker-chips 10 | tr ';' '\n' | grep "^720p@" | cut -d@ -f2)
+    $R "post-click:$chip" 10 >/dev/null
+    sleep 0.5
+    IFS=, read -r pick_x pick_y pick_width pick_height <<< "$($R picker-selection 10)"
+    seam_target
+    grip=$($R picker-grip 10)
+    result="no grip"
+    if [ -n "$grip" ]; then
+        dx=$((target_x - (pick_x + pick_width / 2)))
+        dy=$((target_y - (pick_y + pick_height / 2)))
+        $R "post-drag:${grip%,*},${grip#*,}:$((${grip%,*} + dx)),$((${grip#*,} + dy))" 15 >/dev/null
+        sleep 0.5
+        result=$($R picker-selection 10)
+    fi
+    expected="$((target_x - pick_width / 2)),$((target_y - pick_height / 2)),$pick_width,$pick_height"
+    if [ "$result" = "$expected" ]; then pass "the picker's grip puts the area across the seam of two displays"; else fail "area across displays in the picker" "$result, expected $expected"; fi
+    $R post-key:36:none 10 >/dev/null
+    sleep 3
+    result=$($R recording-region 10)
+    if echo "$result" | grep -q "region=${pick_width}x${pick_height} recording=true .* at=$((target_x - pick_width / 2)),$((target_y - pick_height / 2))$"; then pass "the recording takes the area across displays"; else fail "recording an area across displays" "$result"; fi
+    sleep 2
+    $R record-stop 60 >/dev/null
+    result=$($R "frame-of-latest:1:$WORK/area-across.png" 30)
+    if [ "$result" = "frame=$((pick_width * clip_scale))x$((pick_height * clip_scale))" ]; then pass "the clip across displays is $((pick_width * clip_scale))×$((pick_height * clip_scale)), the sharper display's density"; else fail "clip across displays size" "$result"; fi
+    check_both_halves "$WORK/area-across.png" "picked across the seam"
+    $R close-windows 10 >/dev/null
+
+    # The same while recording: the area starts on one display, its grip takes it onto the seam.
+    $R "activate-app:$BROWSER" 10 >/dev/null
+    sleep 1
+    $R record-area-picker 10 >/dev/null
+    sleep 1.5
+    chip=$($R picker-chips 10 | tr ';' '\n' | grep "^720p@" | cut -d@ -f2)
+    $R "post-click:$chip" 10 >/dev/null
+    sleep 0.5
+    IFS=, read -r pick_x pick_y pick_width pick_height <<< "$($R picker-selection 10)"
+    seam_target
+    $R post-key:36:none 10 >/dev/null
+    sleep 3
+    grip=$($R area-grip 10)
+    result="no grip"
+    if [ -n "$grip" ]; then
+        dx=$((target_x - (pick_x + pick_width / 2)))
+        dy=$((target_y - (pick_y + pick_height / 2)))
+        $R "post-drag:${grip%,*},${grip#*,}:$((${grip%,*} + dx)),$((${grip#*,} + dy))" 15 >/dev/null
+        sleep 1
+        result=$($R recording-region 10)
+    fi
+    if echo "$result" | grep -q "region=${pick_width}x${pick_height} recording=true .* at=$((target_x - pick_width / 2)),$((target_y - pick_height / 2))$"; then pass "the recording frame's grip moves the area onto the seam of two displays"; else fail "moving the area across displays while recording" "$result"; fi
+    sleep 2
+    $R record-stop 60 >/dev/null
+    result=$($R "frame-of-latest:1:$WORK/area-moved-across.png" 30)
+    if [ "$result" = "frame=$((pick_width * clip_scale))x$((pick_height * clip_scale))" ]; then pass "the clip of the area moved across displays is $((pick_width * clip_scale))×$((pick_height * clip_scale))"; else fail "moved across displays clip size" "$result"; fi
+    check_both_halves "$WORK/area-moved-across.png" "moved across the seam"
+    $R close-windows 10 >/dev/null
+fi
+
 echo "==> area picker buttons"
 # The picker draws its buttons by hand; VoiceOver and the tests press them by name.
 $R record-area-picker 10 >/dev/null
@@ -388,6 +576,7 @@ result=$($R editor-size-test 30)
 if echo "$result" | grep -q "color=yellow" && [ "$(echo "$result" | sed -n 's/.*textFont=\([0-9]*\)->\([0-9]*\).*/\2/p')" -gt "$(echo "$result" | sed -n 's/.*textFont=\([0-9]*\)->.*/\1/p')" ]; then pass "screenshot + and - ($result)"; else fail "screenshot + and -" "$result"; fi
 result=$($R video-size-test 60)
 if echo "$result" | grep -q "100→150→400"; then pass "video mark sizes 100→150→400%"; else fail "video mark sizes" "$result"; fi
+if echo "$result" | grep -q "picked=250 presetMark=250 remembered=250 blurSized=false"; then pass "video size picked with nothing selected goes to the next mark and is remembered; blur has none"; else fail "video size for the next mark" "$result"; fi
 result=$($R cleanup-dryrun:0:0 60)
 if echo "$result" | grep -q "wouldDelete=0"; then pass "clean-up with no limits deletes nothing"; else fail "clean-up dry run" "$result"; fi
 
@@ -1617,7 +1806,7 @@ if [ "$(capture_count)" = "$((before + 1))" ]; then pass "recording bar \"Stop\"
 $R close-windows 10 >/dev/null
 
 echo "==> every control has a check"
-# The controls on screen now, against scripts/controls.txt: a new button without a check fails.
+# The controls on screen now, against scripts/check/controls.txt: a new button without a check fails.
 listing="$WORK/controls.txt"
 : > "$listing"
 $R close-panel 10 >/dev/null
@@ -1677,7 +1866,7 @@ $R close-windows 10 >/dev/null
 for area in menubar/Capture menubar/Record menubar/Tools menubar/Recent menubar/Space settings history space "screenshot:" "video:"; do
     if [ "$(grep -c "^$area|AX" "$listing")" -lt 3 ]; then fail "no controls listed for $area" "the window did not open in time"; fi
 done
-if coverage=$(python3 -I scripts/control-coverage.py "$listing"); then pass "every control of every window has a check ($(wc -l < "$listing" | tr -d ' ') controls)"; else fail "controls without a check" "$coverage"; fi
+if coverage=$(python3 -I scripts/check/control-coverage.py "$listing"); then pass "every control of every window has a check ($(wc -l < "$listing" | tr -d ' ') controls)"; else fail "controls without a check" "$coverage"; fi
 
 echo "==> settings buttons"
 open_settings
@@ -2293,6 +2482,11 @@ press_in video: "Bigger mark" >/dev/null
 bigger=$(vfield "$(video_state)" scale)
 press_in video: "Smaller mark" >/dev/null
 if [ "$bigger" != "$scale" ] && [ "$(vfield "$(video_state)" scale)" = "$scale" ]; then pass "video \"Bigger mark\" and \"Smaller mark\" resize the selected mark"; else fail "video mark size" "$scale $bigger"; fi
+# The toolbar's size control says "text size" for the selected text and resizes it too.
+press_in video: "Bigger text size" >/dev/null
+bigger=$(vfield "$(video_state)" scale)
+press_in video: "Smaller text size" >/dev/null
+if [ "$bigger" != "$scale" ] && [ "$(vfield "$(video_state)" scale)" = "$scale" ]; then pass "video \"Bigger text size\" and \"Smaller text size\" in the toolbar: the toolbar size resizes the selected text"; else fail "video toolbar size" "$scale $bigger"; fi
 # The selected text's background: a segmented switch, Label or Transparent.
 clear_before=$(vfield "$(video_state)" clear)
 press_in video: Transparent >/dev/null
@@ -2422,7 +2616,7 @@ echo "==> welcome guide fits the screen"
 frame_key="NSWindow Frame Bugbear.onboarding"
 defaults delete "$BUNDLE_ID" "$frame_key" 2>/dev/null
 result=$($R open-onboarding 10)
-if python3 scripts/window-fits.py "$result"; then pass "welcome guide fits the screen ($result)"; else fail "welcome guide fits the screen" "$result"; fi
+if python3 scripts/test/lib/window-fits.py "$result"; then pass "welcome guide fits the screen ($result)"; else fail "welcome guide fits the screen" "$result"; fi
 $R close-windows 10 >/dev/null
 defaults delete "$BUNDLE_ID" "$frame_key" 2>/dev/null
 

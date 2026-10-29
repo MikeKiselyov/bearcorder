@@ -22,6 +22,9 @@
 "editors.size.bigger" = "Bigger %@";
 "editors.size.bigger.tip" = "Bigger %@ (+)";
 "editors.size.value.tip" = "%1$@: %2$@";
+/* What the size stepper sizes, in both editors. */
+"editors.size.text" = "text size";
+"editors.size.line" = "line width";
 
 /* The selected mark. title: the mark's kind. */
 "editors.selected.title" = "Selected · %@";

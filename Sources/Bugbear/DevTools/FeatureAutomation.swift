@@ -7,7 +7,7 @@ import ScreenCaptureKit
 import SwiftUI
 import BugbearCore
 
-/// Automation commands for scripts/e2e-features.sh: drive each feature the way a user would,
+/// Automation commands for scripts/test/e2e-features.sh: drive each feature the way a user would,
 /// without the pickers and dialogs that need a mouse. Only active with the automation hook on.
 @MainActor
 enum FeatureAutomation {
@@ -1333,6 +1333,18 @@ enum FeatureAutomation {
                 texts.append("\(chip.title)@\(Int(chip.point.x)),\(Int(chip.point.y))")
             }
             return texts.joined(separator: ";")
+        case "picker-selection":
+            // The open picker's area: x,y,width,height in top-left screen points.
+            guard let rect = app.regionSelector.selectionOnScreen else { return "none" }
+            return "\(Int(rect.minX)),\(Int(rect.minY)),\(Int(rect.width)),\(Int(rect.height))"
+        case "picker-grip":
+            // The grip above the picker's area that moves it, top-left screen points.
+            guard let center = app.regionSelector.gripCenterOnScreen else { return "" }
+            return "\(Int(center.x)),\(Int(center.y))"
+        case "area-grip":
+            // The grip above the recording frame that moves the area, top-left screen points.
+            guard let center = app.recordingOutline.gripCenter else { return "" }
+            return "\(Int(center.x)),\(Int(center.y))"
         case "front-app":
             return NSWorkspace.shared.frontmostApplication?.localizedName ?? "none"
         case "area-handles":
@@ -1345,7 +1357,9 @@ enum FeatureAutomation {
             return texts.joined(separator: ";")
         case "recording-region":
             guard let region = app.recordingRegion else { return "none recording=\(app.recording != nil)" }
-            return "region=\(Int(region.global.width))x\(Int(region.global.height)) recording=\(app.recording != nil) outline=\(app.recordingOutline.windowCount)"
+            // at= is the area's top-left corner in top-left screen points.
+            let top = (NSScreen.screens.first?.frame.maxY ?? 0) - region.global.maxY
+            return "region=\(Int(region.global.width))x\(Int(region.global.height)) recording=\(app.recording != nil) outline=\(app.recordingOutline.windowCount) at=\(Int(region.global.minX)),\(Int(top))"
 
         case "frame-of-latest":
             // frame-of-latest:<seconds>:<png path> from the newest video
@@ -1357,6 +1371,42 @@ enum FeatureAutomation {
             guard let frame = try? await generator.image(at: CMTime(seconds: seconds, preferredTimescale: 600)).image else { return "no frame" }
             ImageFiles.write(frame, to: URL(fileURLWithPath: parts[2]), type: "public.png")
             return "frame=\(frame.width)x\(frame.height)"
+
+        case "png-black":
+            // png-black:<png path>: the share of pure black pixels (nothing recorded there) in the
+            // left, right, top and bottom halves, in percent.
+            guard let image = ImageFiles.load(URL(fileURLWithPath: argument)), let pixels = ScreenshotComparison.rgba(image, width: image.width, height: image.height) else { return "no picture" }
+            var black = [0, 0, 0, 0]
+            var total = [0, 0, 0, 0]
+            for row in 0..<image.height {
+                for column in 0..<image.width {
+                    let index = (row * image.width + column) * 4
+                    let isBlack = pixels[index] < 3 && pixels[index + 1] < 3 && pixels[index + 2] < 3
+                    var halves = [column < image.width / 2 ? 0 : 1]
+                    halves.append(row < image.height / 2 ? 2 : 3)
+                    for half in halves {
+                        total[half] += 1
+                        if isBlack {
+                            black[half] += 1
+                        }
+                    }
+                }
+            }
+            var shares: [Int] = []
+            for half in 0..<4 {
+                shares.append(total[half] == 0 ? 100 : black[half] * 100 / total[half])
+            }
+            return "left=\(shares[0]) right=\(shares[1]) top=\(shares[2]) bottom=\(shares[3])"
+
+        case "picker-screens":
+            // The screens the open area picker covers, the first where it opened, top-left screen
+            // points with their scale: x,y,w,h@scale;...
+            var texts: [String] = []
+            for screen in app.regionSelector.screensOnScreen {
+                let rect = screen.rect
+                texts.append("\(Int(rect.minX)),\(Int(rect.minY)),\(Int(rect.width)),\(Int(rect.height))@\(Int(screen.scale))")
+            }
+            return texts.joined(separator: ";")
 
         case "pick-color-test":
             // Opens the system color loupe; the script clicks somewhere to pick.
@@ -1618,8 +1668,22 @@ enum FeatureAutomation {
             model.addOverlay(kind: .text, start: CGPoint(x: 0.1, y: 0.1), end: CGPoint(x: 0.1, y: 0.1))
             let newMarkScale = Int((model.selectedOverlay?.effectiveScale ?? 0) * 100)
             model.deleteSelection()
+            // Nothing selected: the toolbar's size is for the next mark, and it is kept for the next clip.
+            model.selection = nil
+            model.tool = .arrow
+            model.changeOverlaySize(by: -1)
+            model.changeOverlaySize(by: -1)
+            let picked = Int(model.shownOverlayScale * 100)
+            model.addOverlay(kind: .arrow, start: CGPoint(x: 0.3, y: 0.3), end: CGPoint(x: 0.6, y: 0.6))
+            let presetMark = Int((model.selectedOverlay?.effectiveScale ?? 0) * 100)
+            let remembered = Int(EditorMemory.videoMarkScale * 100)
+            model.deleteSelection()
+            model.selection = nil
+            model.tool = .blur
+            let blurSized = model.canChangeOverlaySize
             model.tearDown()
-            return "arrow % \(steps.joined(separator: "→")) newMark=\(newMarkScale)"
+            EditorMemory.videoMarkScale = 1
+            return "arrow % \(steps.joined(separator: "→")) newMark=\(newMarkScale) picked=\(picked) presetMark=\(presetMark) remembered=\(remembered) blurSized=\(blurSized)"
 
         case "editor-size-test":
             return editorSizeTest()
@@ -1642,7 +1706,7 @@ enum FeatureAutomation {
         let normalized = CGRect(x: numbers[0], y: numbers[1], width: numbers[2], height: numbers[3])
         let frame = screen.frame
         let global = CGRect(x: frame.minX + normalized.minX * frame.width, y: frame.maxY - normalized.maxY * frame.height, width: normalized.width * frame.width, height: normalized.height * frame.height)
-        return RegionSelector.Selection(screen: screen, normalized: normalized, global: global)
+        return RegionSelector.Selection(global: global)
     }
 
     /// Visible frame of the first AXWebArea in the app's focused window, in top-left screen points. The web

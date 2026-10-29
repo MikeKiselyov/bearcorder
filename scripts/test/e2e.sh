@@ -1,15 +1,15 @@
 #!/bin/bash
 # End-to-end checks against the real app and real screen capture.
 #
-#   scripts/e2e.sh            build, launch, run every scenario, print PASS/FAIL
+#   scripts/test/e2e.sh            build, launch, run every scenario, print PASS/FAIL
 #
 # Needs Screen Recording permission for Bugbear (granted once in System Settings).
 # Turns on the local automation hook for the run and turns it off afterwards.
 # The microphone and camera are skipped: they would show permission prompts.
 set -uo pipefail
 
-# shellcheck source=lib/common.sh
-source "$(dirname "$0")/lib/common.sh"
+# shellcheck source=../lib/common.sh
+source "$(dirname "$0")/../lib/common.sh"
 if [ -f "$ROOT/.env" ]; then
     set -a
     # shellcheck disable=SC1091
@@ -18,7 +18,7 @@ if [ -f "$ROOT/.env" ]; then
 fi
 BUNDLE_ID="${BUGBEAR_BUNDLE_ID:-io.github.bugbear.app}"
 # shellcheck disable=SC1091
-source "$ROOT/scripts/test-app.sh"
+source "$ROOT/scripts/test/lib/test-app.sh"
 LOG="$HOME/Library/Logs/Bugbear/bugbear.log"
 FAILURES=0
 PASSES=0
@@ -32,7 +32,7 @@ run() {
     local timeout="${2:-60}"
     local before
     before=$(grep -c "AUTOMATION $command →" "$LOG" 2>/dev/null || true)
-    scripts/bugbear-command.sh "$command"
+    scripts/dev/bugbear-command.sh "$command"
     local waited=0
     while [ "$waited" -lt "$timeout" ]; do
         local now

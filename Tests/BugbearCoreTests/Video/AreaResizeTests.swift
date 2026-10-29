@@ -51,6 +51,63 @@ final class AreaResizeTests: XCTestCase {
         XCTAssertEqual(AreaEdges(maxY: true).point(on: area), CGPoint(x: 60, y: 70))
     }
 
+    func testAPressTakesHoldOfAHandleTheAreaOrNothing() {
+        let area = CGRect(x: 100, y: 100, width: 400, height: 300)
+        XCTAssertEqual(AreaEdges.grabbed(at: CGPoint(x: 503, y: 398), area: area, reach: 8), AreaEdges(maxX: true, maxY: true), "a corner")
+        XCTAssertEqual(AreaEdges.grabbed(at: CGPoint(x: 96, y: 250), area: area, reach: 8), AreaEdges(minX: true), "the middle of an edge")
+        XCTAssertEqual(AreaEdges.grabbed(at: CGPoint(x: 300, y: 250), area: area, reach: 8), .all, "inside: the whole area")
+        XCTAssertNil(AreaEdges.grabbed(at: CGPoint(x: 700, y: 250), area: area, reach: 8), "outside: a new area is drawn")
+    }
+
+    func testDraggingInsideMovesWithoutResizing() {
+        let area = CGRect(x: 100, y: 100, width: 400, height: 300)
+        XCTAssertEqual(AreaResize.dragged(area, edges: .all, dx: 50, dy: -30, bounds: screen, minimum: 40), CGRect(x: 150, y: 70, width: 400, height: 300))
+        XCTAssertEqual(AreaResize.dragged(area, edges: .all, dx: 900, dy: 0, bounds: screen, minimum: 40).size, area.size, "keeps its size at the screen edge")
+        XCTAssertEqual(AreaResize.dragged(area, edges: AreaEdges(maxX: true), dx: 50, dy: -30, bounds: screen, minimum: 40), CGRect(x: 100, y: 100, width: 450, height: 300))
+    }
+
+    func testThePointerSaysWhatADragDoes() {
+        let area = CGRect(x: 100, y: 100, width: 400, height: 300)
+        XCTAssertEqual(AreaCursor.at(CGPoint(x: 300, y: 250), area: area, reach: 8), .move)
+        XCTAssertEqual(AreaCursor.at(CGPoint(x: 100, y: 100), area: area, reach: 8), .corner)
+        XCTAssertEqual(AreaCursor.at(CGPoint(x: 500, y: 250), area: area, reach: 8), .leftRight)
+        XCTAssertEqual(AreaCursor.at(CGPoint(x: 300, y: 400), area: area, reach: 8), .upDown)
+        XCTAssertEqual(AreaCursor.at(CGPoint(x: 900, y: 700), area: area, reach: 8), .draw)
+    }
+
+    /// A laptop (0...1512 wide, 982 tall) and a shorter monitor to its right (0...700 tall).
+    let laptop = CGRect(x: 0, y: 0, width: 1512, height: 982)
+    let monitor = CGRect(x: 1512, y: 0, width: 1920, height: 700)
+
+    func testAnAreaCrossesScreens() throws {
+        let area = CGRect(x: 1000, y: 100, width: 400, height: 300)
+        let moved = try XCTUnwrap(AreaResize.dragged(area, edges: .all, dx: 300, dy: 0, screens: [laptop, monitor], minimum: 40))
+        XCTAssertEqual(moved, CGRect(x: 1300, y: 100, width: 400, height: 300), "across the seam")
+    }
+
+    func testAnAreaSlidesAlongTheEdgeOfNoScreen() throws {
+        // High on the laptop, dragged right and up: right of the laptop at that height is the
+        // corner above the shorter monitor, no screen. The area goes up along the laptop's edge.
+        let area = CGRect(x: 1000, y: 750, width: 300, height: 200)
+        let slid = try XCTUnwrap(AreaResize.dragged(area, edges: .all, dx: 1000, dy: 100, screens: [laptop, monitor], minimum: 40))
+        XCTAssertEqual(slid, CGRect(x: 1000, y: 782, width: 300, height: 200), "only the part of the drag that stays on a screen")
+        // Entirely into the empty corner: only the part of the move that stays on a screen is taken.
+        let corner = CGRect(x: 3000, y: 600, width: 300, height: 90)
+        let kept = try XCTUnwrap(AreaResize.dragged(corner, edges: .all, dx: 0, dy: 200, screens: [laptop, monitor], minimum: 40))
+        XCTAssertEqual(kept, corner.offsetBy(dx: 0, dy: 0), "nothing on a screen up there: it stays")
+        XCTAssertNil(AreaResize.dragged(corner, edges: .all, dx: 0, dy: 0, screens: [], minimum: 40))
+    }
+
+    func testTheSizeLabelClearsTheGrip() {
+        let grip = CGRect(x: 100, y: 10, width: 56, height: 16)
+        let far = CGRect(x: 0, y: 10, width: 60, height: 18)
+        XCTAssertEqual(AreaResize.label(far, clearOf: grip, gap: 4), far, "already clear")
+        let near = CGRect(x: 80, y: 10, width: 60, height: 18)
+        let moved = AreaResize.label(near, clearOf: grip, gap: 4)
+        XCTAssertEqual(moved.maxX, 96)
+        XCTAssertFalse(moved.intersects(grip))
+    }
+
     func testTheWholeFrameIsNoCrop() {
         XCTAssertNil(VideoCrop.normalized(nil))
         XCTAssertNil(VideoCrop.normalized(VideoCrop.whole))

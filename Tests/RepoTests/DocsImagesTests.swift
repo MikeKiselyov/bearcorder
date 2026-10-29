@@ -39,7 +39,7 @@ final class DocsImagesTests: XCTestCase {
     func testEveryDocsPictureIsUsed() {
         let text = docsText
         for name in files(in: "docs/images") {
-            XCTAssertTrue(text.contains("images/\(name)"), "docs/images/\(name) is not shown anywhere: delete it and its line in scripts/readme-media.sh")
+            XCTAssertTrue(text.contains("images/\(name)"), "docs/images/\(name) is not shown anywhere: delete it and its line in scripts/dev/readme-media.sh")
         }
     }
 

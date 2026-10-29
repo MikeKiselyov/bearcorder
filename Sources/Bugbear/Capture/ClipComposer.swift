@@ -1,5 +1,6 @@
 import AVFoundation
 import AppKit
+import BugbearCore
 import QuartzCore
 
 /// How displays are arranged in an exported clip, used to place recorded clicks.
@@ -12,20 +13,17 @@ struct ClipLayout {
 
     var displays: [Display]
     var totalWidth: Double
-    /// Normalized region (origin top-left) when a single display was cropped.
-    var region: CGRect?
+    /// A recorded area (global AppKit points), on one display or across several.
+    var area: CGRect? = nil
 
     /// Normalized clip position (origin top-left) for a global AppKit point.
     func normalizedPoint(forGlobal point: CGPoint) -> CGPoint? {
+        if let area {
+            return AreaComposition.normalizedPoint(point, area: area)
+        }
         for display in displays where display.frame.contains(point) {
             let localX = (point.x - display.frame.minX) / display.frame.width
             let localY = 1 - (point.y - display.frame.minY) / display.frame.height
-            if let crop = region {
-                let x = (localX - crop.minX) / crop.width
-                let y = (localY - crop.minY) / crop.height
-                if x < 0 || x > 1 || y < 0 || y > 1 { return nil }
-                return CGPoint(x: x, y: y)
-            }
             let x = (display.x + localX * display.width) / totalWidth
             return CGPoint(x: x, y: localY)
         }
@@ -59,11 +57,11 @@ struct ClipExport {
 }
 
 /// Combines one or more display buffers into a single MP4: side by side for several
-/// displays, or cropped to a region for one.
+/// displays, or an area (global points) that may cross displays, each in its place (AreaComposition).
 enum ClipComposer {
     /// `audioFrom` is the buffer that holds the sound (the main display's); it may be outside `buffers`
     /// when one other display is saved on its own.
-    static func export(buffers: [ScreenBuffer], ranges: [(start: Double, end: Double)], region: CGRect?, framesPerSecond: Int, audioFrom: ScreenBuffer? = nil) async throws -> ClipExport {
+    static func export(buffers: [ScreenBuffer], ranges: [(start: Double, end: Double)], area: CGRect?, framesPerSecond: Int, audioFrom: ScreenBuffer? = nil) async throws -> ClipExport {
         guard let primary = buffers.first else { throw BufferError.noDisplay }
         let audioSource = audioFrom ?? primary
         for buffer in buffers {
@@ -115,15 +113,25 @@ enum ClipComposer {
         var x = 0.0
         var renderSize = CGSize.zero
 
-        if let crop = region, placed.count == 1 {
-            let size = placed[0].buffer.size
-            let pixelRect = CGRect(x: crop.minX * size.width, y: crop.minY * size.height, width: crop.width * size.width, height: crop.height * size.height).integral
-            let layer = AVMutableVideoCompositionLayerInstruction(assetTrack: placed[0].track)
-            layer.setTransform(CGAffineTransform(translationX: -pixelRect.minX, y: -pixelRect.minY), at: .zero)
-            layers.append(layer)
-            renderSize = CGSize(width: Int(pixelRect.width / 2) * 2, height: Int(pixelRect.height / 2) * 2)
-            layoutDisplays.append(ClipLayout.Display(frame: placed[0].buffer.displayFrame, x: 0, width: Double(size.width)))
-            x = Double(size.width)
+        var sources: [AreaComposition.Source] = []
+        for item in placed {
+            sources.append(AreaComposition.Source(frame: item.buffer.displayFrame, pixels: item.buffer.size))
+        }
+        var plan: AreaComposition.Plan?
+        if let area {
+            plan = AreaComposition.plan(area: area, sources: sources)
+            if plan == nil { throw BufferError.nothingRecorded }
+        }
+        if let plan {
+            for placement in plan.placements {
+                let item = placed[placement.index]
+                let layer = AVMutableVideoCompositionLayerInstruction(assetTrack: item.track)
+                layer.setTransform(placement.transform, at: .zero)
+                layers.append(layer)
+                layoutDisplays.append(ClipLayout.Display(frame: item.buffer.displayFrame, x: Double(placement.offset.x), width: Double(item.buffer.size.width * placement.scale)))
+            }
+            renderSize = plan.renderSize
+            x = Double(renderSize.width)
         } else {
             for item in sorted {
                 let size = item.buffer.size
@@ -155,7 +163,7 @@ enum ClipComposer {
         // which takes a fraction of a second however busy the screen was.
         let audioTracks = composition.tracks(withMediaType: .audio).count
         var copied = false
-        if placed.count == 1 && region == nil && audioTracks <= 1 {
+        if placed.count == 1 && area == nil && audioTracks <= 1 {
             copied = await copyWithoutReencoding(composition, duration: exactDuration, to: url)
         }
         if !copied {
@@ -163,8 +171,7 @@ enum ClipComposer {
             try await AssetExporter.export(asset: composition, videoComposition: videoComposition, options: options, to: url)
         }
 
-        let usesRegion = region != nil && placed.count == 1
-        let layout = ClipLayout(displays: layoutDisplays, totalWidth: x, region: usesRegion ? region : nil)
+        let layout = ClipLayout(displays: layoutDisplays, totalWidth: x, area: plan == nil ? nil : area)
         return ClipExport(url: url, pieces: pieces, duration: exactDuration.seconds, layout: layout)
     }
 
@@ -172,7 +179,7 @@ enum ClipComposer {
     /// Where clicks land when these displays are shown side by side, the way `export` and
     /// `sideBySide(files:)` arrange them: left to right, scaled to the first buffer's height.
     static func sideBySideLayout(_ buffers: [ScreenBuffer]) -> ClipLayout {
-        guard let primary = buffers.first else { return ClipLayout(displays: [], totalWidth: 1, region: nil) }
+        guard let primary = buffers.first else { return ClipLayout(displays: [], totalWidth: 1) }
         let sorted = buffers.sorted { first, second in first.displayFrame.minX < second.displayFrame.minX }
         let targetHeight = Double(primary.size.height)
         var displays: [ClipLayout.Display] = []
@@ -182,7 +189,7 @@ enum ClipComposer {
             displays.append(ClipLayout.Display(frame: buffer.displayFrame, x: x, width: width))
             x += width
         }
-        return ClipLayout(displays: displays, totalWidth: x, region: nil)
+        return ClipLayout(displays: displays, totalWidth: x)
     }
 
     /// Builds one clip with saved per-display clips side by side, in the given order, scaled to the

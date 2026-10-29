@@ -120,7 +120,7 @@ private struct ScreenshotEditorContent: View {
                 FillToggle(isFilled: document.isFilled, isEnabled: document.fillTarget != nil) { filled in
                     document.setFilled(filled)
                 }
-                SizeStepper(value: "\(document.sizeValue)", name: document.sizeIsText ? L("screenshot.size.text") : L("screenshot.size.line"), symbol: document.sizeIsText ? "textformat.size" : "lineweight") { direction in
+                SizeStepper(value: "\(document.sizeValue)", name: document.sizeIsText ? L("editors.size.text") : L("editors.size.line"), symbol: document.sizeIsText ? "textformat.size" : "lineweight") { direction in
                     document.changeSize(by: direction)
                 }
             }

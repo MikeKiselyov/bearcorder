@@ -1,14 +1,14 @@
 #!/bin/bash
 # Regenerates the pictures and GIFs in docs/images that README.md shows.
 #
-#   scripts/readme-media.sh
+#   scripts/dev/readme-media.sh
 #
 # Everything is rendered off screen from a made-up demo page (no screen access, no real captures).
 # Needs ffmpeg for the GIFs: brew install ffmpeg
 set -euo pipefail
 
-# shellcheck source=lib/common.sh
-source "$(dirname "$0")/lib/common.sh"
+# shellcheck source=../lib/common.sh
+source "$(dirname "$0")/../lib/common.sh"
 WORK="$ROOT/build/readme-media"
 OUT="$ROOT/docs/images"
 

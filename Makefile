@@ -14,32 +14,33 @@ app: ## Build the signed .app in build/
 	scripts/build-app.sh
 
 test: ## Unit tests, self-test, lint and the release check (~2 min, no permissions)
-	scripts/test-all.sh --quick
+	scripts/test/all.sh --quick
 
 test-all: ## Every suite, the real app included (~10 min, moves the mouse)
-	scripts/test-all.sh
+	scripts/test/all.sh
 
 e2e: ## The real app: buffer, saving, recording
-	scripts/e2e.sh
+	scripts/test/e2e.sh
 
 features: ## The real app with a browser: every feature and control
-	scripts/e2e-features.sh
+	scripts/test/e2e-features.sh
 
 perf: ## CPU and memory while idle and recording
-	scripts/perf.sh
+	scripts/test/perf.sh
 
-lint: ## shellcheck on every script and the control list check
-	shellcheck -x scripts/*.sh scripts/lib/*.sh
-	python3 -I scripts/control-coverage.py
+lint: ## shellcheck on every script, actionlint on the CI workflows and the control list check
+	shellcheck -x scripts/*.sh scripts/*/*.sh scripts/*/*/*.sh
+	actionlint
+	python3 -I scripts/check/control-coverage.py
 
 media: ## Regenerate the README pictures and GIFs (needs ffmpeg)
-	scripts/readme-media.sh
+	scripts/dev/readme-media.sh
 
 release-check: ## What CI checks on a pull request: a new release in the notes
-	scripts/check-release.sh origin/main
+	scripts/check/release.sh origin/main
 
 no-automation: ## A release build has no automation hook, self-test or media tools
-	scripts/check-no-automation.sh
+	scripts/check/no-automation.sh
 
 clean: ## Remove build output
 	rm -rf .build build

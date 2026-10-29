@@ -4,7 +4,7 @@ import AVFoundation
 import AppKit
 import BugbearCore
 
-/// Local automation for end-to-end tests (scripts/e2e.sh). Off by default; enable with
+/// Local automation for end-to-end tests (scripts/test/e2e.sh). Off by default; enable with
 ///   defaults write <bundle id> automationEnabled -bool true
 /// Commands arrive as a distributed notification "Bugbear.automation" with userInfo["command"];
 /// results are written to the log as "AUTOMATION <command> → <result>".

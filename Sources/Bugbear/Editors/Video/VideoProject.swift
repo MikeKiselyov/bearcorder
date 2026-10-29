@@ -48,10 +48,15 @@ struct VideoOverlay: Identifiable, Codable, Equatable {
     }
 
     func steppedScale(_ direction: Int) -> Double {
+        return VideoOverlay.stepped(effectiveScale, direction)
+    }
+
+    /// The size one step bigger (1) or smaller (-1) than `scale`, within `scales`.
+    static func stepped(_ scale: Double, _ direction: Int) -> Double {
         var index = 2
         var bestDistance = Double.greatestFiniteMagnitude
         for (candidate, value) in VideoOverlay.scales.enumerated() {
-            let distance = abs(value - effectiveScale)
+            let distance = abs(value - scale)
             if distance < bestDistance {
                 index = candidate
                 bestDistance = distance

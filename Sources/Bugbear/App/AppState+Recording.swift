@@ -26,7 +26,7 @@ extension AppState {
             let screen = NSScreen.screens.first { screen in screen.frame.contains(NSEvent.mouseLocation) } ?? NSScreen.main
             guard let chosen = screen else { return }
             let bugbearWasInFront = NSApp.isActive
-            let selection = await regionSelector.pick(on: chosen, initial: nil)
+            let selection = await regionSelector.pick(on: chosen, initial: nil, acrossScreens: true)
             guard let picked = selection else { return }
             // The picker took the focus to read Return; give it back, so the keys go to the app being
             // recorded right away. Started from one of Bugbear's own windows, the focus stays there.
@@ -35,14 +35,19 @@ extension AppState {
             }
             recordingRegion = picked
         }
-        // Which display to keep: the area's, or the one under the pointer when only one is wanted.
+        var restart = bufferState != .running
+        // Which display to keep: the one under the pointer when only one is wanted. An area can be
+        // moved to any display or across them while recording, so every display is kept for it.
         recordingDisplay = nil
-        if let region = recordingRegion {
-            recordingDisplay = AppState.displayID(of: region.screen)
+        if recordingRegion != nil {
+            if NSScreen.screens.count > 1 && !settings.captureAllDisplays {
+                allDisplaysForArea = true
+                restart = true
+                Log.info("area recording: every display in the buffer")
+            }
         } else if !settings.captureAllDisplays, let screen = NSScreen.screens.first(where: { screen in screen.frame.contains(NSEvent.mouseLocation) }) {
             recordingDisplay = AppState.displayID(of: screen)
         }
-        var restart = bufferState != .running
         if let display = recordingDisplay, !buffers.contains(where: { buffer in buffer.displayID == display }) {
             extraDisplayForRecording = display
             restart = true
@@ -115,13 +120,10 @@ extension AppState {
         }
     }
 
-    /// The area was resized on screen while recording; the video gets the area as it is at the end.
+    /// The area was resized or moved on screen while recording, maybe onto another display; the
+    /// video gets the area as it is at the end.
     private func recordingAreaChanged(_ global: CGRect) {
-        guard var region = recordingRegion else { return }
-        let screen = region.screen.frame
-        region.global = global
-        // Normalized rects count from the top of the screen.
-        region.normalized = CGRect(x: (global.minX - screen.minX) / screen.width, y: (screen.maxY - global.maxY) / screen.height, width: global.width / screen.width, height: global.height / screen.height)
+        guard recordingRegion != nil, let region = RegionSelector.Selection(global: global) else { return }
         recordingRegion = region
     }
 
@@ -151,13 +153,17 @@ extension AppState {
         if let display = recordingDisplay {
             exportBuffers = buffers.filter { buffer in buffer.displayID == display }
         }
+        if let area = region?.global {
+            exportBuffers = buffers.filter { buffer in buffer.displayFrame.intersects(area) }
+        }
         recordingDisplay = nil
         do {
             if region == nil {
                 let capture = try await saveClip(from: exportBuffers, ranges: ranges, app: app, framesPerSecond: settings.recordingFramesPerSecond)
                 WindowManager.shared.openEditor(for: capture)
             } else {
-                let clip = try await ClipComposer.export(buffers: exportBuffers, ranges: ranges, region: region?.normalized, framesPerSecond: settings.recordingFramesPerSecond)
+                // The sound is on the main display's buffer, which the area may not touch.
+                let clip = try await ClipComposer.export(buffers: exportBuffers, ranges: ranges, area: region?.global, framesPerSecond: settings.recordingFramesPerSecond, audioFrom: primaryBuffer)
                 await finishClip(clip, app: app)
             }
         } catch {
@@ -193,9 +199,10 @@ extension AppState {
         if case .failed = bufferState {
             bufferFailed = true
         }
-        let needsRestart = nativeResolutionForArea || extraDisplayForRecording != nil || bufferFailed || screensChangedWhileRecording
+        let needsRestart = nativeResolutionForArea || allDisplaysForArea || extraDisplayForRecording != nil || bufferFailed || screensChangedWhileRecording
         let wasBoosted = boostedFrameRate
         nativeResolutionForArea = false
+        allDisplaysForArea = false
         extraDisplayForRecording = nil
         boostedFrameRate = false
         screensChangedWhileRecording = false

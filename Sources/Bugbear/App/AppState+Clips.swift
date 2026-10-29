@@ -63,7 +63,7 @@ extension AppState {
         guard let main = source.first else { throw BufferError.noDisplay }
         let environment = await EnvironmentCollector.snapshot(for: app, readURL: settings.readBrowserURL)
         if source.count == 1 {
-            let clip = try await ClipComposer.export(buffers: source, ranges: ranges, region: nil, framesPerSecond: rate)
+            let clip = try await ClipComposer.export(buffers: source, ranges: ranges, area: nil, framesPerSecond: rate)
             Log.info("clip exported: \(clip.duration)s → \(clip.url.lastPathComponent)")
             let capture = try store.add(kind: .video, mediaFile: clip.url, environment: environment, events: inputRecorder.events(for: clip), duration: clip.duration)
             attachSystemLog(to: capture, clip: clip, app: app)
@@ -74,7 +74,7 @@ extension AppState {
         var clips: [ClipExport] = []
         var variants: [ScreenVariant] = []
         for buffer in ordered {
-            let clip = try await ClipComposer.export(buffers: [buffer], ranges: ranges, region: nil, framesPerSecond: rate, audioFrom: main)
+            let clip = try await ClipComposer.export(buffers: [buffer], ranges: ranges, area: nil, framesPerSecond: rate, audioFrom: main)
             clips.append(clip)
             variants.append(ScreenVariant(id: "display-\(buffer.displayID)", name: AppState.screenName(buffer.displayID), file: "screen-\(buffer.displayID).mp4", events: inputRecorder.events(for: clip), isMain: buffer === main))
         }

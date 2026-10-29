@@ -26,7 +26,7 @@ extension AppState {
     /// Main display first, then the others when "all displays" is on.
     private func displaysToCapture() -> [CGDirectDisplayID] {
         var ids: [CGDirectDisplayID] = [CGMainDisplayID()]
-        if settings.captureAllDisplays {
+        if settings.captureAllDisplays || allDisplaysForArea {
             for screen in NSScreen.screens {
                 let id = AppState.displayID(of: screen)
                 if !ids.contains(id) {

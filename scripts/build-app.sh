@@ -9,12 +9,17 @@
 #   BUGBEAR_BUNDLE_ID       bundle identifier (default io.github.bugbear.app)
 #   BUGBEAR_SIGN_IDENTITY   codesign identity, e.g. "Apple Development: you@example.com (TEAMID)".
 #                            Unset: the first "Apple Development" identity in the keychain, or without
-#                            one a certificate made for this Mac (scripts/local-signing.sh).
+#                            one a certificate made for this Mac (scripts/dev/local-signing.sh).
 #                            "local": always that certificate. "-": ad-hoc signing (macOS asks for
 #                            permissions again after each rebuild).
 #
+# --install replaces an installed copy with another bundle id together with its permissions, so System
+# Settings lists the app once; macOS asks for the password for that (scripts/lib/permissions.sh).
+# Only an earlier Bugbear (executable Bugbear, a plain reverse-DNS id) is handled that way.
+# BUGBEAR_KEEP_PERMISSIONS=1 skips the password and leaves the system's records alone.
+#
 # BUGBEAR_AUTOMATION=1 builds the app the tests drive: with automation, the self-test and the media
-# tools (Sources/Bugbear/DevTools). A release never has them. scripts/test-app.sh sets it.
+# tools (Sources/Bugbear/DevTools). A release never has them. scripts/test/lib/test-app.sh sets it.
 set -euo pipefail
 
 # Bugbear stops its screen capture before it quits (up to 2 s), so wait for it to be gone.
@@ -31,6 +36,20 @@ wait_for_bugbear_to_quit() {
     fi
 }
 
+# What is left to undo when the script ends, however it ends: the local signing key is locked
+# again, and copies of a replaced app kept aside for their permissions go.
+uses_local_signing=0
+kept_dir=""
+on_exit() {
+    if [ -n "$kept_dir" ]; then
+        rm -rf "$kept_dir"
+    fi
+    if [ "$uses_local_signing" = 1 ]; then
+        "$ROOT/scripts/dev/local-signing.sh" finish
+    fi
+}
+trap on_exit EXIT
+
 # shellcheck source=lib/common.sh
 source "$(dirname "$0")/lib/common.sh"
 if [ -f "$ROOT/.env" ]; then
@@ -40,7 +59,9 @@ if [ -f "$ROOT/.env" ]; then
     set +a
 fi
 # shellcheck disable=SC1091
-source "$ROOT/scripts/app-name.sh"
+source "$ROOT/scripts/lib/app-name.sh"
+# shellcheck source=lib/permissions.sh
+source "$ROOT/scripts/lib/permissions.sh"
 BUNDLE_ID="${BUGBEAR_BUNDLE_ID:-io.github.bugbear.app}"
 BUILD_DIR="$ROOT/build"
 APP_DIR="$BUILD_DIR/$APP_NAME.app"
@@ -104,16 +125,16 @@ set_plist BugbearSourcePath "$ROOT"
 plutil -lint "$PLIST" >/dev/null
 
 # Signing order: BUGBEAR_SIGN_IDENTITY, then an Apple Development certificate, then a certificate
-# made for this Mac (scripts/local-signing.sh). All three stay the same between builds, so macOS
+# made for this Mac (scripts/dev/local-signing.sh). All three stay the same between builds, so macOS
 # keeps the permissions after an update. Ad-hoc ("-") is the last resort.
 IDENTITY="${BUGBEAR_SIGN_IDENTITY:-}"
 if [ -z "$IDENTITY" ]; then
     IDENTITY="$(security find-identity -v -p codesigning | grep "Apple Development" | head -1 | sed -E 's/.*"(.*)"/\1/' || true)"
 fi
 if [ -z "$IDENTITY" ] || [ "$IDENTITY" = "local" ]; then
-    IDENTITY="$("$ROOT/scripts/local-signing.sh" identity || true)"
-    # The key is usable only while this build signs.
-    trap '"$ROOT/scripts/local-signing.sh" finish' EXIT
+    IDENTITY="$("$ROOT/scripts/dev/local-signing.sh" identity || true)"
+    # The key is usable only while this build signs (on_exit locks it).
+    uses_local_signing=1
     if [ -n "$IDENTITY" ]; then
         echo "==> signing with the certificate made for this Mac (no Apple Development one)"
     fi
@@ -163,9 +184,28 @@ for argument in "$@"; do
                 fi
             done
             already_installed=false
+            # Copies with another bundle id: kept aside until their permissions are gone.
+            other_ids=()
+            other_copies=()
             for copy in "${installed_copies[@]}"; do
-                if [ -d "$copy" ]; then
-                    already_installed=true
+                if [ ! -d "$copy" ]; then
+                    continue
+                fi
+                already_installed=true
+                if copy_id=$(is_earlier_bugbear "$copy" "$BUNDLE_ID"); then
+                    # Without a copy the old id's permissions stay; the install goes on.
+                    if [ -z "$kept_dir" ] && ! kept_dir="$(mktemp -d -t bugbear-replaced)"; then
+                        kept_dir=""
+                        echo "==> could not keep a copy of $copy: the permissions of $copy_id stay"
+                        continue
+                    fi
+                    kept="$kept_dir/${#other_ids[@]}/$(basename "$copy")"
+                    if ! mkdir -p "$(dirname "$kept")" || ! cp -R "$copy" "$kept"; then
+                        echo "==> could not keep a copy of $copy: the permissions of $copy_id stay"
+                        continue
+                    fi
+                    other_ids+=("$copy_id")
+                    other_copies+=("$kept")
                 fi
             done
             pkill -x Bugbear 2>/dev/null || true
@@ -176,6 +216,9 @@ for argument in "$@"; do
             if [ "$already_installed" = false ]; then
                 defaults delete "$BUNDLE_ID" onboardingCompleted 2>/dev/null || true
                 defaults delete "$BUNDLE_ID" onboardingPage 2>/dev/null || true
+                # Allow… asks macOS first again (SystemActions.askOnceThenOpenSettings).
+                defaults delete "$BUNDLE_ID" askedPermission.Privacy_ScreenCapture 2>/dev/null || true
+                defaults delete "$BUNDLE_ID" askedPermission.Privacy_Accessibility 2>/dev/null || true
                 echo "==> new install: the welcome guide opens on launch"
             fi
             rm -rf "$TARGET_DIR/$APP_NAME.app"
@@ -185,6 +228,13 @@ for argument in "$@"; do
             done
             cp -R "$APP_DIR" "$TARGET_DIR/"
             echo "==> installed to $TARGET_DIR/$APP_NAME.app"
+            for index in "${!other_ids[@]}"; do
+                forget_permissions "${other_ids[$index]}" "${other_copies[$index]}"
+            done
+            if [ -n "$kept_dir" ]; then
+                rm -rf "$kept_dir"
+                kept_dir=""
+            fi
             if [ -z "${BUGBEAR_NO_OPEN:-}" ]; then
                 open "$TARGET_DIR/$APP_NAME.app"
             fi

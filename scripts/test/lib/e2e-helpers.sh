@@ -1,6 +1,6 @@
 # shellcheck shell=bash
-# Sourced by scripts/e2e-features.sh and scripts/e2e-section.sh: pressing controls and reading
-# what they did. Needs R (scripts/bugbear-run.sh).
+# Sourced by scripts/test/e2e-features.sh and scripts/test/e2e-section.sh: pressing controls and reading
+# what they did. Needs R (scripts/dev/bugbear-run.sh).
 
 # press_menu <tab> <label>: opens the menu bar panel on a tab and presses a control in it, the
 # way VoiceOver presses it. Prints "pressed" or "not found".

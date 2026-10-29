@@ -1,7 +1,7 @@
 import Foundation
 import XCTest
 
-/// scripts/test-app.sh keeps a copy of the person's settings before a test run and puts all of it
+/// scripts/test/lib/test-app.sh keeps a copy of the person's settings before a test run and puts all of it
 /// back on exit, also when the run is stopped half way. Checked on a scratch settings domain.
 final class TestAppScriptTests: XCTestCase {
     private var root: URL {
@@ -39,7 +39,7 @@ final class TestAppScriptTests: XCTestCase {
         defer { forget(domain) }
         let script = """
         set -e
-        source "$ROOT/scripts/test-app.sh"
+        source "$ROOT/scripts/test/lib/test-app.sh"
         defaults write \(domain) outputFolderPath "/Users/someone/Desktop/Bugbear"
         defaults write \(domain) bufferMinutes -int 3
         save_settings \(domain)
@@ -63,7 +63,7 @@ final class TestAppScriptTests: XCTestCase {
         defer { forget(domain) }
         let script = """
         set -e
-        source "$ROOT/scripts/test-app.sh"
+        source "$ROOT/scripts/test/lib/test-app.sh"
         save_settings \(domain)
         defaults write \(domain) automationEnabled -bool true
         restore_settings \(domain)
