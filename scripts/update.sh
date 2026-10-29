@@ -23,7 +23,7 @@ wait_for_bugbear_to_quit() {
 
 cd "$(dirname "$0")/.."
 # shellcheck disable=SC1091
-source scripts/app-name.sh
+source scripts/lib/app-name.sh
 TARGET_APP="${1:-}"
 
 if [ -n "$(git status --porcelain --untracked-files=no)" ]; then

@@ -2,7 +2,7 @@
 # area <TAB> label pattern (regular expression, whole label) <TAB> words of the check's PASS line
 # {app} in a pattern stands for the app's name (AppInfo.name).
 # Areas: menubar/<tab>, menubar/* (on every tab). Add a row with its check for every new control:
-# scripts/control-coverage.py fails on a control without one, and on a row whose check is gone.
+# scripts/check/control-coverage.py fails on a control without one, and on a row whose check is gone.
 
 menubar/*	Capture|Record|Tools|Recent|Space	menu panel buttons
 menubar/*	Pause buffer	menu "Pause buffer" pauses it
@@ -210,6 +210,7 @@ video:	Highlight clicks|Show keystrokes|Show steps|Environment badge	video switc
 video:	Corner|Quality|Size limit|GIF frame rate	video picker
 video:	Label|Transparent	video text \"Transparent\" and \"Label\"
 video:	Bigger mark|Smaller mark	resize the selected mark
+video:	Bigger (line width|text size)|Smaller (line width|text size)	the toolbar size resizes the selected text
 video:	Copy	video environment
 video:	Bar: .+	video a mark bar's right edge dragged makes the mark longer
 video:	Text on the video	video a click with Text places text and it is typed right on the video

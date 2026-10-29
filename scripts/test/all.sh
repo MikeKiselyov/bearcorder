@@ -1,15 +1,16 @@
 #!/bin/bash
 # Every test suite in one run, with a summary at the end.
 #
-#   scripts/test-all.sh           # everything (~8 min): needs Screen Recording and Accessibility,
+#   scripts/test/all.sh           # everything (~8 min): needs Screen Recording and Accessibility,
 #                                 # opens a Chrome window and moves the mouse, so don't touch the Mac
-#   scripts/test-all.sh --quick   # unit tests, self-test, lint and the release check (~2 min), no permissions
+#   scripts/test/all.sh --quick   # unit tests, self-test, lint and the release check (~2 min), no permissions
 #
 # Suites:
 #   unit       swift test: parsers, converters, reports, timelines, disk tree (BugbearCore)
 #   self-test  media pipeline: export, edits, GIF, size limits, annotations, OCR, QR, stitching
-#   controls   every control in scripts/controls.txt has a check in the tests
+#   controls   every control in scripts/check/controls.txt has a check in the tests
 #   lint       shellcheck on every script (when shellcheck is installed)
+#   workflows  actionlint on the CI workflows (when actionlint is installed)
 #   release    a release build has no automation, self-test or media tools in it
 #   e2e        the real app: buffer, saving, recording with pause, audio, markers, crash watch, updates
 #   features   the real app with a browser: scrolling screenshot, ruler, color picker, overlay,
@@ -17,8 +18,8 @@
 #   perf       CPU and memory while idle and recording, save speed
 set -uo pipefail
 
-# shellcheck source=lib/common.sh
-source "$(dirname "$0")/lib/common.sh"
+# shellcheck source=../lib/common.sh
+source "$(dirname "$0")/../lib/common.sh"
 LOGS="$ROOT/build/test-logs"
 rm -rf "$LOGS"
 mkdir -p "$LOGS"
@@ -44,7 +45,7 @@ run_suite() {
     local status=$?
     local seconds=$(($(date +%s) - started))
     local summary
-    summary=$(grep -E "passed, [0-9]+ failed|Executed [0-9]+ tests|ALL CHECKS PASSED|ALL PERFORMANCE CHECKS PASSED|control coverage ok|shellcheck clean|release has no automation|FAILED" "$log" | tail -1 | sed -E 's/^[[:space:]]+//')
+    summary=$(grep -E "passed, [0-9]+ failed|Executed [0-9]+ tests|ALL CHECKS PASSED|ALL PERFORMANCE CHECKS PASSED|control coverage ok|shellcheck clean|actionlint clean|release has no automation|FAILED" "$log" | tail -1 | sed -E 's/^[[:space:]]+//')
     # A suite that stops halfway can still exit 0 (its exit trap runs last); no summary line
     # means it did not finish.
     if [ "$status" = "0" ] && [ -z "$summary" ]; then
@@ -76,23 +77,35 @@ self_test() {
 # Run by name through run_suite. shellcheck says nothing when all is well: say how many it checked.
 # shellcheck disable=SC2329
 lint_scripts() {
-    local scripts=(scripts/*.sh scripts/lib/*.sh)
+    local scripts=(scripts/*.sh scripts/*/*.sh scripts/*/*/*.sh)
     shellcheck -x "${scripts[@]}" || return 1
     echo "shellcheck clean: ${#scripts[@]} scripts"
 }
 
+# The same for the CI workflows: actionlint prints nothing when all is well.
+# shellcheck disable=SC2329
+lint_workflows() {
+    local workflows=(.github/workflows/*.yml)
+    actionlint -no-color || return 1
+    echo "actionlint clean: ${#workflows[@]} workflows"
+}
+
 run_suite unit swift test
 run_suite self-test self_test
-run_suite controls python3 -I scripts/control-coverage.py
-run_suite release scripts/check-no-automation.sh
+run_suite controls python3 -I scripts/check/control-coverage.py
+run_suite release scripts/check/no-automation.sh
 # CI lints the scripts too; locally only where shellcheck is installed (brew install shellcheck).
 if command -v shellcheck >/dev/null; then
     run_suite lint lint_scripts
 fi
+# CI checks the workflows too; locally only where actionlint is installed (brew install actionlint).
+if command -v actionlint >/dev/null; then
+    run_suite workflows lint_workflows
+fi
 if [ "$QUICK" = "0" ]; then
-    run_suite e2e scripts/e2e.sh
-    run_suite features scripts/e2e-features.sh
-    run_suite perf scripts/perf.sh
+    run_suite e2e scripts/test/e2e.sh
+    run_suite features scripts/test/e2e-features.sh
+    run_suite perf scripts/test/perf.sh
 fi
 
 echo

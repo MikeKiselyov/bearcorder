@@ -28,7 +28,8 @@ final class UninstallScriptTests: XCTestCase {
         try Data("x".utf8).write(to: url)
     }
 
-    private func run(home: URL, arguments: [String]) throws -> (status: Int32, output: String) {
+    /// `answers`: what is typed at the questions, one per line, in place of the terminal.
+    private func run(home: URL, arguments: [String], answers: String? = nil) throws -> (status: Int32, output: String) {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/bin/bash")
         process.arguments = [root.appendingPathComponent("scripts/uninstall.sh").path] + arguments
@@ -38,6 +39,12 @@ final class UninstallScriptTests: XCTestCase {
         environment["BUGBEAR_APPS_DIRS"] = home.appendingPathComponent("Applications").path
         environment["BUGBEAR_DRY_SYSTEM"] = "1"
         environment["NO_COLOR"] = "1"
+        if let answers {
+            let file = home.appendingPathComponent("answers.txt")
+            try FileManager.default.createDirectory(at: home, withIntermediateDirectories: true)
+            try answers.write(to: file, atomically: true, encoding: .utf8)
+            environment["BUGBEAR_TTY"] = file.path
+        }
         process.environment = environment
         process.standardInput = FileHandle.nullDevice
         let output = Pipe()
@@ -118,6 +125,30 @@ final class UninstallScriptTests: XCTestCase {
         }
     }
 
+    /// Leaving is met with a sorry and a link to say what did not work; a --yes run never waits on
+    /// a question or opens a browser.
+    func testSaysSorryAndAsksForFeedback() throws {
+        let home = FileManager.default.temporaryDirectory.appendingPathComponent("uninstall-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: home) }
+        try makeApp(at: home.appendingPathComponent("Applications/\(AppInfo.name).app"), executable: "Bugbear", bundleId: "test.bugbear")
+        let result = try run(home: home, arguments: ["--yes"])
+        XCTAssertEqual(result.status, 0, result.output)
+        XCTAssertTrue(result.output.contains("Oh no, you are leaving? The bear is already crying."), result.output)
+        XCTAssertTrue(result.output.contains("▀▀████████"), "the crying bear is drawn")
+        let link = "https://github.com/\(FeedbackReport.defaultRepository)/issues/new?template=uninstall_feedback.yml"
+        XCTAssertTrue(result.output.contains("The bear will miss you."), result.output)
+        XCTAssertTrue(result.output.contains("please tell us what you did not like"), result.output)
+        XCTAssertTrue(result.output.contains(link), "the feedback form of the app's own repository: \(result.output)")
+        XCTAssertFalse(result.output.contains("Open the feedback form?"), "no question in a --yes run")
+        XCTAssertFalse(result.output.contains("would run: open"), "no browser in a --yes run")
+        if let done = result.output.range(of: "is uninstalled"), let ask = result.output.range(of: link) {
+            XCTAssertTrue(done.lowerBound < ask.lowerBound, "the link comes after the uninstall, not before it")
+        }
+        // The form the link opens, with the field that asks what was not liked.
+        let form = try String(contentsOf: root.appendingPathComponent(".github/ISSUE_TEMPLATE/uninstall_feedback.yml"), encoding: .utf8)
+        XCTAssertTrue(form.contains("id: reason"), form)
+    }
+
     func testAsksFirstAndRemovesNothingWithoutAnAnswer() throws {
         let home = FileManager.default.temporaryDirectory.appendingPathComponent("uninstall-\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(at: home) }
@@ -130,5 +161,33 @@ final class UninstallScriptTests: XCTestCase {
         XCTAssertTrue(result.output.contains("--yes"), result.output)
         XCTAssertTrue(exists("Applications/\(AppInfo.name).app", in: home))
         XCTAssertTrue(exists("Library/Logs/\(AppInfo.storageName)/bugbear.log", in: home))
+    }
+
+    /// In a terminal: yes to uninstall, then Return opens the feedback form; "n" leaves it closed.
+    func testOffersToOpenTheFeedbackForm() throws {
+        let link = "https://github.com/\(FeedbackReport.defaultRepository)/issues/new?template=uninstall_feedback.yml"
+        for (answers, opens) in [("y\n\n", true), ("y\nn\n", false)] {
+            let home = FileManager.default.temporaryDirectory.appendingPathComponent("uninstall-\(UUID().uuidString)")
+            defer { try? FileManager.default.removeItem(at: home) }
+            try makeApp(at: home.appendingPathComponent("Applications/\(AppInfo.name).app"), executable: "Bugbear", bundleId: "test.bugbear")
+            let result = try run(home: home, arguments: [], answers: answers)
+            XCTAssertEqual(result.status, 0, result.output)
+            XCTAssertFalse(exists("Applications/\(AppInfo.name).app", in: home), "uninstalled after yes")
+            XCTAssertTrue(result.output.contains("Open the feedback form? [Y/n]"), result.output)
+            XCTAssertEqual(result.output.contains("would run: open \(link)"), opens, "answers \(answers.debugDescription): \(result.output)")
+            XCTAssertTrue(result.output.contains("Bye!"), result.output)
+        }
+    }
+
+    /// A no keeps everything, and the bear is relieved.
+    func testNoKeepsEverything() throws {
+        let home = FileManager.default.temporaryDirectory.appendingPathComponent("uninstall-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: home) }
+        try makeApp(at: home.appendingPathComponent("Applications/\(AppInfo.name).app"), executable: "Bugbear", bundleId: "test.bugbear")
+        let result = try run(home: home, arguments: [], answers: "n\n")
+        XCTAssertEqual(result.status, 0, result.output)
+        XCTAssertTrue(exists("Applications/\(AppInfo.name).app", in: home))
+        XCTAssertTrue(result.output.contains("Phew! The bear wipes its tears. Nothing was removed."), result.output)
+        XCTAssertFalse(result.output.contains("feedback form"), result.output)
     }
 }

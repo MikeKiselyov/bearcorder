@@ -1,14 +1,14 @@
 #!/bin/bash
-# Runs one section of scripts/e2e-features.sh against a fresh test build, for working on it.
+# Runs one section of scripts/test/e2e-features.sh against a fresh test build, for working on it.
 # A section starts at its `echo "==> <title>"` line and ends at the next one.
 #
-#   scripts/e2e-section.sh "menu panel buttons: Capture"
+#   scripts/test/e2e-section.sh "menu panel buttons: Capture"
 #
 # Sections that need the browser test page from earlier sections are not meant for this.
 set -uo pipefail
 
-# shellcheck source=lib/common.sh
-source "$(dirname "$0")/lib/common.sh"
+# shellcheck source=../lib/common.sh
+source "$(dirname "$0")/../lib/common.sh"
 if [ -f "$ROOT/.env" ]; then
     set -a
     # shellcheck disable=SC1091
@@ -17,8 +17,8 @@ if [ -f "$ROOT/.env" ]; then
 fi
 BUNDLE_ID="${BUGBEAR_BUNDLE_ID:-io.github.bugbear.app}"
 # shellcheck disable=SC1091
-source "$ROOT/scripts/test-app.sh"
-R=scripts/bugbear-run.sh
+source "$ROOT/scripts/test/lib/test-app.sh"
+R=scripts/dev/bugbear-run.sh
 # BROWSER and LOG are for the section file sourced below.
 # shellcheck disable=SC2034
 BROWSER="${E2E_BROWSER:-Google Chrome}"
@@ -31,7 +31,7 @@ pass() { echo "PASS  $1"; PASSES=$((PASSES + 1)); }
 fail() { echo "FAIL  $1 ${2:-}"; FAILURES=$((FAILURES + 1)); }
 field() { echo "$1" | tr ' ' '\n' | grep "^$2=" | head -1 | cut -d= -f2-; }
 # shellcheck disable=SC1091
-source "$ROOT/scripts/e2e-helpers.sh"
+source "$ROOT/scripts/test/lib/e2e-helpers.sh"
 
 title="${1:?section title}"
 section=$(mktemp)
@@ -39,7 +39,7 @@ awk -v start="echo \"==> $title\"" '
     index($0, start) == 1 { inside = 1; print; next }
     inside && /^echo "==> / { exit }
     inside { print }
-' scripts/e2e-features.sh > "$section"
+' scripts/test/e2e-features.sh > "$section"
 if [ ! -s "$section" ]; then
     echo "no section \"$title\""
     exit 2

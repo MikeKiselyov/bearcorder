@@ -7,8 +7,13 @@ on:
   push:
     branches: [main]
 
+# Read-only by default; only the release job can write (tags and releases).
+permissions:
+  contents: read
+
+# A newer push to a pull request cancels its older run; every merge to main runs to the end and releases.
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ci-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
   cancel-in-progress: true
 
 jobs:
@@ -17,34 +22,49 @@ jobs:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           fetch-depth: 0
-      - run: scripts/check-release.sh "origin/${{ github.base_ref }}"
+          persist-credentials: false
+      - run: scripts/check/release.sh "origin/$BASE_REF"
+        env:
+          BASE_REF: ${{ github.base_ref }}
 
   lint:
     name: Lint scripts
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
       # The same shellcheck as on the Mac (brew): older ones read the directives differently.
       - name: Install shellcheck 0.11.0
         run: |
-          curl -fsSL https://github.com/koalaman/shellcheck/releases/download/v0.11.0/shellcheck-v0.11.0.linux.x86_64.tar.xz | tar -xJ
+          curl -fsSL -o shellcheck.tar.xz https://github.com/koalaman/shellcheck/releases/download/v0.11.0/shellcheck-v0.11.0.linux.x86_64.tar.xz
+          echo "8c3be12b05d5c177a04c29e3c78ce89ac86f1595681cab149b65b97c4e227198  shellcheck.tar.xz" | sha256sum -c -
+          tar -xJf shellcheck.tar.xz
           sudo install shellcheck-v0.11.0/shellcheck /usr/local/bin/shellcheck
           shellcheck --version
-      - run: shellcheck -x scripts/*.sh scripts/lib/*.sh
+      - run: shellcheck -x scripts/*.sh scripts/*/*.sh scripts/*/*/*.sh
+      # actionlint runs the shellcheck above on every run: block of the workflows too.
+      - name: Install actionlint 1.7.12
+        run: |
+          curl -fsSL -o actionlint.tar.gz https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_linux_amd64.tar.gz
+          echo "8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8  actionlint.tar.gz" | sha256sum -c -
+          tar -xzf actionlint.tar.gz actionlint
+          sudo install actionlint /usr/local/bin/actionlint
+          actionlint -version
+      - run: actionlint -no-color
 
   test:
     name: Build and test
     runs-on: macos-15
     timeout-minutes: 30
-    permissions:
-      contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           fetch-depth: 0
+          persist-credentials: false
       - run: swift --version
       - name: Unit tests
         run: swift test
@@ -54,23 +74,44 @@ jobs:
           mkdir -p build/self-test
           .build/debug/Bugbear --self-test build/self-test
       - name: Every control has a check
-        run: python3 -I scripts/control-coverage.py
+        run: python3 -I scripts/check/control-coverage.py
       - name: A release has no automation
-        run: scripts/check-no-automation.sh
+        run: scripts/check/no-automation.sh
       - name: The app bundle (resources, Info.plist, signature)
         env:
           BUGBEAR_SIGN_IDENTITY: "-"
         run: |
           scripts/build-app.sh
-          source scripts/app-name.sh
+          source scripts/lib/app-name.sh
           app="build/$APP_NAME.app"
           test -f "$app/Contents/Resources/Bugbear_Bugbear.bundle/en.lproj/menubar.strings"
           test -d "$app/Contents/Resources/Bugbear_Bugbear.bundle/WhatsNew"
           plutil -lint "$app/Contents/Info.plist"
           test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$app/Contents/Info.plist")" = "$("$app/Contents/MacOS/Bugbear" --version)"
           codesign --verify --strict "$app"
+      - name: Self-test pictures
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: self-test
+          path: build/self-test
+
+  # Apart from the tests, so the build and test steps never hold a token that can write.
+  release:
+    name: Release
+    if: github.event_name == 'push'
+    needs: test
+    runs-on: macos-15
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - run: swift build
       - name: Release
-        if: github.event_name == 'push'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -79,12 +120,7 @@ jobs:
             echo "v$version is already released."
             exit 0
           fi
+          mkdir -p build
           .build/debug/Bugbear --release-notes > build/release-notes.md
-          source scripts/app-name.sh
+          source scripts/lib/app-name.sh
           gh release create "v$version" --target "$GITHUB_SHA" --title "$APP_NAME $version" --notes-file build/release-notes.md
-      - name: Self-test pictures
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: self-test
-          path: build/self-test

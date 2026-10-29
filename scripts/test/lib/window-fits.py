@@ -1,6 +1,6 @@
 """Checks an "open-onboarding" result: the window frame lies inside the visible part of the screen.
 
-    python3 scripts/window-fits.py "frame=x,y,w,h visible=x,y,w,h"   # exit 0 when it fits
+    python3 scripts/test/lib/window-fits.py "frame=x,y,w,h visible=x,y,w,h"   # exit 0 when it fits
 """
 import sys
 

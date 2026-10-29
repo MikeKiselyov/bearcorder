@@ -687,6 +687,104 @@ enum DevChecks {
         SystemActions.stopRecording()
         check(recorded == ["open /tmp/bugbear-captures", "ask Accessibility", "login true", "choose folder /tmp", "trash \(kept.path)"] && loginWorked && chosen == nil, "buttons that open macOS things are recorded in tests, not opened", recorded.joined(separator: " | "))
         check(trashWorked && FileManager.default.fileExists(atPath: kept.path), "a file moved to the Trash in tests stays where it is")
+        checkAllowShowsOneWindow()
+    }
+
+    /// The grip that moves the recording area sits above the frame, clear of the top handle, and
+    /// just inside when the area reaches the top of the screen.
+    private static func checkAreaGrip() {
+        let screen = CGRect(x: 0, y: 0, width: 1512, height: 982)
+        let size = AreaHandleView.gripSize
+        let area = CGRect(x: 400, y: 300, width: 640, height: 360)
+        let above = CGRect(origin: RecordingOutline.gripOrigin(area: area, screens: [screen]), size: size)
+        let topHandle = CGRect(x: area.midX - AreaHandleView.side / 2, y: area.maxY - AreaHandleView.side / 2, width: AreaHandleView.side, height: AreaHandleView.side)
+        check(above.minY > area.maxY && !above.intersects(topHandle) && abs(above.midX - area.midX) < 1, "the grip sits centered above the recording frame, clear of the top handle", "\(above)")
+        let atTop = CGRect(x: 400, y: 600, width: 640, height: 382)
+        let inside = CGRect(origin: RecordingOutline.gripOrigin(area: atTop, screens: [screen]), size: size)
+        check(screen.contains(inside) && inside.maxY < atTop.maxY - AreaHandleView.side / 2, "with no room above, the grip sits inside the frame and stays on the screen", "\(inside)")
+
+        // The picker (flipped, top-left) has the same grip, clear of the size bar at the top.
+        let picked = CGRect(x: 400, y: 300, width: 640, height: 360)
+        let pickerGrip = RegionSelectionView.gripRect(area: picked, screens: [screen], avoiding: nil, handleSize: 12)
+        // A press within reach of the top handle resizes, so the grip stays out of that reach.
+        let topReach = CGRect(x: picked.midX - 12, y: picked.minY - 12, width: 24, height: 24)
+        check(pickerGrip.maxY < picked.minY && !pickerGrip.intersects(topReach) && abs(pickerGrip.midX - picked.midX) < 1, "the picker's grip sits centered above the area, out of the top handle's reach", "\(pickerGrip)")
+        let bar = CGRect(x: 300, y: 42, width: 900, height: 40)
+        let underBar = RegionSelectionView.gripRect(area: CGRect(x: 400, y: 100, width: 640, height: 360), screens: [screen], avoiding: bar, handleSize: 12)
+        check(!underBar.intersects(bar) && underBar.minY > 100 + 12, "with the size bar in the way, the picker's grip goes inside the area, out of the top handle's reach", "\(underBar)")
+        let screenTop = RegionSelectionView.gripRect(area: CGRect(x: 0, y: 0, width: 640, height: 360), screens: [screen], avoiding: nil, handleSize: 12)
+        check(screenTop.minY > 12, "at the top of the screen the picker's grip goes inside the area", "\(screenTop)")
+        let picker = RegionSelectionView(frame: CGRect(x: 0, y: 0, width: 1512, height: 982))
+        picker.selection = CGRect(x: 400, y: 300, width: 640, height: 0)
+        let flat = picker.hasGrip
+        picker.selection = picked
+        check(!flat && picker.hasGrip, "the picker has a grip only for an area that is there, not a flat one being drawn")
+        let scrolling = RegionSelectionView(frame: CGRect(x: 0, y: 0, width: 1512, height: 982))
+        scrolling.showsSizes = false
+        check(scrolling.model.barRect == nil, "a picker without the size bar has no bar for the grip to avoid")
+        checkAreaAcrossScreens()
+    }
+
+    /// The picker's screens share one area: it can lie across two of them.
+    private static func checkAreaAcrossScreens() {
+        // Desktop points (y down from the top of the first screen): a laptop and a taller monitor to
+        // its right whose top is 200 pt higher.
+        let laptop = CGRect(x: 0, y: 0, width: 1512, height: 982)
+        let monitor = CGRect(x: 1512, y: -200, width: 1920, height: 1080)
+        let model = RegionPickerModel(selection: CGRect(x: 1300, y: 300, width: 640, height: 360), screens: [laptop, monitor])
+        let left = RegionSelectionView.screen(of: model, frame: laptop, pixelScale: 2, confirmTitle: "Record", showsSizes: true)
+        let right = RegionSelectionView.screen(of: model, frame: monitor, pixelScale: 1, confirmTitle: "Record", showsSizes: false)
+        // The grip keeps clear of the size bar that is drawn: the laptop's, not one the monitor never shows.
+        check(model.barRect.map { bar in laptop.contains(bar) } == true, "the grip keeps clear of the size bar on the picker's first screen only", "\(String(describing: model.barRect))")
+        check(model.clipScale(of: model.selection) == 2 && model.clipScale(of: CGRect(x: 2000, y: 100, width: 100, height: 100)) == 1, "an area's density is the sharpest screen it is on")
+        check(model.labelScreen == laptop, "the size label is on the screen with the area's top-left corner")
+        check(left.selection == CGRect(x: 1300, y: 300, width: 640, height: 360) && right.selection == CGRect(x: -212, y: 500, width: 640, height: 360), "each screen of the picker shows the same area in its own place", "\(left.selection) / \(right.selection)")
+        right.selection = CGRect(x: 100, y: 100, width: 640, height: 360)
+        check(model.selection == CGRect(x: 1612, y: -100, width: 640, height: 360) && left.selection.minX == 1612, "an area moved on one screen moves on the others")
+        check(model.mainScreen == monitor, "the monitor holds most of an area on it")
+        // Above the monitor's part of the desktop that the laptop does not reach, the grip has room.
+        check(model.gripRect.maxY < model.selection.minY, "the grip stays above an area near the top of the taller screen", "\(model.gripRect)")
+        model.selection = CGRect(x: 1300, y: 300, width: 640, height: 360)
+        let buttons = model.buttonRects
+        check(monitor.contains(buttons.cancel) && monitor.contains(buttons.record), "Cancel and Record go on the screen under the area's bottom middle", "\(buttons)")
+        // The monitor ends at 880 and the laptop at 982: below the monitor's bottom there is no screen.
+        check(model.touchesAScreen(CGRect(x: 1400, y: 900, width: 50, height: 50)) && !model.touchesAScreen(CGRect(x: 2000, y: 900, width: 50, height: 50)), "the corner under the monitor, beside the laptop that reaches lower, is no screen")
+        check(model.reach == CGRect(x: 0, y: -200, width: 3432, height: 1182), "the area can go anywhere on both screens")
+        // Global points: the frame's top (1160) is above the laptop's (982) but the monitor goes on to 1280.
+        let grip = RecordingOutline.gripOrigin(area: CGRect(x: 1600, y: 800, width: 640, height: 360), screens: [CGRect(x: 0, y: 0, width: 1512, height: 982), CGRect(x: 1512, y: 0, width: 1920, height: 1280)])
+        check(grip.y > 1160, "while recording the grip goes above the frame where the taller screen has room", "\(grip)")
+    }
+
+    /// Allow… asks macOS (its window has Open System Settings) or opens System Settings, never both.
+    private static func checkAllowShowsOneWindow() {
+        let suite = "bugbear.selftest.permissions.\(UUID().uuidString)"
+        guard let defaults = UserDefaults(suiteName: suite) else {
+            check(false, "a settings store for the Allow check")
+            return
+        }
+        defer { defaults.removePersistentDomain(forName: suite) }
+        SystemActions.startRecording()
+        SystemActions.askOnceThenOpenSettings("Screen Recording", pane: "Privacy_ScreenCapture", defaults: defaults) {
+            check(false, "a recorded permission prompt is not shown")
+        }
+        let first = SystemActions.recorded
+        SystemActions.askOnceThenOpenSettings("Screen Recording", pane: "Privacy_ScreenCapture", defaults: defaults) {
+            check(false, "a recorded permission prompt is not shown")
+        }
+        let second = Array(SystemActions.recorded.dropFirst(first.count))
+        let afterGuide = UserDefaults(suiteName: suite + ".guide")
+        defer { afterGuide?.removePersistentDomain(forName: suite + ".guide") }
+        let countBefore = SystemActions.recorded.count
+        if let fresh = afterGuide {
+            SystemActions.askOnceThenOpenSettings("Screen Recording", pane: "Privacy_ScreenCapture", askedBefore: true, defaults: fresh) {
+                check(false, "a recorded permission prompt is not shown")
+            }
+        }
+        let asked = Array(SystemActions.recorded.dropFirst(countBefore))
+        SystemActions.stopRecording()
+        check(asked == ["open x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture"], "Allow after something else asked already opens System Settings at once", asked.joined(separator: " | "))
+        check(first == ["ask Screen Recording"], "the first Allow only asks macOS, without opening System Settings too", first.joined(separator: " | "))
+        check(second == ["open x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture"], "a later Allow opens System Settings, without asking macOS again", second.joined(separator: " | "))
     }
 
     /// A card's "More actions" menu offers the log and crash report only when they were saved.
@@ -1158,6 +1256,7 @@ enum DevChecks {
         checkCrashClipMigration()
         checkDefaultMarkSize()
         checkSystemActionsRecord()
+        checkAreaGrip()
         checkHistoryCardMenu()
         checkLateSystemLog()
         await checkPopUpChoices()
@@ -1380,13 +1479,14 @@ enum DevChecks {
             check(false, "Render white image")
         }
 
-        // 4. Click placement for side-by-side displays and a cropped region.
+        // 4. Click placement for side-by-side displays and a recorded area.
         let left = ClipLayout.Display(frame: CGRect(x: 0, y: 0, width: 1440, height: 900), x: 0, width: 1920)
         let right = ClipLayout.Display(frame: CGRect(x: 1440, y: 0, width: 1920, height: 1080), x: 1920, width: 1600)
-        let layout = ClipLayout(displays: [left, right], totalWidth: 3520, region: nil)
+        let layout = ClipLayout(displays: [left, right], totalWidth: 3520)
         let point = layout.normalizedPoint(forGlobal: CGPoint(x: 1440 + 960, y: 540))
         check(point != nil && abs(point!.x - (1920 + 800) / 3520) < 0.001 && abs(point!.y - 0.5) < 0.001, "Click mapping across displays")
-        let regionLayout = ClipLayout(displays: [left], totalWidth: 1920, region: CGRect(x: 0.5, y: 0.5, width: 0.5, height: 0.5))
+        // The bottom-right quarter of the left display.
+        let regionLayout = ClipLayout(displays: [left], totalWidth: 1920, area: CGRect(x: 720, y: 0, width: 720, height: 450))
         let inside = regionLayout.normalizedPoint(forGlobal: CGPoint(x: 1080, y: 225))
         check(inside != nil && abs(inside!.x - 0.5) < 0.001 && abs(inside!.y - 0.5) < 0.001, "Click mapping inside a region")
         check(regionLayout.normalizedPoint(forGlobal: CGPoint(x: 100, y: 800)) == nil, "Clicks outside the region are dropped")
@@ -1815,6 +1915,7 @@ enum DevChecks {
         renderAppKit(outline, to: folder.appendingPathComponent("record-outline-area.png"))
         let other = RecordingOutlineView(frame: CGRect(origin: .zero, size: CGSize(width: 1200, height: 700)))
         renderAppKit(other, to: folder.appendingPathComponent("record-outline-other-display.png"))
+        renderAreaAcrossDisplays(to: folder.appendingPathComponent("record-area-across.png"))
 
         for page in 0..<6 {
             render(OnboardingView(startPage: page).environment(app).preferredColorScheme(.dark), size: CGSize(width: 680, height: 600), to: folder.appendingPathComponent("onboarding-\(page + 1).png"))
@@ -1872,6 +1973,40 @@ enum DevChecks {
     }
 
     /// AppKit views (area picker, recording outline) over a grey "desktop".
+    /// A laptop and a smaller monitor beside it, an area recorded across both (What's New). Each
+    /// screen is drawn on its own, the way the other pictures are, then put on one desk.
+    private static func renderAreaAcrossDisplays(to url: URL) {
+        let deskSize = CGSize(width: 2712, height: 982)
+        let area = CGRect(x: 1100, y: 330, width: 640, height: 360)
+        let screens = [CGRect(x: 0, y: 0, width: 1512, height: 982), CGRect(x: 1512, y: 140, width: 1200, height: 750)]
+        // Two shades, so the seam between the displays shows inside the area too.
+        let colors: [UInt32] = [0x6B7280, 0x7C8494]
+        let scale: CGFloat = 2
+        guard let desk = CGContext(data: nil, width: Int(deskSize.width * scale), height: Int(deskSize.height * scale), bitsPerComponent: 8, bytesPerRow: 0, space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return }
+        desk.setFillColor(NSColor(hex: 0x16171A).cgColor)
+        desk.fill(CGRect(origin: .zero, size: CGSize(width: deskSize.width * scale, height: deskSize.height * scale)))
+        for (index, frame) in screens.enumerated() {
+            let outline = RecordingOutlineView(frame: CGRect(origin: .zero, size: frame.size))
+            outline.recordedRect = area.offsetBy(dx: -frame.minX, dy: -frame.minY)
+            outline.labelScale = 2
+            outline.showsLabel = index == 0
+            outline.drawsHandles = true
+            // On screen the grip is one window; here the laptop, which has room above the area, draws it.
+            outline.drawsGrip = index == 0
+            let container = NSView(frame: outline.frame)
+            container.wantsLayer = true
+            container.layer?.backgroundColor = NSColor(hex: colors[index]).cgColor
+            container.addSubview(outline)
+            guard let bitmap = container.bitmapImageRepForCachingDisplay(in: container.bounds) else { continue }
+            container.cacheDisplay(in: container.bounds, to: bitmap)
+            guard let image = bitmap.cgImage else { continue }
+            desk.draw(image, in: CGRect(x: frame.minX * scale, y: frame.minY * scale, width: frame.width * scale, height: frame.height * scale))
+        }
+        if let image = desk.makeImage() {
+            ImageFiles.write(image, to: url, type: "public.png")
+        }
+    }
+
     static func renderAppKit(_ view: NSView, to url: URL) {
         let container = NSView(frame: view.frame)
         container.wantsLayer = true

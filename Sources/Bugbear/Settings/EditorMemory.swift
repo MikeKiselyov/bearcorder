@@ -82,6 +82,15 @@ enum EditorMemory {
 
     // MARK: Video editor
 
+    /// The size new text, arrows and boxes get, 1 = standard.
+    static var videoMarkScale: Double {
+        get {
+            guard let scale = defaults.object(forKey: "videoMarkScale") as? Double, VideoOverlay.scales.contains(scale) else { return 1 }
+            return scale
+        }
+        set { defaults.set(newValue, forKey: "videoMarkScale") }
+    }
+
     /// What the video editor remembers: the switches and export choices, not the edits.
     private static let videoKey = "videoEditorChoices"
 

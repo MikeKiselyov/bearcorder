@@ -20,7 +20,7 @@ final class AppNameTests: XCTestCase {
     func testScriptsReadTheSameName() throws {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/bin/bash")
-        process.arguments = ["-c", "source scripts/app-name.sh && printf '%s' \"$APP_NAME\""]
+        process.arguments = ["-c", "source scripts/lib/app-name.sh && printf '%s' \"$APP_NAME\""]
         process.currentDirectoryURL = root
         let output = Pipe()
         process.standardOutput = output
@@ -44,12 +44,12 @@ final class AppNameTests: XCTestCase {
 
     func testDocsShowTheSameName() throws {
         let readme = try String(contentsOf: root.appendingPathComponent("README.md"), encoding: .utf8)
-        XCTAssertTrue(readme.contains("<h1 align=\"center\">\(AppInfo.name)</h1>"), "README.md shows another name: run scripts/rename-app.sh")
+        XCTAssertTrue(readme.contains("<h1 align=\"center\">\(AppInfo.name)</h1>"), "README.md shows another name: run scripts/dev/rename-app.sh")
         let uninstall = try String(contentsOf: root.appendingPathComponent("docs/uninstall.md"), encoding: .utf8)
-        XCTAssertTrue(uninstall.contains("/Applications/\(AppInfo.name).app"), "docs/uninstall.md shows another name: run scripts/rename-app.sh")
+        XCTAssertTrue(uninstall.contains("/Applications/\(AppInfo.name).app"), "docs/uninstall.md shows another name: run scripts/dev/rename-app.sh")
     }
 
-    /// Runs scripts/rename-app.sh on a copy of the files it changes and returns that copy.
+    /// Runs scripts/dev/rename-app.sh on a copy of the files it changes and returns that copy.
     private func renamedCopy(to newName: String) throws -> URL {
         let copy = FileManager.default.temporaryDirectory.appendingPathComponent("rename-\(UUID().uuidString)")
         for file in renamedFiles {
@@ -59,7 +59,7 @@ final class AppNameTests: XCTestCase {
         }
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/bin/bash")
-        process.arguments = [root.appendingPathComponent("scripts/rename-app.sh").path, newName, copy.path]
+        process.arguments = [root.appendingPathComponent("scripts/dev/rename-app.sh").path, newName, copy.path]
         process.standardOutput = Pipe()
         try process.run()
         process.waitUntilExit()

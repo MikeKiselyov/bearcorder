@@ -2,14 +2,14 @@
 # Every change that reaches main is a new release: a pull request that touches the app
 # must add a release on top of WhatsNewCatalog.swift with a higher version.
 #
-#   scripts/check-release.sh origin/main
+#   scripts/check/release.sh origin/main
 #
 # Changes only to docs (*.md, docs/) or CI (.github/) need no release.
 set -euo pipefail
 
-# shellcheck source=lib/common.sh
-source "$(dirname "$0")/lib/common.sh"
-BASE="${1:?usage: scripts/check-release.sh <base ref>}"
+# shellcheck source=../lib/common.sh
+source "$(dirname "$0")/../lib/common.sh"
+BASE="${1:?usage: scripts/check/release.sh <base ref>}"
 CATALOG="Sources/BugbearCore/Support/WhatsNewCatalog.swift"
 
 # latest_version reads the top "version:" from catalog source on stdin; 0.0.0 when there is none.

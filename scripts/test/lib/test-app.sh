@@ -7,7 +7,7 @@
 #   open "$TEST_APP"          # then start the test copy
 
 # shellcheck disable=SC1091
-source "$ROOT/scripts/app-name.sh"
+source "$ROOT/scripts/lib/app-name.sh"
 TEST_APP="$ROOT/build/$APP_NAME.app"
 # The tests drive the app through its automation hook, which only this build has (build-app.sh).
 export BUGBEAR_AUTOMATION=1

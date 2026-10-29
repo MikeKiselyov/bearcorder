@@ -3,9 +3,9 @@
 # (no Xcode or Apple ID). Ad-hoc signing changes with every build, so macOS asks for Screen
 # Recording again after each update; a certificate that stays the same keeps the permissions.
 #
-#   scripts/local-signing.sh identity   # creates it once, unlocks it, prints its SHA-1 for codesign
-#   scripts/local-signing.sh finish     # locks it again after signing
-#   scripts/local-signing.sh remove     # deletes it (part of uninstalling)
+#   scripts/dev/local-signing.sh identity   # creates it once, unlocks it, prints its SHA-1 for codesign
+#   scripts/dev/local-signing.sh finish     # locks it again after signing
+#   scripts/dev/local-signing.sh remove     # deletes it (part of uninstalling)
 #
 # The certificate lives in its own keychain, not in the login keychain, with a random password
 # kept next to it (readable only by you). The key is usable only while a build signs: "identity"
@@ -129,7 +129,7 @@ case "${1:-}" in
         echo "Removed the local signing certificate."
         ;;
     *)
-        echo "usage: scripts/local-signing.sh identity|finish|remove" >&2
+        echo "usage: scripts/dev/local-signing.sh identity|finish|remove" >&2
         exit 2
         ;;
 esac

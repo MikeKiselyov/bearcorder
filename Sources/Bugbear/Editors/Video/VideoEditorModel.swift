@@ -389,7 +389,7 @@ final class VideoEditorModel {
     func addOverlay(kind: VideoOverlay.Kind, start: CGPoint, end: CGPoint) {
         checkpoint()
         var overlay = VideoOverlay(kind: kind, span: actionSpan(), start: start, end: end)
-        overlay.scale = lastOverlayScale
+        overlay.scale = overlayScale
         if kind == .text {
             overlay.text = ""
             overlay.end = start
@@ -405,8 +405,49 @@ final class VideoEditorModel {
         projectChanged()
     }
 
-    /// New marks use the size picked last.
-    @ObservationIgnored private var lastOverlayScale: Double = 1
+    /// The size new text, arrows and boxes get: picked in the toolbar, or the last one a mark was
+    /// resized to. Remembered for the next clip.
+    private(set) var overlayScale: Double = EditorMemory.videoMarkScale {
+        didSet { EditorMemory.videoMarkScale = overlayScale }
+    }
+
+    /// The mark the size control works on: the selected text, arrow or box (blur has no size).
+    private var sizedOverlay: VideoOverlay? {
+        guard let overlay = selectedOverlay, overlay.kind != .blur else { return nil }
+        return overlay
+    }
+
+    /// The size the toolbar shows: the selected mark's, or what new marks get.
+    var shownOverlayScale: Double {
+        return sizedOverlay?.effectiveScale ?? overlayScale
+    }
+
+    /// The size control says "text size" for text, "line width" for arrows and boxes.
+    var sizeIsText: Bool {
+        if let overlay = selectedOverlay {
+            return overlay.kind == .text
+        }
+        return tool == .text
+    }
+
+    /// Blur has no size: the control is off while it is picked or selected.
+    var canChangeOverlaySize: Bool {
+        if let overlay = selectedOverlay {
+            return overlay.kind != .blur
+        }
+        return tool != .blur
+    }
+
+    /// The toolbar's size control and + / -: the selected mark, or with none selected the size the
+    /// next text, arrow or box gets.
+    func changeOverlaySize(by direction: Int) {
+        if sizedOverlay != nil {
+            changeSelectedOverlaySize(by: direction)
+            return
+        }
+        if !canChangeOverlaySize { return }
+        overlayScale = VideoOverlay.stepped(overlayScale, direction)
+    }
     /// New text keeps the background choice made last.
     @ObservationIgnored private var lastClearText = EditorMemory.clearTextBackground
 
@@ -427,7 +468,7 @@ final class VideoEditorModel {
         if next == overlay.effectiveScale { return }
         checkpoint()
         overlay.scale = next
-        lastOverlayScale = next
+        overlayScale = next
         updateOverlay(overlay)
     }
 

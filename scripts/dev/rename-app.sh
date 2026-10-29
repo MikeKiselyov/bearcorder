@@ -5,15 +5,15 @@
 # (".../Application Support/Bugbear", ".../Logs/Bugbear", AppInfo.storageName), source paths
 # (Sources/Bugbear, BugbearCore) and the executable.
 #
-#   scripts/rename-app.sh "New Name" [repository root]
+#   scripts/dev/rename-app.sh "New Name" [repository root]
 set -euo pipefail
 
 if [ $# -lt 1 ] || [ -z "$1" ]; then
-    echo "usage: scripts/rename-app.sh \"New Name\" [repository root]" >&2
+    echo "usage: scripts/dev/rename-app.sh \"New Name\" [repository root]" >&2
     exit 1
 fi
 NEW_NAME="$1"
-ROOT="${2:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+ROOT="${2:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
 
 python3 -I - "$ROOT" "$NEW_NAME" <<'PYTHON'
 import pathlib

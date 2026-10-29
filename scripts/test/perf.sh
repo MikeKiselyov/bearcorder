@@ -2,13 +2,13 @@
 # Performance check of the running app: CPU and memory while idle with the buffer,
 # while recording with the drawing overlay, and how long saving a clip takes.
 #
-#   scripts/perf.sh
+#   scripts/test/perf.sh
 #
-# Needs Screen Recording permission. Uses the automation hook like scripts/e2e.sh.
+# Needs Screen Recording permission. Uses the automation hook like scripts/test/e2e.sh.
 set -uo pipefail
 
-# shellcheck source=lib/common.sh
-source "$(dirname "$0")/lib/common.sh"
+# shellcheck source=../lib/common.sh
+source "$(dirname "$0")/../lib/common.sh"
 if [ -f "$ROOT/.env" ]; then
     set -a
     # shellcheck disable=SC1091
@@ -17,7 +17,7 @@ if [ -f "$ROOT/.env" ]; then
 fi
 BUNDLE_ID="${BUGBEAR_BUNDLE_ID:-io.github.bugbear.app}"
 # shellcheck disable=SC1091
-source "$ROOT/scripts/test-app.sh"
+source "$ROOT/scripts/test/lib/test-app.sh"
 LOG="$HOME/Library/Logs/Bugbear/bugbear.log"
 FAILURES=0
 
@@ -80,19 +80,19 @@ echo "      peak ${idle_peak}%"
 verdict "idle memory MB" "$idle_mem" "$MAX_MEMORY_MB"
 
 echo "==> recording with the drawing overlay (15 s)"
-scripts/bugbear-command.sh record-start; sleep 2
-scripts/bugbear-command.sh draw-toggle; sleep 1
+scripts/dev/bugbear-command.sh record-start; sleep 2
+scripts/dev/bugbear-command.sh draw-toggle; sleep 1
 read -r rec_avg rec_peak rec_mem <<< "$(sample 15)"
 verdict "recording CPU average %" "$rec_avg" "$MAX_RECORDING_CPU"
 echo "      peak ${rec_peak}%"
 verdict "recording memory MB" "$rec_mem" "$MAX_MEMORY_MB"
-scripts/bugbear-command.sh draw-toggle; sleep 1
-scripts/bugbear-command.sh record-stop; sleep 8
-scripts/bugbear-command.sh close-windows; sleep 2
+scripts/dev/bugbear-command.sh draw-toggle; sleep 1
+scripts/dev/bugbear-command.sh record-stop; sleep 8
+scripts/dev/bugbear-command.sh close-windows; sleep 2
 
 echo "==> save the last 30 s"
 sleep 10
-scripts/bugbear-command.sh save:30
+scripts/dev/bugbear-command.sh save:30
 sleep 10
 start=$(grep "save from buffer: last 30" "$LOG" | tail -1 | awk '{print $2}')
 end=$(grep "clip exported" "$LOG" | tail -1 | awk '{print $2}')
@@ -102,11 +102,11 @@ fmt = '%H:%M:%S.%f'
 print(round((datetime.strptime('$end', fmt) - datetime.strptime('$start', fmt)).total_seconds(), 2))
 " 2>/dev/null || echo 99)
 verdict "save 30 s clip, seconds" "$save_seconds" "$MAX_SAVE_SECONDS"
-scripts/bugbear-command.sh close-windows; sleep 2
+scripts/dev/bugbear-command.sh close-windows; sleep 2
 
 echo "==> menu bar stays responsive (automation round trip)"
 before=$(date +%s.%N)
-scripts/bugbear-command.sh status
+scripts/dev/bugbear-command.sh status
 for _ in $(seq 1 50); do
     if [ "$(grep -c "AUTOMATION status" "$LOG")" -gt 0 ]; then break; fi
     sleep 0.1

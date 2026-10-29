@@ -104,12 +104,18 @@ opens in about half a second.
 </p>
 
 - Record the full screen, all displays, or an area: ready sizes (720p, 1080p, 1440×900, 16:9, 4:3,
-  1:1, phone) or your own. Move and resize the frame before you start.
+  1:1, phone) or your own. Before you start, drag the grip above the frame (or anywhere inside it) to
+  move it and drag a corner or an edge to resize it; the pointer shows which one a drag does.
+- With more than one display the picker covers all of them: the area can go onto any display or
+  across two, before and while recording. The video shows both parts in their places, at the
+  sharper display's density; where the area covers no display (beside a smaller one) it is black.
 - While recording, a frame shows what is in the video and the rest is dimmed; neither is in the
   video. Displays that are not recorded say so.
 - The frame of an area keeps its handles while recording: drag a corner or an edge to make the
-  area bigger or smaller. The video gets the area as it is when you stop. After you pick the area,
-  the app you were in is in front again.
+  area bigger or smaller, or the grip above the frame to move the whole area, to another display
+  too. Clicks inside the
+  area still go to the app under it. The video gets the area as it is when you stop. After you pick
+  the area, the app you were in is in front again.
 
 <p align="center">
   <img src="images/record-outline-area.png" width="720" alt="Recording an area: the frame and the dimmed rest of the screen">
@@ -143,7 +149,9 @@ Delete clears.
   A new mark lasts 3 seconds from the playhead.
 - Every mark has a bar on the timeline: drag its middle to move it in time, its edges to make it
   shorter or longer. On the video, drag a mark to move it; it stays inside the frame.
-- `+` and `-` resize the selected mark. Text can be a label or outlined letters.
+- The size in the toolbar (or `+` and `-`) resizes the selected mark, and with nothing selected sets
+  the size of the next text, arrow or box; the editor remembers it. Text can be a label or outlined
+  letters.
 - **Crop** keeps only part of the screen: the whole frame shows, drag the edges or draw the part to
   keep, then Done. Marks, clicks and blur stay on the picture; keystrokes, steps and the badge stay
   in the corners of the cropped video. Reset brings the whole screen back.
@@ -271,7 +279,9 @@ Settings has pages in a sidebar:
 </p>
 
 The Permissions page lists what Bugbear may use, whether it is allowed, and what it is for. **Allow…**
-asks macOS for a missing one; **Open…** shows an allowed one in System Settings.
+asks macOS for a missing one; for Screen Recording and Accessibility macOS shows its window only the
+first time, so pressing Allow… again opens System Settings instead. **Open…** shows an allowed one in
+System Settings.
 
 | Permission | What for |
 |---|---|
@@ -293,4 +303,5 @@ After allowing Screen Recording, Quit & Reopen in System Settings opens Bugbear 
   it on your Mac and restarts it; What's new shows what changed, with pictures.
 - **Report a problem** or **suggest a feature** from the menu: it opens a filled-in GitHub issue,
   and can attach a zip of the logs.
-- Uninstall everything with one command: see [uninstall](uninstall.md).
+- Uninstall everything with one command: see [uninstall](uninstall.md). At the end it asks, if you
+  can, to say in a short form what you did not like.

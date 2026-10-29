@@ -65,8 +65,8 @@ final class AppState {
     /// While an area is recorded the buffer runs at the display's full resolution, so a "720p" area
     /// really comes out 1280×720 instead of a crop of the downscaled buffer.
     @ObservationIgnored var nativeResolutionForArea = false
-    /// The one display a recording keeps: the area's, or the one under the pointer when "Record all
-    /// displays" is off. Nil records every buffered display side by side.
+    /// The one display a recording keeps: the one under the pointer when "Record all displays" is
+    /// off. Nil records every buffered display side by side, or the area wherever it is.
     @ObservationIgnored var recordingDisplay: CGDirectDisplayID?
     /// The buffer runs at the recording frame rate while recording.
     @ObservationIgnored var boostedFrameRate = false
@@ -75,6 +75,8 @@ final class AppState {
     @ObservationIgnored var screensChangedWhileRecording = false
     /// A display the buffer does not normally capture, added for the length of one recording.
     @ObservationIgnored var extraDisplayForRecording: CGDirectDisplayID?
+    /// An area recording keeps every display, so the area can go to any of them.
+    @ObservationIgnored var allDisplaysForArea = false
     /// A buffer that stopped on its own (the displays went away) and comes back by itself.
     var bufferRecovery = BufferRecovery()
     @ObservationIgnored var bufferRecoveryTask: Task<Void, Never>?

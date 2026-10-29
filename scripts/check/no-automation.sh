@@ -5,10 +5,10 @@
 # must be in a debug build, which has the tools: otherwise this list is out of date and would
 # find nothing in any build.
 #
-#   scripts/check-no-automation.sh
+#   scripts/check/no-automation.sh
 set -euo pipefail
-# shellcheck source=lib/common.sh
-source "$(dirname "$0")/lib/common.sh"
+# shellcheck source=../lib/common.sh
+source "$(dirname "$0")/../lib/common.sh"
 
 # Long enough that Swift keeps them as C strings, where `strings` sees them.
 MARKERS=(

@@ -116,9 +116,9 @@ private struct VideoEditorContent: View {
         .onKeyPress(characters: CharacterSet(charactersIn: "+=-_")) { press in
             if isTypingText { return .ignored }
             if press.characters == "+" || press.characters == "=" {
-                model.changeSelectedOverlaySize(by: 1)
+                model.changeOverlaySize(by: 1)
             } else {
-                model.changeSelectedOverlaySize(by: -1)
+                model.changeOverlaySize(by: -1)
             }
             return .handled
         }
@@ -144,9 +144,20 @@ private struct VideoEditorContent: View {
         HStack(spacing: 4) {
             // Without room for every title (a narrow window) the buttons show only their icons:
             // titles wrapped to two lines and pushed the screen picker out of the window.
+            // The size control shrinks to − and + last, after the titles are gone.
             ViewThatFits(in: .horizontal) {
-                toolGroup(showTitles: true)
-                toolGroup(showTitles: false)
+                HStack(spacing: 4) {
+                    toolGroup(showTitles: true)
+                    sizeControl(compact: false)
+                }
+                HStack(spacing: 4) {
+                    toolGroup(showTitles: false)
+                    sizeControl(compact: false)
+                }
+                HStack(spacing: 4) {
+                    toolGroup(showTitles: false)
+                    sizeControl(compact: true)
+                }
             }
             Spacer()
             screenPicker
@@ -156,6 +167,14 @@ private struct VideoEditorContent: View {
         }
         .padding(.horizontal, 12)
         .frame(height: 52)
+    }
+
+    /// The size of the selected mark, or of the next one, as in the screenshot editor.
+    private func sizeControl(compact: Bool) -> some View {
+        SizeStepper(value: "\(Int(model.shownOverlayScale * 100))%", name: model.sizeIsText ? L("editors.size.text") : L("editors.size.line"), symbol: model.sizeIsText ? "textformat.size" : "lineweight", compact: compact) { direction in
+            model.changeOverlaySize(by: direction)
+        }
+        .disabled(!model.canChangeOverlaySize)
     }
 
     private func toolGroup(showTitles: Bool) -> some View {

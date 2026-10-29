@@ -12,6 +12,7 @@
 #                            (default: /Applications and ~/Applications)
 #   BUGBEAR_DRY_SYSTEM       1: print the steps that touch the running app, settings, permissions
 #                            and keychains instead of doing them (for tests)
+#   BUGBEAR_TTY              where the answers come from (default: /dev/tty; a file in tests)
 #   NO_COLOR                 plain text
 set -euo pipefail
 
@@ -23,10 +24,14 @@ STORAGE_NAME="Bugbear"
 EXECUTABLE="Bugbear"
 # The bundle id of copies built by the installer.
 DEFAULT_BUNDLE_ID="io.github.bugbear.app"
+# Where people say why they left (.github/ISSUE_TEMPLATE/uninstall_feedback.yml); a unit test
+# checks the repository matches the app's.
+FEEDBACK_URL="https://github.com/MikeKiselyov/bugbear-app/issues/new?template=uninstall_feedback.yml"
 
 SOURCE_DIR="${BUGBEAR_SOURCE_DIR:-$HOME/.bugbear}"
 APPS_DIRS="${BUGBEAR_APPS_DIRS:-/Applications:$HOME/Applications}"
 DRY_SYSTEM="${BUGBEAR_DRY_SYSTEM:-}"
+TTY="${BUGBEAR_TTY:-/dev/tty}"
 SUPPORT_DIR="$HOME/Library/Application Support/$STORAGE_NAME"
 LOGS_DIR="$HOME/Library/Logs/$STORAGE_NAME"
 KEYCHAIN="$SUPPORT_DIR/Signing/bugbear-signing.keychain-db"
@@ -42,13 +47,47 @@ for argument in "$@"; do
     esac
 done
 
-OK=""; DIM=""; BOLD=""; N=""
+OK=""; DIM=""; BOLD=""; N=""; H=""; C=""; T=""
 if [ -t 1 ] && [ -z "${NO_COLOR:-}" ] && [ "${TERM:-}" != "dumb" ]; then
     OK=$'\033[38;5;114m'
     DIM=$'\033[2m'
     BOLD=$'\033[1m'
     N=$'\033[0m'
+    H=$'\033[97m'          # the bear and the magnifying glass, as in install.sh
+    C=$'\033[38;5;203m'    # the bug
+    T=$'\033[38;5;75m'     # tears
 fi
+
+# The installer's bear, crying: it is sad to see you go.
+crying_bear() {
+    local lines=(
+    "      ${H}▄▄██▄▄${N}     ${H}▄${N}     ${H}▄▄██▄▄${N}"
+    "     ${H}▄████████████████████████▄${N}"
+    "     ${H}██████████████████████████${N}"
+    "     ${H}▀████████████████████████${N}"
+    "       ${H}██████▀${N} ${H}▀█████▀${N} ${H}▀█████${N}"
+    "       ${H}██████▄▄▄█████▄▄▄█████${N}"
+    "       ${H}███████${N}${T}█${N}${H}█▀${N}  ${H}███${N}${T}█${N}${H}██▀▀▀${N}"
+    "       ${H}▀██████${N}${T}█${N}${H}███████${N}${T}█${N} ${H}▄▄████████▄▄${N}"
+    "        ${H}▀█████${N}${T}█${N}${H}██████${N} ${T}▀${N}${H}██▀${N}        ${H}▀██▄${N}"
+    "          ${H}▀▀██${N}${T}█${N}${H}█████${N} ${H}▄█▀${N}   ${C}▀▄${N}   ${C}▄▀${N}  ${H}▀██${N}"
+    "              ${H}▀▀▀▀▀${N}  ${H}██${N}      ${C}███${N}      ${H}██${N}"
+    "              ${T}▄${N}     ${H}██${N}   ${C}▀▄███▀███▄▀${N}  ${H}██${N}"
+    "                    ${H}▀█${N}   ${C}▄${N} ${C}███${N} ${C}███${N} ${C}▄${N}  ${H}██${N}"
+    "             ${T}•${N}       ${H}██${N}   ${C}▀███${N} ${C}███▀${N}  ${H}▄█▀${N}"
+    "                      ${H}██▄${N}   ${C}▀▀${N} ${C}▀▀${N}   ${H}▄█▀${N}"
+    "                       ${H}▀██▄▄▄${N}   ${H}▄▄██▀${N} ${H}▄█▄${N}"
+    "                          ${H}▀▀▀██▀▀▀▀${N}  ${H}█████▄${N}"
+    "                                      ${H}▀█████▄${N}"
+    "                                        ${H}▀████${N}"
+    "                                          ${H}▀▀${N}"
+    )
+    echo
+    for line in "${lines[@]}"; do
+        printf '%s\n' "$line"
+    done
+    echo
+}
 
 done_step() { echo "${OK}✓${N}  $1"; }
 
@@ -103,8 +142,9 @@ for bundle_id in "${bundle_ids[@]}"; do
     fi
 done
 
-echo
-echo "${BOLD}Uninstall $APP_NAME${N}"
+crying_bear
+echo "   ${BOLD}Oh no, you are leaving?${N} The bear is already crying."
+echo "   ${DIM}It will be brave. Here is what goes:${N}"
 echo
 echo "This removes:"
 if [ ${#apps[@]} -eq 0 ]; then
@@ -127,14 +167,16 @@ echo
 
 if [ "$ASK" = "1" ]; then
     # Piped from curl, stdin is the script: the answer comes from the terminal, if there is one.
-    if ! (: < /dev/tty) 2>/dev/null; then
+    if ! (: < "$TTY") 2>/dev/null; then
         echo "Run it again with --yes to uninstall without asking." >&2
         exit 1
     fi
     printf "Uninstall %s? [y/N] " "$APP_NAME"
-    read -r answer < /dev/tty
+    # Opened once, so the answers are read one after another.
+    exec 4< "$TTY"
+    read -r answer <&4 || answer=""
     if [ "$answer" != "y" ] && [ "$answer" != "Y" ] && [ "$answer" != "yes" ]; then
-        echo "Nothing was removed."
+        echo "Phew! The bear wipes its tears. Nothing was removed. 🐻"
         exit 0
     fi
 fi
@@ -246,3 +288,17 @@ done_step "Removed temporary files"
 
 echo
 echo "$APP_NAME is uninstalled. Your saved files stay in $exports_dir."
+echo
+echo "The bear will miss you. 🐻💧"
+echo "If you have a minute, please tell us what you did not like:"
+echo "the bear reads every answer and learns from it."
+echo "  $FEEDBACK_URL"
+# Asked only in the terminal that answered the first question; --yes runs never wait.
+if [ "$ASK" = "1" ]; then
+    printf "Open the feedback form? [Y/n] "
+    read -r answer <&4 || answer="n"
+    if [ "$answer" != "n" ] && [ "$answer" != "N" ] && [ "$answer" != "no" ]; then
+        system open "$FEEDBACK_URL" || true
+    fi
+fi
+echo "Thank you for giving $APP_NAME a try. Bye! 👋"

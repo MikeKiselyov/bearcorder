@@ -7,7 +7,7 @@ import SwiftUI
 
 /// `--readme-media <folder>`: the pictures and GIF frames for README.md. Everything is rendered off screen
 /// from a demo library inside the folder (a made-up checkout page), so real captures never show up and no
-/// permissions are needed. `scripts/readme-media.sh` turns the output into `docs/images`.
+/// permissions are needed. `scripts/dev/readme-media.sh` turns the output into `docs/images`.
 @MainActor
 enum ReadmeMedia {
     static func make(folder: URL) async -> Int32 {

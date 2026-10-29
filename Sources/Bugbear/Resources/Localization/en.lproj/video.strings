@@ -98,7 +98,7 @@
 "video.help.bars" = "Drag bars to move, edges to resize";
 "video.help.crop" = "Crop keeps only part of the screen";
 "video.help.keys" = "Space plays, I / O trim, Delete removes";
-"video.help.resize" = "+ and - resize the selected text, arrow or box";
+"video.help.resize" = "+ and - resize the selected mark or the next one";
 
 /* Sidebar: environment. */
 "video.report.tip" = "Steps from your clicks and keys, environment and the saved file";

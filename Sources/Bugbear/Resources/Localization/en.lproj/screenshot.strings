@@ -8,8 +8,6 @@
 "screenshot.insertImage.choose" = "Pick a screenshot or picture to place on this one";
 "screenshot.combine.tip" = "Combine with another screenshot: places other images to the right";
 "screenshot.combine.choose" = "Pick screenshots to place to the right";
-"screenshot.size.text" = "text size";
-"screenshot.size.line" = "line width";
 
 /* Crop. */
 "screenshot.crop.hint" = "Drag the edges or corners · drag inside to move · Enter to apply · Esc to leave";
