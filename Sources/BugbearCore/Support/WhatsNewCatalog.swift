@@ -3,6 +3,9 @@
 /// top entry, the update badge compares it with GitHub, and CI refuses a pull request without one.
 public enum WhatsNewCatalog {
     public static let releases: [WhatsNewRelease] = [
+        WhatsNewRelease(id: 21, version: "0.13.1", title: "Library updates", items: [
+            WhatsNewRelease.Item(symbol: "shippingbox", title: "Newer YAML parser", text: "YAML in the toolbox (format and convert) uses Yams 6. It works the same as before.", shortcut: "Toolbox"),
+        ]),
         WhatsNewRelease(id: 20, version: "0.13.0", title: "Put the area where you need it", items: [
             WhatsNewRelease.Item(symbol: "hand.draw", title: "Move the area while recording", text: "The frame of an area recording has a grip above it: drag it to move the whole area without stopping, the size stays. Clicks inside the area still go to the app under it. The video gets the area where it is when you stop.", shortcut: "⌥⇧6", image: "record-area-move"),
             WhatsNewRelease.Item(symbol: "rectangle.split.2x1", title: "An area across two displays", text: "With more than one display the area picker covers all of them: draw or drag the area onto another display, or across two. While recording the grip takes it there too. The video has both parts in their places, as sharp as the sharper display. Everything outside the area stays out.", shortcut: "⌥⇧6", image: "record-area-across"),

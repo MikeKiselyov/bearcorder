@@ -1,13 +1,13 @@
 {
-  "originHash" : "35b7a8da13fba8627b1da93b7954f19bf8ab132d7b719b9e0498df197f41858f",
+  "originHash" : "29cd3094081eeaaad31b8e163541c212f5667ae48e74b2bf085b929a7c00835e",
   "pins" : [
     {
       "identity" : "yams",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/jpsim/Yams.git",
       "state" : {
-        "revision" : "3d6871d5b4a5cd519adf233fbb576e0a2af71c17",
-        "version" : "5.4.0"
+        "revision" : "a27b21e0c81c5bf42049b897a62aaf387e80f279",
+        "version" : "6.2.2"
       }
     }
   ],

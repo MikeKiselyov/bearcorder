@@ -1,7 +1,14 @@
-# Actions are pinned to a commit; Dependabot opens a pull request when a new version comes out.
+# Actions are pinned to a commit. Dependabot opens one pull request a month with all their
+# updates; a new major version is left for a change of its own.
 version: 2
 updates:
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: monthly
+    groups:
+      actions:
+        patterns: ["*"]
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
