@@ -216,11 +216,18 @@ final class WindowManager: NSObject, NSWindowDelegate {
         }
     }
 
-    /// Disk space: clean up, folders by size, largest files.
-    func openSpace(section: SpaceView.Section) {
+    /// Disk space: clean up, folders by size, largest files. `category` opens that review list in
+    /// "Clean up" (a category id or `SpaceModel.projectsID`); nil shows the categories. An open
+    /// window switches to it too.
+    func openSpace(section: SpaceView.Section, category: String? = nil) {
         AppState.shared.closeMenuPanel()
+        let space = SpaceModel.shared
+        space.section = section
+        if section == .cleanUp {
+            space.showReview(category)
+        }
         show(id: "space", title: L("app.window.space"), size: CGSize(width: 980, height: 720), minSize: CGSize(width: 760, height: 520)) {
-            SpaceView(section: section)
+            SpaceView()
         }
     }
 

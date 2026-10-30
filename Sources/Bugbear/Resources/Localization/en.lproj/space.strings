@@ -16,22 +16,16 @@
 "space.cleanable" = "%@ can be cleaned safely";
 "space.measureAgain" = "Measure again";
 "space.measureAgain.tip" = "Measure the clean-up categories again to get fresh sizes";
-"space.cleanUp.note" = "Caches are made again by apps when they need them. Deleting them cannot be undone, so each one asks first.";
+"space.cleanUp.note" = "Caches are made again by apps when they need them. Review… lists what is inside; tick what goes and confirm.";
 
-/* A category row. %@ is the category's name; question: the size, then the category's name; confirm: the size. */
-"space.clean" = "Clean";
-"space.clean.label" = "Clean %@";
-"space.clean.tip" = "Delete the contents of %@ to free space; asks to confirm first";
-"space.clean.question" = "Delete %1$@ from %2$@? This cannot be undone.";
-"space.clean.cancel" = "Cancel";
-"space.clean.cancel.tip" = "Keep these files";
-"space.clean.confirm" = "Delete %@";
-"space.clean.confirm.tip" = "Delete for good; this cannot be undone";
+/* A category row. %@ is the category's name. */
+"space.review" = "Review…";
+"space.review.label" = "Review %@";
+"space.review.tip" = "List what is in %@ with a checkbox each; tick what goes, then confirm";
 "space.captures.open" = "Open";
 "space.captures.open.tip" = "Open the captures history to delete screenshots and clips you no longer need";
 
 /* Results. freed: the size, then the category's name. movedToTrash: the file's name, then its size. trashFailed: the error. */
-"space.message.freed" = "Freed %1$@ from %2$@";
 "space.message.movedToTrash" = "Moved %1$@ to the Trash (%2$@). Empty the Trash to free the space.";
 "space.message.trashFailed" = "Could not move it to the Trash: %@";
 
@@ -54,6 +48,22 @@
 "space.category.cocoapods.detail" = "Downloaded pods. Projects keep their own copies.";
 "space.category.pip.title" = "pip cache";
 "space.category.pip.detail" = "Downloaded Python packages. Installed packages stay.";
+"space.category.uv.title" = "uv cache";
+"space.category.uv.detail" = "Downloaded Python packages and built wheels. uv downloads them again when a project needs them.";
+"space.category.bun.title" = "Bun cache";
+"space.category.bun.detail" = "Downloaded packages. They are downloaded again on the next install.";
+"space.category.goModules.title" = "Go modules";
+"space.category.goModules.detail" = "Downloaded Go dependencies, removed with go clean. They are downloaded again on the next build.";
+"space.category.maven.title" = "Maven repository";
+"space.category.maven.detail" = "Downloaded Java libraries and plugins come back on the next build. Libraries you installed locally with mvn install come back only from their projects, so nothing here starts ticked.";
+"space.category.huggingFace.title" = "Hugging Face models";
+"space.category.huggingFace.detail" = "Models and datasets downloaded for machine learning. They are downloaded again when a program asks for them.";
+"space.category.preCommit.title" = "pre-commit environments";
+"space.category.preCommit.detail" = "Tools pre-commit installed for your repositories' hooks. They are installed again at the next commit.";
+"space.category.editorCaches.title" = "Editor caches";
+"space.category.editorCaches.detail" = "Cursor and VS Code: cached code and downloaded extension packages. Settings, extensions and workspaces stay.";
+"space.category.playwright.title" = "Playwright browsers";
+"space.category.playwright.detail" = "Browsers downloaded for tests. Playwright downloads them again when a test needs one.";
 "space.category.logs.title" = "Logs";
 "space.category.logs.detail" = "Logs apps wrote for troubleshooting. %@'s own log and crash reports stay.";
 "space.category.captures.title" = "%@ captures";
@@ -126,3 +136,64 @@
 "space.tab.allCategories.tip" = "Open the Disk Space window with every clean-up category";
 "space.tab.whatTakesSpace" = "What takes space…";
 "space.tab.whatTakesSpace.tip" = "Scan folders to see what takes the most space on this Mac";
+
+/* Review lists: why a ticked row was not removed. */
+"space.review.skip.changed" = "Changed since the scan";
+"space.review.skip.gone" = "No longer there";
+"space.review.skip.link" = "Not removed: the path now goes through a link";
+"space.review.skip.notAllowed" = "Not removed: Space does not remove this place";
+"space.review.skip.failed" = "Could not be removed: %@";
+"space.review.skip.trashReplaced" = "Not deleted: another item with this name is in the Trash now";
+
+/* Review lists in the window. ticked: the ticked rows, then all rows. show.label: the row's path. */
+"space.review.back" = "All categories";
+"space.review.back.tip" = "Back to the list of clean-up categories";
+"space.review.listing" = "Listing what is inside…";
+"space.review.empty" = "Nothing to remove here.";
+"space.review.ticked" = "%1$ld of %2$ld ticked";
+"space.review.selectAll" = "Select all";
+"space.review.selectAll.tip" = "Tick every row";
+"space.review.selectNone" = "Select none";
+"space.review.selectNone.tip" = "Untick every row";
+"space.review.row.tip" = "Tick to remove this folder; untick to keep it";
+"space.review.show" = "Show";
+"space.review.show.label" = "Show %@ in Finder";
+"space.review.show.tip" = "Show this folder in Finder";
+"space.review.age.unknown" = "Age unknown";
+"space.review.age.today" = "Changed today";
+"space.review.note.trash" = "Ticked folders go to the Trash; you can put them back from there.";
+"space.review.note.delete" = "Ticked rows are deleted for good; this cannot be undone.";
+"space.review.action.tip" = "Remove the ticked rows; asks to confirm first";
+
+/* The confirmation. %@ is the button's text, like "Move 2 folders, 1.2 GB to the Trash". */
+"space.review.confirm.trash" = "%@? They stay in the Trash until you empty it.";
+"space.review.confirm.trash.tip" = "Move the ticked folders to the Trash now";
+"space.review.confirm.delete" = "%@? This cannot be undone.";
+"space.review.confirm.delete.tip" = "Delete the ticked rows for good now";
+"space.review.cancel" = "Cancel";
+"space.review.cancel.tip" = "Keep everything as it is";
+
+/* After a removal. %@ is a size; skippedRow: the path, then why it was left alone. */
+"space.review.result.freed" = "Freed %@";
+"space.review.result.trashed" = "Moved %@ to the Trash. Empty the Trash, or delete them for good, to free the space.";
+"space.review.result.skippedRow" = "%1$@: %2$@";
+"space.review.forGood.tip" = "Delete for good only the folders this removal moved to the Trash; asks first, and the rest of the Trash stays";
+"space.review.forGood.confirm.tip" = "Delete the folders this removal moved to the Trash for good now";
+
+/* Project folders. found: the size, then when, like "2 hr. ago". unreadable and prompt: folder names. */
+"space.projects.title" = "Project folders";
+"space.projects.detail" = "node_modules, build and other folders your projects download or build again. Projects not changed for a while are ticked.";
+"space.projects.notSearched" = "Not searched yet";
+"space.projects.searching" = "Searching…";
+"space.projects.found" = "%1$@, found %2$@";
+"space.projects.open" = "Find projects…";
+"space.projects.open.tip" = "Open the project folders list in the Disk Space window";
+"space.projects.review.tip" = "Open the dependency folders found in your projects";
+"space.projects.find" = "Find projects";
+"space.projects.findAgain" = "Find again";
+"space.projects.find.tip" = "Look in your project folders for dependency and build folders";
+"space.projects.stop" = "Stop";
+"space.projects.stop.tip" = "Stop looking for projects";
+"space.projects.unreadable" = "Could not read %@";
+"space.projects.prompt" = "Find projects looks in %@ for dependency and build folders. Change the folders in Settings → Storage.";
+"space.projects.noRoots" = "No project folders to look in. Add them in Settings → Storage.";

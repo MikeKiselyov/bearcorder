@@ -39,6 +39,12 @@ final class UninstallScriptTests: XCTestCase {
         environment["BUGBEAR_APPS_DIRS"] = home.appendingPathComponent("Applications").path
         environment["BUGBEAR_DRY_SYSTEM"] = "1"
         environment["NO_COLOR"] = "1"
+        // The real lsregister dump takes 5-7 s: a small one with a copy that is gone stands in.
+        let dump = home.appendingPathComponent("lsregister-dump.txt")
+        try FileManager.default.createDirectory(at: home, withIntermediateDirectories: true)
+        let gonePath = home.appendingPathComponent("Gone/\(AppInfo.name).app").path
+        try "path:               \(gonePath) (0x1234)\n".write(to: dump, atomically: true, encoding: .utf8)
+        environment["BUGBEAR_LSREGISTER_DUMP"] = dump.path
         if let answers {
             let file = home.appendingPathComponent("answers.txt")
             try FileManager.default.createDirectory(at: home, withIntermediateDirectories: true)
@@ -117,6 +123,7 @@ final class UninstallScriptTests: XCTestCase {
         // A remembered copy would file the next install's Screen Recording request under its id.
         XCTAssertTrue(result.output.contains("lsregister -u \(home.path)/Applications/Renamed.app"), "macOS forgets the removed app")
         XCTAssertTrue(result.output.contains("lsregister -u \(home.path)/.bugbear/build/Bugbear.app"), "and the installer's build")
+        XCTAssertTrue(result.output.contains("lsregister -u \(home.path)/Gone/\(AppInfo.name).app"), "and a remembered copy that is gone")
         // Permissions first: tccutil refuses a bundle id whose app is already gone.
         if let reset = result.output.range(of: "tccutil reset All test.bugbear"), let removed = result.output.range(of: "Removed \(home.path)/Applications/Renamed.app") {
             XCTAssertTrue(reset.lowerBound < removed.lowerBound, "permissions are reset before the app is removed")

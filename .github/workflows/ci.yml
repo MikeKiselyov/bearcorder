@@ -65,9 +65,22 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
-      - run: swift --version
+      - name: Swift version
+        id: swift
+        run: |
+          swift --version
+          echo "version=$(swift --version 2>&1 | head -1 | shasum | cut -c1-12)" >> "$GITHUB_OUTPUT"
+      # Compiled packages and objects, so a run rebuilds only what changed. A pull request reads the
+      # cache of main and saves its own; the cache is not trusted for anything but build output.
+      - name: Cache .build
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .build
+          key: spm-${{ runner.os }}-${{ steps.swift.outputs.version }}-${{ hashFiles('Package.resolved') }}
+          restore-keys: |
+            spm-${{ runner.os }}-${{ steps.swift.outputs.version }}-
       - name: Unit tests
-        run: swift test
+        run: swift test --parallel
       - name: Self-test (export, edits, annotations, OCR, QR, stitching)
         run: |
           swift build

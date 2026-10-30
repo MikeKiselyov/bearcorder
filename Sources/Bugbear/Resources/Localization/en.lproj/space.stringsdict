@@ -19,5 +19,117 @@
             <string>%ld files</string>
         </dict>
     </dict>
+    <key>space.review.action.trash</key>
+    <dict>
+        <key>NSStringLocalizedFormatKey</key>
+        <string>Move %1$#@folders@, %2$@ to the Trash</string>
+        <key>folders</key>
+        <dict>
+            <key>NSStringFormatSpecTypeKey</key>
+            <string>NSStringPluralRuleType</string>
+            <key>NSStringFormatValueTypeKey</key>
+            <string>ld</string>
+            <key>one</key>
+            <string>%ld folder</string>
+            <key>other</key>
+            <string>%ld folders</string>
+        </dict>
+    </dict>
+    <key>space.review.action.deleteFolders</key>
+    <dict>
+        <key>NSStringLocalizedFormatKey</key>
+        <string>Delete %1$#@folders@, %2$@</string>
+        <key>folders</key>
+        <dict>
+            <key>NSStringFormatSpecTypeKey</key>
+            <string>NSStringPluralRuleType</string>
+            <key>NSStringFormatValueTypeKey</key>
+            <string>ld</string>
+            <key>one</key>
+            <string>%ld folder</string>
+            <key>other</key>
+            <string>%ld folders</string>
+        </dict>
+    </dict>
+    <key>space.review.action.deleteItems</key>
+    <dict>
+        <key>NSStringLocalizedFormatKey</key>
+        <string>Delete %1$#@items@, %2$@</string>
+        <key>items</key>
+        <dict>
+            <key>NSStringFormatSpecTypeKey</key>
+            <string>NSStringPluralRuleType</string>
+            <key>NSStringFormatValueTypeKey</key>
+            <string>ld</string>
+            <key>one</key>
+            <string>%ld item</string>
+            <key>other</key>
+            <string>%ld items</string>
+        </dict>
+    </dict>
+    <key>space.review.forGood</key>
+    <dict>
+        <key>NSStringLocalizedFormatKey</key>
+        <string>Delete %1$#@folders@ for good, %2$@</string>
+        <key>folders</key>
+        <dict>
+            <key>NSStringFormatSpecTypeKey</key>
+            <string>NSStringPluralRuleType</string>
+            <key>NSStringFormatValueTypeKey</key>
+            <string>ld</string>
+            <key>one</key>
+            <string>this folder</string>
+            <key>other</key>
+            <string>these %ld folders</string>
+        </dict>
+    </dict>
+    <key>space.review.forGood.confirm</key>
+    <dict>
+        <key>NSStringLocalizedFormatKey</key>
+        <string>Delete %1$#@folders@, %2$@ for good? This cannot be undone.</string>
+        <key>folders</key>
+        <dict>
+            <key>NSStringFormatSpecTypeKey</key>
+            <string>NSStringPluralRuleType</string>
+            <key>NSStringFormatValueTypeKey</key>
+            <string>ld</string>
+            <key>one</key>
+            <string>this folder</string>
+            <key>other</key>
+            <string>these %ld folders</string>
+        </dict>
+    </dict>
+    <key>space.review.result.skipped</key>
+    <dict>
+        <key>NSStringLocalizedFormatKey</key>
+        <string>%#@rows@</string>
+        <key>rows</key>
+        <dict>
+            <key>NSStringFormatSpecTypeKey</key>
+            <string>NSStringPluralRuleType</string>
+            <key>NSStringFormatValueTypeKey</key>
+            <string>ld</string>
+            <key>one</key>
+            <string>%ld row left alone:</string>
+            <key>other</key>
+            <string>%ld rows left alone:</string>
+        </dict>
+    </dict>
+    <key>space.review.age.days</key>
+    <dict>
+        <key>NSStringLocalizedFormatKey</key>
+        <string>Changed %#@days@ ago</string>
+        <key>days</key>
+        <dict>
+            <key>NSStringFormatSpecTypeKey</key>
+            <string>NSStringPluralRuleType</string>
+            <key>NSStringFormatValueTypeKey</key>
+            <string>ld</string>
+            <key>one</key>
+            <string>%ld day</string>
+            <key>other</key>
+            <string>%ld days</string>
+        </dict>
+    </dict>
 </dict>
 </plist>

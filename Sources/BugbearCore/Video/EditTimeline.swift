@@ -73,7 +73,7 @@ public struct FreezeEdit: Equatable, Codable, Hashable {
 }
 
 /// One continuous piece of the output video.
-public struct TimelinePiece: Equatable {
+public struct TimelinePiece: Equatable, Sendable {
     public var sourceStart: Double
     public var sourceDuration: Double
     public var outputStart: Double
@@ -195,7 +195,7 @@ public struct EditTimeline: Equatable, Codable {
 }
 
 /// Maps between output time and source time for a list of pieces.
-public struct TimeMap {
+public struct TimeMap: Sendable {
     public let pieces: [TimelinePiece]
 
     public init(pieces: [TimelinePiece]) {

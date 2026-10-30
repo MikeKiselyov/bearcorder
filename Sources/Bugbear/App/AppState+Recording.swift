@@ -36,13 +36,15 @@ extension AppState {
             recordingRegion = picked
         }
         var restart = bufferState != .running
+        // Displays the running buffer does not capture yet are added; the running ones keep going.
+        var addDisplays = false
         // Which display to keep: the one under the pointer when only one is wanted. An area can be
         // moved to any display or across them while recording, so every display is kept for it.
         recordingDisplay = nil
         if recordingRegion != nil {
             if NSScreen.screens.count > 1 && !settings.captureAllDisplays {
                 allDisplaysForArea = true
-                restart = true
+                addDisplays = true
                 Log.info("area recording: every display in the buffer")
             }
         } else if !settings.captureAllDisplays, let screen = NSScreen.screens.first(where: { screen in screen.frame.contains(NSEvent.mouseLocation) }) {
@@ -53,13 +55,21 @@ extension AppState {
             restart = true
             Log.info("recording: adding display \(display) to the buffer")
         }
-        if recordingRegion != nil && settings.maxHeight > 0 {
-            nativeResolutionForArea = true
-            restart = true
-            Log.info("area recording: buffer at native resolution")
+        // Only the displays the area touches go to native resolution and the recording frame rate.
+        if let region = recordingRegion {
+            nativeDisplaysForArea = displaysTouched(by: region.global)
+            Log.info("area recording: native resolution on \(nativeDisplaysForArea.sorted())")
+        }
+        if !restart && addDisplays {
+            let added = await addMissingBuffers()
+            if !added {
+                restart = true
+            }
         }
         if restart {
             await startBuffer()
+        } else if !nativeDisplaysForArea.isEmpty {
+            await upgradeBuffers(nativeDisplaysForArea)
         }
         if bufferState != .running {
             await restoreBufferResolution(force: true)
@@ -67,7 +77,9 @@ extension AppState {
             return
         }
         await refreshBufferFilters()
-        if settings.recordingFramesPerSecond > settings.framesPerSecond {
+        // An area's displays got the recording frame rate with native resolution; the others keep
+        // the buffer's.
+        if settings.recordingFramesPerSecond > settings.framesPerSecond && recordingRegion == nil {
             for buffer in buffers {
                 await buffer.setFrameRate(settings.recordingFramesPerSecond)
             }
@@ -125,6 +137,32 @@ extension AppState {
     private func recordingAreaChanged(_ global: CGRect) {
         guard recordingRegion != nil, let region = RegionSelector.Selection(global: global) else { return }
         recordingRegion = region
+        areaMoved(to: global)
+    }
+
+    /// A display the moved area now touches goes to native resolution from this moment (its earlier
+    /// frames stay at the buffer's resolution, the clip scales them up). Displays the area left keep
+    /// native resolution until the recording ends.
+    func areaMoved(to area: CGRect) {
+        let newlyTouched = AreaDisplays.toUpgrade(touched: displaysTouched(by: area), native: nativeDisplaysForArea, recording: recording != nil)
+        if newlyTouched.isEmpty { return }
+        nativeDisplaysForArea.formUnion(newlyTouched)
+        Log.info("area recording: area moved onto \(newlyTouched.sorted()), native resolution there")
+        Task {
+            await upgradeBuffers(newlyTouched)
+        }
+    }
+
+    /// Native resolution and the recording frame rate on the running buffers of these displays. A stream
+    /// that does not take the change is restarted, on the buffer's start chain.
+    private func upgradeBuffers(_ displays: Set<CGDirectDisplayID>) async {
+        let rate = max(settings.recordingFramesPerSecond, settings.framesPerSecond)
+        for buffer in buffers where displays.contains(buffer.displayID) {
+            let applied = await buffer.upgradeToNative(framesPerSecond: rate)
+            if !applied {
+                await restartBufferForArea(buffer.displayID)
+            }
+        }
     }
 
     func stopRecording() async {
@@ -199,9 +237,12 @@ extension AppState {
         if case .failed = bufferState {
             bufferFailed = true
         }
-        let needsRestart = nativeResolutionForArea || allDisplaysForArea || extraDisplayForRecording != nil || bufferFailed || screensChangedWhileRecording
-        let wasBoosted = boostedFrameRate
-        nativeResolutionForArea = false
+        // Displays an area recording took to native resolution go back by a restart; the frame rate alone
+        // changes on the running stream.
+        let changedResolution = !nativeDisplaysForArea.isEmpty && settings.maxHeight > 0
+        let needsRestart = changedResolution || allDisplaysForArea || extraDisplayForRecording != nil || bufferFailed || screensChangedWhileRecording
+        let wasBoosted = boostedFrameRate || !nativeDisplaysForArea.isEmpty
+        nativeDisplaysForArea = []
         allDisplaysForArea = false
         extraDisplayForRecording = nil
         boostedFrameRate = false

@@ -149,6 +149,33 @@
 "settings.storage.sizeLimit.tip" = "Delete the oldest captures when they take more space than this";
 "settings.storage.cleanUp" = "Clean up now";
 "settings.storage.cleanUp.note" = "Applied after launch and once a day; the oldest go first. Captures open in an editor are kept.";
+"settings.cleanup.section" = "Project clean-up";
+"settings.cleanup.roots" = "Project folders";
+"settings.cleanup.roots.tip" = "Folders inside your home folder where Space looks for projects";
+"settings.cleanup.roots.add" = "Add folder…";
+"settings.cleanup.roots.add.prompt" = "Add";
+"settings.cleanup.roots.add.tip" = "Choose a folder inside your home folder to search for projects";
+"settings.cleanup.roots.remove" = "Remove";
+"settings.cleanup.roots.remove.tip" = "Stop searching ~/%@ for projects";
+"settings.cleanup.roots.remove.label" = "Remove ~/%@";
+"settings.cleanup.roots.refused" = "Choose a folder inside your home folder, not in Library";
+"settings.cleanup.oldDays" = "Old after %ld days";
+"settings.cleanup.oldDays.tip" = "A project you have not touched for this many days counts as old (1 to 365)";
+"settings.cleanup.trash" = "Move project folders to the Trash";
+"settings.cleanup.trash.tip" = "Removed project folders go to the Trash so you can put them back; off deletes them at once";
+"settings.cleanup.kinds" = "Look for";
+"settings.cleanup.kinds.tip" = "The kinds of dependency and build folders Space offers to remove inside projects";
+"settings.cleanup.kind.nodeModules" = "Node modules";
+"settings.cleanup.kind.pythonVenv" = "Python environments";
+"settings.cleanup.kind.pods" = "CocoaPods";
+"settings.cleanup.kind.cargoTarget" = "Rust build output";
+"settings.cleanup.kind.swiftBuild" = "Swift build output";
+"settings.cleanup.kind.gradleBuild" = "Gradle build output";
+"settings.cleanup.kind.gradleCache" = "Gradle project cache";
+"settings.cleanup.kind.tip" = "Folders named %@";
+"settings.cleanup.caches" = "More caches to show";
+"settings.cleanup.caches.tip" = "Extra cache rows in the Space clean-up list; turn one off to hide it";
+"settings.cleanup.cache.tip" = "Show this cache in the Space clean-up list";
 "settings.storage.cleanUp.tip" = "Apply the clean-up rules right now instead of waiting for the daily run";
 
 /* Shortcuts page. row.label: VoiceOver label, %1$@ is the action, %2$@ its keys. error.taken: %1$@ the keys, %2$@ the action that has them. */

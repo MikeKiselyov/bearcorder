@@ -115,7 +115,8 @@ scripts/                  what people run: install.sh, update.sh, uninstall.sh, 
     lib/                  what the test runs share: test-app.sh, e2e-helpers.sh, window-fits.py
   check/                  CI checks: release.sh, no-automation.sh, control-coverage.py + controls.txt
   dev/                    tools for working on the app: readme-media.sh, rename-app.sh,
-                          local-signing.sh, bugbear-run.sh and bugbear-command.sh (automation)
+                          local-signing.sh, bugbear-run.sh, bugbear-command.sh and
+                          bugbear-send.swift (automation; see docs/testing.md)
 Makefile                  one entry point for the scripts
 docs/                     these docs; images/ holds the README pictures
 ```
@@ -137,7 +138,9 @@ failed check is reported and the run goes on. `shellcheck` (`make lint`, and CI)
 CI (`.github/workflows/ci.yml`) runs with a read-only token; only the `release` job, on a push to `main`
 and after the tests pass, can write tags and releases. Actions are pinned to a commit, Dependabot
 (`.github/dependabot.yml`) proposes updates, and the shellcheck and actionlint downloads are checked
-against their sha256. `actionlint` (`make lint`, and CI) checks the workflows.
+against their sha256. `actionlint` (`make lint`, and CI) checks the workflows. The test job caches `.build`
+(`actions/cache`); the key has the Swift version and the hash of `Package.resolved`, and an older cache of
+the same Swift version is the fallback.
 
 The logo (a bear looking at a bug through a magnifying glass) is one flat shape drawn in code in `UI/Logo.swift`: the menu bar
 glyph, the in-app logo and the app icon are the same picture. The build script renders the `.icns` from it.

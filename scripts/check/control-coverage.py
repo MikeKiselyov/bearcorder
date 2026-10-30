@@ -13,8 +13,8 @@ ROOT = Path(__file__).resolve().parents[2]
 TEST_FILES = [
     ROOT / "scripts" / "test" / "e2e.sh",
     ROOT / "scripts" / "test" / "e2e-features.sh",
-    ROOT / "Sources" / "Bugbear" / "DevTools" / "DevChecks.swift",
 ]
+TEST_FILES += sorted((ROOT / "Sources" / "Bugbear" / "DevTools").glob("DevChecks*.swift"))
 
 
 def app_name():

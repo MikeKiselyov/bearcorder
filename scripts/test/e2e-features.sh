@@ -33,8 +33,8 @@ field() { echo "$1" | tr ' ' '\n' | grep "^$2=" | head -1 | cut -d= -f2-; }
 # shellcheck disable=SC1091
 source "$ROOT/scripts/test/lib/e2e-helpers.sh"
 
-echo "==> build and launch"
-scripts/build-app.sh >/dev/null 2>&1 || { echo "build failed"; exit 1; }
+section "build and launch"
+build_test_app || exit 1
 # Quit the person's Bugbear and keep a copy of their settings before any test setting is written.
 quit_running_bugbear
 rm -rf "$WORK"
@@ -50,7 +50,7 @@ pbpaste > "$WORK/clipboard-before.txt" 2>/dev/null
 # The person's editor palette; the tests pick colors in a store of their own.
 defaults read "$BUNDLE_ID" recentAnnotationColors > "$WORK/palette-before.txt" 2>/dev/null
 
-echo "==> a new install shows the welcome guide"
+section "a new install shows the welcome guide"
 # Settings outlive a deleted app, so installing where no Bugbear is starts the guide again;
 # installing over a copy (an update) keeps them.
 # The test copy shares the installed app's settings: keep what these steps touch and put it back.
@@ -59,16 +59,16 @@ saved_onboarding_page=$(defaults read "$BUNDLE_ID" onboardingPage 2>/dev/null ||
 saved_whats_new=$(defaults read "$BUNDLE_ID" whatsNewLastSeenID 2>/dev/null || echo "")
 install_dir="$WORK/apps"
 defaults write "$BUNDLE_ID" onboardingCompleted -bool true
-BUGBEAR_INSTALL_DIR="$install_dir" BUGBEAR_NO_OPEN=1 scripts/build-app.sh --install >/dev/null 2>&1
+BUGBEAR_INSTALL_DIR="$install_dir" BUGBEAR_NO_OPEN=1 scripts/build-app.sh --install-only >/dev/null 2>&1
 if ! defaults read "$BUNDLE_ID" onboardingCompleted >/dev/null 2>&1; then pass "installing where no Bugbear is forgets the finished guide"; else fail "a new install forgets the finished guide"; fi
 defaults write "$BUNDLE_ID" onboardingCompleted -bool true
-BUGBEAR_INSTALL_DIR="$install_dir" BUGBEAR_NO_OPEN=1 scripts/build-app.sh --install >/dev/null 2>&1
+BUGBEAR_INSTALL_DIR="$install_dir" BUGBEAR_NO_OPEN=1 scripts/build-app.sh --install-only >/dev/null 2>&1
 if [ "$(defaults read "$BUNDLE_ID" onboardingCompleted 2>/dev/null)" = "1" ]; then pass "installing over a copy (an update) keeps the finished guide"; else fail "an update keeps the finished guide"; fi
 rm -rf "$install_dir"
 defaults delete "$BUNDLE_ID" onboardingCompleted 2>/dev/null
 defaults write "$BUNDLE_ID" automationFirstLaunch -bool true
 open "$TEST_APP"
-sleep 6
+wait_for_value 15 "visible=true" $R window-visible:onboarding 10
 result=$($R window-visible:onboarding 10)
 if [ "$result" = "visible=true" ]; then pass "the first launch opens the welcome guide"; else fail "the first launch opens the welcome guide" "$result"; fi
 pkill -x Bugbear 2>/dev/null
@@ -90,10 +90,18 @@ fi
 
 defaults delete "$BUNDLE_ID" feedbackLastCrashCheck 2>/dev/null
 open "$TEST_APP"
-sleep 6
+wait_for 20 status_starts running
+wait_for 10 defaults read "$BUNDLE_ID" feedbackLastCrashCheck
 $R setting:readBrowserURL:false 10 >/dev/null
 # The launch looks for a crash of the last run (no window in test runs) and remembers when it looked.
 if defaults read "$BUNDLE_ID" feedbackLastCrashCheck >/dev/null 2>&1; then pass "launch checks for a crash of the last run"; else fail "launch checks for a crash of the last run" "feedbackLastCrashCheck not set"; fi
+# The same command sent twice at once: each call has its own token, so each gets its own result file.
+$R status 10 > "$WORK/status-first.txt" &
+first_pid=$!
+$R status 10 > "$WORK/status-second.txt" &
+second_pid=$!
+wait "$first_pid" "$second_pid"
+if grep -q "captures=" "$WORK/status-first.txt" && grep -q "captures=" "$WORK/status-second.txt"; then pass "the same command sent twice gets two results"; else fail "the same command sent twice gets two results" "$(cat "$WORK/status-first.txt") / $(cat "$WORK/status-second.txt")"; fi
 if [ "$($R ax 10)" = "trusted=true" ]; then pass "Accessibility is allowed"; else fail "Accessibility is allowed" "grant it in System Settings"; fi
 
 # A long page with a sticky header and footer and 150 numbered rows.
@@ -118,27 +126,33 @@ case "$BROWSER" in
         # Chromium browsers open the page in a new window of the usual profile; nothing is typed into
         # whatever browser window happened to be in front.
         open -na "$BROWSER" --args --new-window "file://$WORK/long.html"
+        # Real time: the browser opens a new window and loads the test page.
         sleep 4
         $R "activate-app:$BROWSER" 10 >/dev/null
-        sleep 1
+        wait_browser_front
         ;;
     *)
         $R "activate-app:$BROWSER" 10 >/dev/null
-        sleep 1
+        wait_browser_front
         front=$($R screen 10 | sed -n 's/.*front=//p')
         if [ "$front" = "$BROWSER" ]; then
             $R post-key:45:cmd 10 >/dev/null
+            # Real time: the browser takes the shortcut and focuses its address bar; nothing in the app shows it.
             sleep 1.5
             printf '%s' "file://$WORK/long.html" | pbcopy
             $R post-key:37:cmd 10 >/dev/null
+            # Real time: keystrokes into the browser go one at a time; its address bar shows no state to poll.
             sleep 0.3
             $R post-key:9:cmd 10 >/dev/null
+            # Real time: keystrokes into the browser go one at a time; its address bar shows no state to poll.
             sleep 0.3
             $R post-key:36:none 10 >/dev/null
+            # Real time: the browser loads the page; the title loop below waits for it too.
             sleep 3
         else
             # Other browsers ignore --new-window; they open the page in a window of their own choice.
             open -a "$BROWSER" "file://$WORK/long.html"
+            # Real time: the browser opens the page; the title loop below waits for it too.
             sleep 4
         fi
         ;;
@@ -149,6 +163,7 @@ title=""
 for _ in $(seq 30); do
     title=$($R front-title 10 | sed -n 's/^title=//p')
     case "$title" in "Scroll test"*) break ;; esac
+    # Poll step of the title loop.
     sleep 0.5
 done
 case "$title" in
@@ -172,17 +187,19 @@ stop_unless_test_page() {
     fi
 }
 
-echo "==> window size"
+section "window size"
 stop_unless_test_page
 result=$($R resize-front:1280x720 10)
 if echo "$result" | grep -q "app=$BROWSER size=1280x720"; then pass "resize $BROWSER to 1280×720"; else fail "resize $BROWSER" "$result"; fi
 stop_unless_test_page
 $R resize-front:1100x760 10 >/dev/null
+# Real time: the browser window finishes resizing and re-lays the page out.
 sleep 1
 
-echo "==> scrolling screenshot"
+section "scrolling screenshot"
 stop_unless_test_page
 $R post-key:115:none 10 >/dev/null
+# Real time: the browser scrolls to the top (an animation); the page has no state to poll.
 sleep 1
 # The page area from Accessibility: normalized on its display, global frame, display width.
 # Chrome builds its accessibility tree for a page on the first requests, so ask a few times.
@@ -192,6 +209,7 @@ for _ in 1 2 3 4 5; do
     if [ "$web" != "no web area" ] && [ -n "$web" ]; then
         break
     fi
+    # Poll step: the browser builds its accessibility tree on the first requests.
     sleep 1
 done
 normalized=$(echo "$web" | cut -d' ' -f1)
@@ -227,8 +245,9 @@ EOF
     if [ "$verdict" = "missing=0 backwards=0 headers=1 footers=1" ]; then pass "all 150 rows once, in order, header and footer once"; else fail "long screenshot content" "$verdict"; fi
 fi
 
-echo "==> color picker"
+section "color picker"
 ( $R pick-color-test 30 > "$WORK/pick.txt" ) &
+# Real time: the color picker command runs in the background and has to start before the next step.
 sleep 2
 # The middle of the sticky footer: 20 pt above the bottom of the page area.
 if [ -n "$global" ] && echo "$global" | grep -q ","; then
@@ -243,55 +262,62 @@ else
     fail "color picker" "the page area was not found"
 fi
 
-echo "==> ruler"
+section "ruler"
 $R ruler-start 10 >/dev/null
 $R post-drag:400,300:700,500 10 >/dev/null
 $R "activate-app:$BROWSER" 10 >/dev/null
-sleep 1
+wait_browser_front
+# Real time: the window becomes key a moment after the app is in front.
+sleep 0.5
 stop_unless_test_page
 $R post-key:53:none 10 >/dev/null
-sleep 1
+wait_for_value 10 "active=false" $R ruler-state 10
 if [ "$($R ruler-state 10)" = "active=false" ]; then pass "Esc closes the ruler even with $BROWSER in front"; else fail "ruler Esc"; $R ruler-stop 10 >/dev/null; fi
 
-echo "==> design overlay"
+section "design overlay"
 result=$($R overlay-test:2 20)
 if echo "$result" | grep -q "frame=700x400 alpha=0.40"; then pass "1400 px design at @2x is 700×400 pt"; else fail "overlay size" "$result"; fi
 result=$($R overlay-click-through:true 10)
 if echo "$result" | grep -q "clickThrough=true"; then pass "overlay click-through"; else fail "overlay click-through" "$result"; fi
 $R overlay-close 10 >/dev/null
 
-echo "==> area recording through the picker"
+section "area recording through the picker"
 $R "activate-app:$BROWSER" 10 >/dev/null
-sleep 1
+wait_browser_front
+# Real time: the window becomes key a moment after the app is in front.
+sleep 0.5
 $R record-area-picker 10 >/dev/null
-sleep 1.5
+wait_for_text 10 region-picker windows_now
 chip=$($R picker-chips 10 | tr ';' '\n' | grep "^720p@" | cut -d@ -f2)
 $R "post-click:$chip" 10 >/dev/null
-sleep 0.5
+wait_for 10 picker_selected
 $R post-key:36:none 10 >/dev/null
-sleep 3
+wait_for_text 15 "recording=true" $R recording-region 10
 result=$($R recording-region 10)
 # One outline window per display: a frame on this one, "Not recorded" on the others.
 screen_count=$($R screens 10 | tr ';' '\n' | wc -l | tr -d ' ')
 if echo "$result" | grep -q "region=640x360 recording=true outline=$screen_count"; then pass "720p chip picks 640×360 pt and shows the outline on $screen_count display(s)"; else fail "area picker" "$result"; fi
+# Real time: the recording runs a bit so the clip has frames to compare.
 sleep 2
 $R record-stop 60 >/dev/null
 result=$($R "frame-of-latest:1:$WORK/area-frame.png" 30)
 if [ "$result" = "frame=1280x720" ]; then pass "area clip is 1280×720"; else fail "area clip size" "$result"; fi
 $R close-windows 10 >/dev/null
 
-echo "==> resizing the area while recording"
+section "resizing the area while recording"
 # The frame has handles: dragging the bottom-right one makes the area bigger, and the clip gets
 # the area as it is when the recording stops.
 $R "activate-app:$BROWSER" 10 >/dev/null
-sleep 1
+wait_browser_front
+# Real time: the window becomes key a moment after the app is in front.
+sleep 0.5
 $R record-area-picker 10 >/dev/null
-sleep 1.5
+wait_for_text 10 region-picker windows_now
 chip=$($R picker-chips 10 | tr ';' '\n' | grep "^720p@" | cut -d@ -f2)
 $R "post-click:$chip" 10 >/dev/null
-sleep 0.5
+wait_for 10 picker_selected
 $R post-key:36:none 10 >/dev/null
-sleep 3
+wait_for_text 15 "recording=true" $R recording-region 10
 handles=$($R area-handles 10)
 handle_count=$(echo "$handles" | tr ';' '\n' | grep -c ",")
 corner=$(echo "$handles" | cut -d';' -f2)
@@ -302,13 +328,14 @@ if [ "$handle_count" = "8" ]; then pass "the recording frame has 8 handles"; els
 front_before=$($R front-app 10)
 if [ "$front_before" = "$BROWSER" ]; then pass "after picking the area $BROWSER is in front again"; else fail "the area picker kept the focus" "$front_before"; fi
 $R "post-drag:$corner_x,$corner_y:$((corner_x + 100)),$((corner_y + 50))" 15 >/dev/null
-sleep 1
+wait_for_text 10 "region=740x410 recording=true" $R recording-region 10
 result=$($R recording-region 10)
 if echo "$result" | grep -q "region=740x410 recording=true"; then pass "dragging the corner while recording makes the area 740×410 pt"; else fail "resize the area while recording" "$result"; fi
 moved=$($R area-handles 10 | cut -d';' -f2)
 if [ "$moved" = "$((corner_x + 100)),$((corner_y + 50))" ]; then pass "the handle follows the frame"; else fail "the handle follows the frame" "$moved, expected $((corner_x + 100)),$((corner_y + 50))"; fi
 front=$($R front-app 10)
 if [ "$front_before" = "$BROWSER" ] && [ "$front" = "$BROWSER" ]; then pass "dragging a handle leaves $BROWSER in front"; else fail "dragging a handle took the focus" "before=$front_before after=$front"; fi
+# Real time: the recording runs a bit so the clip has frames to compare.
 sleep 2
 $R record-stop 60 >/dev/null
 result=$($R "frame-of-latest:1:$WORK/area-resized.png" 30)
@@ -316,26 +343,28 @@ if [ "$result" = "frame=1480x820" ]; then pass "the clip has the resized area, 1
 if [ -z "$($R area-handles 10)" ]; then pass "the handles go when the recording stops"; else fail "the handles go when the recording stops"; fi
 $R close-windows 10 >/dev/null
 
-echo "==> moving the area"
+section "moving the area"
 # In the picker a drag inside the area or by its grip moves it and an edge handle moves one side; while recording,
 # the grip above the frame moves the whole area without resizing it, and the clip gets that place.
 $R "activate-app:$BROWSER" 10 >/dev/null
-sleep 1
+wait_browser_front
+# Real time: the window becomes key a moment after the app is in front.
+sleep 0.5
 $R record-area-picker 10 >/dev/null
-sleep 1.5
+wait_for_text 10 region-picker windows_now
 chip=$($R picker-chips 10 | tr ';' '\n' | grep "^720p@" | cut -d@ -f2)
 $R "post-click:$chip" 10 >/dev/null
-sleep 0.5
+wait_for 10 picker_selected
 picked=$($R picker-selection 10)
 IFS=, read -r pick_x pick_y pick_width pick_height <<< "$picked"
 $R "post-drag:$((pick_x + pick_width / 2)),$((pick_y + pick_height / 2)):$((pick_x + pick_width / 2 + 100)),$((pick_y + pick_height / 2 + 60))" 15 >/dev/null
-sleep 0.5
+wait_for_value 10 "$((pick_x + 100)),$((pick_y + 60)),$pick_width,$pick_height" $R picker-selection 10
 result=$($R picker-selection 10)
 if [ "$result" = "$((pick_x + 100)),$((pick_y + 60)),$pick_width,$pick_height" ]; then pass "dragging inside the picked area moves it by 100,60 pt and keeps its size"; else fail "move the area in the picker" "$picked -> $result"; fi
 pick_x=$((pick_x + 100))
 pick_y=$((pick_y + 60))
 $R "post-drag:$((pick_x + pick_width)),$((pick_y + pick_height / 2)):$((pick_x + pick_width + 80)),$((pick_y + pick_height / 2 + 40))" 15 >/dev/null
-sleep 0.5
+wait_for_value 10 "$pick_x,$pick_y,$((pick_width + 80)),$pick_height" $R picker-selection 10
 result=$($R picker-selection 10)
 if [ "$result" = "$pick_x,$pick_y,$((pick_width + 80)),$pick_height" ]; then pass "the right edge handle in the picker makes the area 80 pt wider and nothing else"; else fail "edge handle in the picker" "$result"; fi
 pick_width=$((pick_width + 80))
@@ -345,27 +374,28 @@ grip_y=${grip#*,}
 result="no grip"
 if [ -n "$grip" ]; then
     $R "post-drag:$grip_x,$grip_y:$((grip_x - 60)),$((grip_y + 40))" 15 >/dev/null
-    sleep 0.5
+    wait_for_value 10 "$((pick_x - 60)),$((pick_y + 40)),$pick_width,$pick_height" $R picker-selection 10
     result=$($R picker-selection 10)
 fi
 if [ "$result" = "$((pick_x - 60)),$((pick_y + 40)),$pick_width,$pick_height" ]; then pass "the grip above the picked area moves it by -60,40 pt and keeps its size"; else fail "grip in the picker" "$grip: $result"; fi
 pick_x=$((pick_x - 60))
 pick_y=$((pick_y + 40))
 $R post-key:36:none 10 >/dev/null
-sleep 3
+wait_for_text 15 "recording=true" $R recording-region 10
 result=$($R recording-region 10)
 if echo "$result" | grep -q "region=${pick_width}x${pick_height} recording=true .* at=$pick_x,$pick_y$"; then pass "the recording takes the moved and widened area"; else fail "area from the picker" "$result, expected ${pick_width}x${pick_height} at $pick_x,$pick_y"; fi
 grip=$($R area-grip 10)
 grip_x=${grip%,*}
 grip_y=${grip#*,}
 $R "post-drag:$grip_x,$grip_y:$((grip_x - 120)),$((grip_y + 50))" 15 >/dev/null
-sleep 1
+wait_for_text 10 "at=$((pick_x - 120)),$((pick_y + 50))" $R recording-region 10
 result=$($R recording-region 10)
 if echo "$result" | grep -q "region=${pick_width}x${pick_height} recording=true .* at=$((pick_x - 120)),$((pick_y + 50))$"; then pass "dragging the grip while recording moves the area by -120,50 pt and keeps its size"; else fail "move the area while recording" "$result, expected at $((pick_x - 120)),$((pick_y + 50))"; fi
 result=$($R area-grip 10)
 if [ "$result" = "$((grip_x - 120)),$((grip_y + 50))" ]; then pass "the grip follows the frame"; else fail "the grip follows the frame" "$result"; fi
 front=$($R front-app 10)
 if [ "$front" = "$BROWSER" ]; then pass "dragging the grip leaves $BROWSER in front"; else fail "dragging the grip took the focus" "$front"; fi
+# Real time: the recording runs a bit so the clip has frames to compare.
 sleep 2
 $R record-stop 60 >/dev/null
 result=$($R "frame-of-latest:1:$WORK/area-moved.png" 30)
@@ -373,7 +403,7 @@ if [ "$result" = "frame=$((pick_width * 2))x$((pick_height * 2))" ]; then pass "
 if [ -z "$($R area-grip 10)" ]; then pass "the grip goes when the recording stops"; else fail "the grip goes when the recording stops"; fi
 $R close-windows 10 >/dev/null
 
-echo "==> an area across displays"
+section "an area across displays"
 # With two displays the area can be picked across them, or moved onto the seam while recording; the
 # clip has both displays in their places (no half left black) at the sharper display's density.
 across_screens=$($R screens 10 | tr ';' '\n' | grep -c ':')
@@ -432,24 +462,26 @@ else
 
     # Displays that touch no other one (a gap between them) have no seam to cross.
     $R record-area-picker 10 >/dev/null
-    sleep 1.5
+    wait_for_text 10 region-picker windows_now
     has_seam=0
     if seam_target; then has_seam=1; fi
     $R post-key:53:none 10 >/dev/null
-    sleep 1
+    wait_for_no_text 10 region-picker windows_now
 fi
 if [ "$across_screens" -ge 2 ] && [ "$has_seam" = 0 ]; then
     echo "  (no display touches the one with the pointer: skipped)"
 elif [ "$across_screens" -ge 2 ]; then
     $R "activate-app:$BROWSER" 10 >/dev/null
-    sleep 1
+    wait_browser_front
+    # Real time: the window becomes key a moment after the app is in front.
+    sleep 0.5
     $R record-area-picker 10 >/dev/null
-    sleep 1.5
+    wait_for_text 10 region-picker windows_now
     picker_count=$($R picker-screens 10 | tr ';' '\n' | grep -c ',')
     if [ "$picker_count" = "$across_screens" ]; then pass "the area picker covers all $across_screens displays"; else fail "picker on every display" "$picker_count of $across_screens"; fi
     chip=$($R picker-chips 10 | tr ';' '\n' | grep "^720p@" | cut -d@ -f2)
     $R "post-click:$chip" 10 >/dev/null
-    sleep 0.5
+    wait_for 10 picker_selected
     IFS=, read -r pick_x pick_y pick_width pick_height <<< "$($R picker-selection 10)"
     seam_target
     grip=$($R picker-grip 10)
@@ -458,15 +490,16 @@ elif [ "$across_screens" -ge 2 ]; then
         dx=$((target_x - (pick_x + pick_width / 2)))
         dy=$((target_y - (pick_y + pick_height / 2)))
         $R "post-drag:${grip%,*},${grip#*,}:$((${grip%,*} + dx)),$((${grip#*,} + dy))" 15 >/dev/null
-        sleep 0.5
+        wait_for_value 10 "$((target_x - pick_width / 2)),$((target_y - pick_height / 2)),$pick_width,$pick_height" $R picker-selection 10
         result=$($R picker-selection 10)
     fi
     expected="$((target_x - pick_width / 2)),$((target_y - pick_height / 2)),$pick_width,$pick_height"
     if [ "$result" = "$expected" ]; then pass "the picker's grip puts the area across the seam of two displays"; else fail "area across displays in the picker" "$result, expected $expected"; fi
     $R post-key:36:none 10 >/dev/null
-    sleep 3
+    wait_for_text 15 "recording=true" $R recording-region 10
     result=$($R recording-region 10)
     if echo "$result" | grep -q "region=${pick_width}x${pick_height} recording=true .* at=$((target_x - pick_width / 2)),$((target_y - pick_height / 2))$"; then pass "the recording takes the area across displays"; else fail "recording an area across displays" "$result"; fi
+    # Real time: the recording runs a bit so the clip has frames to compare.
     sleep 2
     $R record-stop 60 >/dev/null
     result=$($R "frame-of-latest:1:$WORK/area-across.png" 30)
@@ -476,26 +509,29 @@ elif [ "$across_screens" -ge 2 ]; then
 
     # The same while recording: the area starts on one display, its grip takes it onto the seam.
     $R "activate-app:$BROWSER" 10 >/dev/null
-    sleep 1
+    wait_browser_front
+    # Real time: the window becomes key a moment after the app is in front.
+    sleep 0.5
     $R record-area-picker 10 >/dev/null
-    sleep 1.5
+    wait_for_text 10 region-picker windows_now
     chip=$($R picker-chips 10 | tr ';' '\n' | grep "^720p@" | cut -d@ -f2)
     $R "post-click:$chip" 10 >/dev/null
-    sleep 0.5
+    wait_for 10 picker_selected
     IFS=, read -r pick_x pick_y pick_width pick_height <<< "$($R picker-selection 10)"
     seam_target
     $R post-key:36:none 10 >/dev/null
-    sleep 3
+    wait_for_text 15 "recording=true" $R recording-region 10
     grip=$($R area-grip 10)
     result="no grip"
     if [ -n "$grip" ]; then
         dx=$((target_x - (pick_x + pick_width / 2)))
         dy=$((target_y - (pick_y + pick_height / 2)))
         $R "post-drag:${grip%,*},${grip#*,}:$((${grip%,*} + dx)),$((${grip#*,} + dy))" 15 >/dev/null
-        sleep 1
+        wait_for_text 10 "at=$((target_x - pick_width / 2)),$((target_y - pick_height / 2))" $R recording-region 10
         result=$($R recording-region 10)
     fi
     if echo "$result" | grep -q "region=${pick_width}x${pick_height} recording=true .* at=$((target_x - pick_width / 2)),$((target_y - pick_height / 2))$"; then pass "the recording frame's grip moves the area onto the seam of two displays"; else fail "moving the area across displays while recording" "$result"; fi
+    # Real time: the recording runs a bit so the clip has frames to compare.
     sleep 2
     $R record-stop 60 >/dev/null
     result=$($R "frame-of-latest:1:$WORK/area-moved-across.png" 30)
@@ -504,33 +540,157 @@ elif [ "$across_screens" -ge 2 ]; then
     $R close-windows 10 >/dev/null
 fi
 
-echo "==> area picker buttons"
+# Only the displays the area touches run at native resolution (and the recording frame rate); the
+# others keep the buffer's. Moving the area onto another display takes that one to native resolution
+# on the running stream, without a restart; moving it back changes nothing more.
+if [ "$across_screens" -lt 2 ]; then
+    echo "  (native resolution per display: skipped: one display)"
+else
+    screen_list=$($R screens 10 | tr ';' '\n')
+    home_line=$(echo "$screen_list" | grep " pointer$" | head -1)
+    if [ -z "$home_line" ]; then home_line=$(echo "$screen_list" | head -1); fi
+    other_line=$(echo "$screen_list" | grep -v -F "$home_line" | head -1)
+    primary_line=$(echo "$screen_list" | head -1)
+    max_height=$(setting_value maxHeight)
+    # display_sizes <screens line> <maxHeight>: "id native normal" in pixels, as ScreenBuffer works them out.
+    display_sizes() {
+        python3 - "$1" "$2" <<'PY'
+import sys
+line, max_height = sys.argv[1], int(sys.argv[2] or 0)
+display, rest = line.split(":", 1)
+rest = rest.replace(" pointer", "")
+frame, scale = rest.split("@")
+x, y, size = frame.split(",")
+width, height = size.split("x")
+native_width = float(width) * float(scale)
+native_height = float(height) * float(scale)
+normal_width, normal_height = native_width, native_height
+if max_height > 0 and native_height > max_height:
+    ratio = max_height / native_height
+    normal_width = native_width * ratio
+    normal_height = native_height * ratio
+def even(value):
+    return int(value / 2) * 2
+print(f"{display} {even(native_width)}x{even(native_height)} {even(normal_width)}x{even(normal_height)}")
+PY
+    }
+    read -r home_id home_native _ <<< "$(display_sizes "$home_line" "$max_height")"
+    read -r other_id other_native other_normal <<< "$(display_sizes "$other_line" "$max_height")"
+    # The other display's middle in top-left screen points (the main display's top is y 0).
+    IFS=, read -r _ _ primary_size <<< "${primary_line#*:}"
+    primary_height=${primary_size%%@*}
+    primary_height=${primary_height#*x}
+    IFS=, read -r other_x other_y other_size <<< "${other_line#*:}"
+    other_size=${other_size%%@*}
+    other_center_x=$((other_x + ${other_size%x*} / 2))
+    other_center_y=$((primary_height - other_y - ${other_size#*x} / 2))
+
+    $R "activate-app:$BROWSER" 10 >/dev/null
+    wait_browser_front
+    # Real time: the window becomes key a moment after the app is in front.
+    sleep 0.5
+    $R "record-area:0.2,0.2,0.3,0.3:$home_id" 20 >/dev/null
+    # Both displays at the sizes the next check expects.
+    sizes_show() { local shown; shown=";$($R buffer-sizes 10);"; [[ "$shown" == *";$1=$2;"* && "$shown" == *";$3=$4;"* ]]; }
+    wait_for 15 sizes_show "$home_id" "$home_native" "$other_id" "$other_normal"
+    sizes=$($R buffer-sizes 10)
+    if echo ";$sizes;" | grep -q ";$home_id=$home_native;" && echo ";$sizes;" | grep -q ";$other_id=$other_normal;"; then pass "an area on one display: that display at native resolution ($home_native), the other one at the buffer's ($other_normal)"; else fail "native resolution only on the area's display" "$sizes, expected $home_id=$home_native $other_id=$other_normal"; fi
+    started_before=$(grep -c "buffer\[.*\] started" "$LOG")
+    region=$($R recording-region 10)
+    region_size=$(echo "$region" | sed -n 's/.*region=\([0-9]*x[0-9]*\).*/\1/p')
+    region_at=$(echo "$region" | sed -n 's/.* at=\([-0-9]*,[-0-9]*\)$/\1/p')
+    area_center_x=$((${region_at%,*} + ${region_size%x*} / 2))
+    area_center_y=$((${region_at#*,} + ${region_size#*x} / 2))
+    dx=$((other_center_x - area_center_x))
+    dy=$((other_center_y - area_center_y))
+    grip=$($R area-grip 10)
+    if [ -n "$grip" ]; then
+        $R "post-drag:${grip%,*},${grip#*,}:$((${grip%,*} + dx)),$((${grip#*,} + dy))" 15 >/dev/null
+    fi
+    wait_for 15 sizes_show "$other_id" "$other_native" "$home_id" "$home_native"
+    sizes=$($R buffer-sizes 10)
+    started_moved=$(grep -c "buffer\[.*\] started" "$LOG")
+    if echo ";$sizes;" | grep -q ";$other_id=$other_native;" && echo ";$sizes;" | grep -q ";$home_id=$home_native;"; then pass "the area moved onto the other display takes it to native resolution ($other_native), the first one stays"; else fail "native resolution after moving the area" "$sizes, expected $home_id=$home_native $other_id=$other_native"; fi
+    if [ "$started_moved" = "$started_before" ]; then pass "moving the area changed the resolution without restarting a stream"; else echo "  (note: a stream restarted for native resolution: $started_before -> $started_moved started lines)"; fi
+    grip=$($R area-grip 10)
+    if [ -n "$grip" ]; then
+        $R "post-drag:${grip%,*},${grip#*,}:$((${grip%,*} - dx)),$((${grip#*,} - dy))" 15 >/dev/null
+    fi
+    # Negative check: moving back must not restart a stream; a restart would show up in this time.
+    sleep 2
+    sizes_back=$($R buffer-sizes 10)
+    started_back=$(grep -c "buffer\[.*\] started" "$LOG")
+    if [ "$started_back" = "$started_moved" ] && [ "$sizes_back" = "$sizes" ]; then pass "moving the area back restarts nothing and changes no size"; else fail "moving the area back" "started $started_moved -> $started_back, sizes $sizes -> $sizes_back"; fi
+    region=$($R recording-region 10)
+    region_size=$(echo "$region" | sed -n 's/.*region=\([0-9]*x[0-9]*\).*/\1/p')
+    home_scale=$(echo "$home_line" | sed -n 's/.*@\([0-9.]*\).*/\1/p')
+    expected_frame=$(python3 -c "w, h = '$region_size'.split('x'); s = float('$home_scale'); print(f'frame={int(int(w) * s / 2) * 2}x{int(int(h) * s / 2) * 2}')")
+    $R record-stop 60 >/dev/null
+    result=$($R "frame-of-latest:1:$WORK/area-native-per-display.png" 30)
+    if [ "$result" = "$expected_frame" ]; then pass "the clip of the area moved there and back is saved at the area's size (${expected_frame#frame=})"; else fail "clip after moving between displays" "$result, expected $expected_frame"; fi
+    # Without "Keep all displays" the buffer leaves the other display out again.
+    sizes=$($R buffer-sizes 10)
+    if echo ";$sizes;" | grep -q ";$other_id=$other_normal;" || ! echo ";$sizes;" | grep -q ";$other_id="; then pass "after the recording the other display is back at the buffer's resolution"; else fail "buffer resolution after the recording" "$sizes, expected $other_id=$other_normal or not captured"; fi
+    $R close-windows 10 >/dev/null
+
+    # Stopped on the other display: its first seconds were recorded at the buffer's resolution, the
+    # rest at native. The clip has the area where it ends for the whole time, so the frame at 1 s comes
+    # from the smaller part and must be scaled up to fill the clip, not sit in a corner.
+    $R "activate-app:$BROWSER" 10 >/dev/null
+    wait_browser_front
+    # Real time: the window becomes key a moment after the app is in front.
+    sleep 0.5
+    $R "record-area:0.2,0.2,0.3,0.3:$home_id" 20 >/dev/null
+    wait_for_text 15 "recording=true" $R recording-region 10
+    grip=$($R area-grip 10)
+    if [ -n "$grip" ]; then
+        $R "post-drag:${grip%,*},${grip#*,}:$((${grip%,*} + dx)),$((${grip#*,} + dy))" 15 >/dev/null
+    fi
+    # Real time: the stream changes to the native resolution of the new display; the buffer sizes read the same before and after.
+    sleep 3
+    region=$($R recording-region 10)
+    region_size=$(echo "$region" | sed -n 's/.*region=\([0-9]*x[0-9]*\).*/\1/p')
+    other_scale=$(echo "$other_line" | sed -n 's/.*@\([0-9.]*\).*/\1/p')
+    expected_frame=$(python3 -c "w, h = '$region_size'.split('x'); s = float('$other_scale'); print(f'frame={int(int(w) * s / 2) * 2}x{int(int(h) * s / 2) * 2}')")
+    $R record-stop 60 >/dev/null
+    result=$($R "frame-of-latest:1:$WORK/area-native-later.png" 30)
+    if [ "$result" = "$expected_frame" ]; then pass "the clip of the area stopped on the other display has its native density (${expected_frame#frame=})"; else fail "clip stopped on the other display" "$result, expected $expected_frame"; fi
+    halves=$($R "png-black:$WORK/area-native-later.png" 30)
+    right=$(echo "$halves" | sed -n 's/.*right=\([0-9]*\).*/\1/p')
+    bottom=$(echo "$halves" | sed -n 's/.*bottom=\([0-9]*\).*/\1/p')
+    if [ -n "$right" ] && [ -n "$bottom" ] && [ "$right" -lt 50 ] && [ "$bottom" -lt 50 ]; then pass "the part recorded before the move fills the clip ($halves)"; else fail "the part before the move is not scaled up" "$halves"; fi
+    $R close-windows 10 >/dev/null
+fi
+
+section "area picker buttons"
 # The picker draws its buttons by hand; VoiceOver and the tests press them by name.
 $R record-area-picker 10 >/dev/null
-sleep 1.5
+wait_for_text 10 region-picker windows_now
 $R controls:region-picker 30 | sed 's/ ;; /\n/g' | sed "s#^#region-picker|#" > "$WORK/picker-controls.txt"
 size_result=$(press_in region-picker "Size 720p")
 record_result=$(press_in region-picker Record)
-sleep 3
+wait_for_text 15 "recording=true" $R recording-region 10
 result=$($R recording-region 10)
 if [ "$size_result" = "pressed" ] && [ "$record_result" = "pressed" ] && echo "$result" | grep -q "region=640x360 recording=true"; then pass "area picker \"Size\" chips and \"Record\" pressed by name record that area"; else fail "area picker buttons" "$size_result $record_result $result"; fi
 $R record-stop 60 >/dev/null
 $R close-windows 10 >/dev/null
 
-echo "==> dock icon"
+section "dock icon"
 # The icon is in the Dock while a window is open. A click brings the window back; with no window
 # left it opened nothing, so now the menu opens. macOS says where the app is:
 # Foreground with a Dock icon, UIElement in the menu bar only.
 dock_type() { lsappinfo info -only ApplicationType "$(pgrep -f "$TEST_APP/Contents/MacOS/$APP_NAME\$" | head -1)" 2>/dev/null | cut -d'"' -f4; }
 $R close-windows 10 >/dev/null
 $R open-space 30 >/dev/null
-sleep 1
+wait_for 10 window_open space
 result=$($R dock-reopen 10)
 in_dock=$(dock_type)
 if [ "$(field "$result" windows)" = "1" ] && [ "$in_dock" = "Foreground" ] && [ "$(field "$result" menu)" = "false" ]; then pass "Dock icon click with a window open brings the window"; else fail "dock icon with a window" "$result $in_dock"; fi
 $R close-windows 10 >/dev/null
+# Real time: the window closes before the Dock icon is clicked (no state for "no windows").
 sleep 0.5
 result=$($R dock-reopen 10)
+# Real time: macOS changes the Dock icon kind after the click; read from outside the app.
 sleep 1.5
 in_dock=$(dock_type)
 # macOS 26 lets a process change its kind only once, so the icon may stay; a click on it then
@@ -538,21 +698,21 @@ in_dock=$(dock_type)
 if [ "$(field "$result" windows)" = "0" ] && [ "$(field "$result" menu)" = "true" ]; then pass "Dock icon click with no window opens the menu ($in_dock)"; else fail "dock icon with no window" "$result $in_dock"; fi
 $R close-panel 10 >/dev/null
 
-echo "==> shortcuts"
+section "shortcuts"
 LOG="$HOME/Library/Logs/Bugbear/bugbear.log"
 before=$(grep -c "marker added" "$LOG")
 $R post-key:46:option,shift 10 >/dev/null
-sleep 1
+wait_for 10 marker_count_above "$before"
 if [ "$(grep -c "marker added" "$LOG")" -gt "$before" ]; then pass "⌥⇧M marks the moment"; else fail "⌥⇧M"; fi
 $R hotkey-set:ruler:25:cmd,shift 10 >/dev/null
 if $R hotkey-set:draw:19:option,shift 10 | grep -q "conflict with saveMinute"; then pass "a taken shortcut is refused"; else fail "shortcut conflict"; fi
 $R post-key:25:cmd,shift 10 >/dev/null
-sleep 1
+wait_for_value 10 "active=true" $R ruler-state 10
 if [ "$($R ruler-state 10)" = "active=true" ]; then pass "custom ⇧⌘9 opens the ruler"; else fail "custom shortcut"; fi
 $R ruler-stop 10 >/dev/null
 $R hotkey-reset 10 >/dev/null
 
-echo "==> reports, guide, comparison, editors"
+section "reports, guide, comparison, editors"
 $R "report-settings-save:$WORK/report-settings-1.json" 10 >/dev/null
 $R fields:Stand=stage-3,Build=1.42 10 >/dev/null
 $R screenshot-full 40 >/dev/null
@@ -580,13 +740,14 @@ if echo "$result" | grep -q "picked=250 presetMark=250 remembered=250 blurSized=
 result=$($R cleanup-dryrun:0:0 60)
 if echo "$result" | grep -q "wouldDelete=0"; then pass "clean-up with no limits deletes nothing"; else fail "clean-up dry run" "$result"; fi
 
-echo "==> several displays"
+section "several displays"
 # wait_selected_screen <id> <seconds>: waits until the newest capture shows that display, prints the one shown.
 wait_selected_screen() {
     local shown="" tries=0
     while [ "$tries" -lt $(($2 * 2)) ]; do
         shown=$($R clip-screens 10 | sed -n 's/^selected=\([^ ]*\) .*/\1/p')
         if [ "$shown" = "$1" ]; then break; fi
+        # Poll step.
         sleep 0.5
         tries=$((tries + 1))
     done
@@ -621,6 +782,7 @@ if [ "$display_count" -ge 2 ]; then
     # The editor opens a moment after the capture: wait for its display picker before pressing it.
     for _ in $(seq 20); do
         if $R controls:screenshot: 30 | grep -q "|Screen: Side by side"; then break; fi
+        # Poll step.
         sleep 0.5
     done
     press_in screenshot: "Screen: Side by side" >/dev/null
@@ -642,7 +804,7 @@ else
     echo "SKIP  one display: connect a second one to check display switching"
 fi
 
-echo "==> menu panel"
+section "menu panel"
 $R close-panel 10 >/dev/null
 if [ "$($R press-status-item 10)" = "open=true" ]; then pass "click on the bear opens the panel"; else fail "panel opens"; fi
 if [ "$($R press-status-item 10)" = "open=false" ]; then pass "second click closes it"; else fail "panel closes"; fi
@@ -652,19 +814,25 @@ $R close-windows 10 >/dev/null
 if [ "$($R press-status-item 10)" = "open=true" ]; then pass "panel still opens after a screenshot"; else fail "panel after screenshot"; fi
 $R close-panel 10 >/dev/null
 
-echo "==> menu panel buttons: Capture"
+section "menu panel buttons: Capture"
 # Every button is pressed the way VoiceOver presses it, and what it did is checked.
 # With more than one display the menu offers "all displays" instead of "full screen".
 display_count=$($R screens 10 | tr ';' '\n' | grep -c .)
 full_screenshot="Screenshot full screen"
 if [ "$display_count" -gt 1 ]; then full_screenshot="Screenshot all displays"; fi
 
+# A tab that is not there stops press-menu before the label: nothing is pressed on the tab that shows.
+result=$(press_menu "No such tab" "Settings…")
+if [ "$result" = "tab not found: No such tab" ]; then pass "press-menu with a missing tab says so and presses nothing"; else fail "press-menu missing tab" "$result"; fi
+$R close-panel 10 >/dev/null
+
 for row in "30 s, ⌥⇧1|video:" "1 min, ⌥⇧2|video:" "3 min, ⌥⇧3|video:" "$full_screenshot|screenshot:"; do
     label="${row%%|*}"
     editor="${row##*|}"
     before=$(capture_count)
     result=$(press_menu Capture "$label")
-    sleep 3
+    wait_for_value 15 "$((before + 1))" capture_count
+    wait_for_text 15 "$editor" windows_now
     after=$(capture_count)
     opened=$(windows_now)
     if [ "$result" = "pressed" ] && [ "$after" -eq $((before + 1)) ] && [[ "$opened" == *"$editor"* ]]; then pass "menu \"$label\" saves a capture and opens its editor"; else fail "menu \"$label\"" "$result before=$before after=$after windows=$opened"; fi
@@ -674,7 +842,7 @@ done
 # "Edit" next to the environment goes to Settings → Bug reports, from another page.
 $R settings-page:General 10 >/dev/null
 edit_result=$(press_menu Capture "Edit")
-sleep 1
+wait_for_text 10 "|Include Device" $R controls:settings 30
 shown=$($R controls:settings 30)
 if [ "$edit_result" = "pressed" ] && [[ "$shown" == *"|Include Device"* ]]; then pass "menu environment \"Edit\" opens Settings on Bug reports"; else fail "menu environment Edit" "$edit_result"; fi
 $R close-windows 10 >/dev/null
@@ -683,32 +851,33 @@ $R close-windows 10 >/dev/null
 for label in "Screenshot area, ⌥⇧4" "Screenshot window, ⌥⇧5" "Copy text from screen, ⌥⇧O"; do
     before=$(capture_count)
     result=$(press_menu Capture "$label")
-    sleep 1
+    wait_for 10 pgrep -x screencapture
     if pgrep -x screencapture >/dev/null; then picking=true; else picking=false; fi
     pkill -x screencapture 2>/dev/null
+    # Negative check: a wrongly saved capture would appear within this time.
     sleep 1
     after=$(capture_count)
     if [ "$result" = "pressed" ] && [ "$picking" = true ] && [ "$after" -eq "$before" ]; then pass "menu \"$label\" starts picking, cancelling saves nothing"; else fail "menu \"$label\"" "$result picking=$picking before=$before after=$after"; fi
 done
 
 result=$(press_menu Capture "Scrolling screenshot")
-sleep 1
+wait_for_text 10 region-picker windows_now
 picker=$(windows_now)
 $R post-key:53:none 10 >/dev/null
-sleep 1
+wait_for_no_text 10 region-picker windows_now
 if [ "$result" = "pressed" ] && [[ "$picker" == *"region-picker"* ]] && [[ "$(windows_now)" != *"region-picker"* ]]; then pass "menu \"Scrolling screenshot\" opens the area picker, Esc closes it"; else fail "menu \"Scrolling screenshot\"" "$result windows=$picker"; fi
 result=$(press_menu Capture "Scrolling screenshot")
-sleep 1
+wait_for_text 10 region-picker windows_now
 $R controls:region-picker 30 | sed 's/ ;; /\n/g' | sed "s#^#region-picker|#" >> "$WORK/picker-controls.txt"
 cancel_result=$(press_in region-picker Cancel)
-sleep 1
+wait_for_no_text 10 region-picker windows_now
 if [ "$cancel_result" = "pressed" ] && grep -q "|Capture$" "$WORK/picker-controls.txt" && [[ "$(windows_now)" != *"region-picker"* ]]; then pass "area picker \"Cancel\" closes it, the scrolling one says \"Capture\""; else fail "area picker Cancel" "$cancel_result $(windows_now)"; fi
 
 result=$(press_menu Capture "Pause buffer")
-sleep 1
+wait_for 10 status_starts paused
 paused=$($R status 10)
 result_start=$(press_menu Capture "Start buffer")
-sleep 3
+wait_for 15 status_starts running
 running=$($R status 10)
 if [[ "$paused" == paused* ]] && [[ "$running" == running* ]]; then pass "menu \"Pause buffer\" pauses it and \"Start buffer\" starts it again"; else fail "menu pause and start buffer" "$result/$result_start $paused / $running"; fi
 
@@ -716,25 +885,25 @@ for row in "Report a problem with $APP_NAME or suggest a feature on GitHub|feedb
     label="${row%%|*}"
     window="${row##*|}"
     result=$(press_menu Capture "$label")
-    sleep 1
+    wait_for_text 10 "$window" windows_now
     if [[ "$(windows_now)" == *"$window"* ]]; then pass "menu \"$label\" opens the $window window"; else fail "menu \"$label\"" "$result $(windows_now)"; fi
     $R close-windows 10 >/dev/null
 done
 $R close-panel 10 >/dev/null
 
-echo "==> menu panel buttons: Record"
+section "menu panel buttons: Record"
 before=$(capture_count)
 result=$(press_menu Record "Start recording")
-sleep 3
+wait_for_text 15 "recording=true paused=false" tools_now
 started=$(tools_now)
 paused_result=$(press_menu Record "Pause")
-sleep 1
+wait_for_text 10 "recording=true paused=true" tools_now
 paused=$(tools_now)
 resumed_result=$(press_menu Record "Resume")
-sleep 1
+wait_for_text 10 "recording=true paused=false" tools_now
 resumed=$(tools_now)
 stop_result=$(press_menu Record "Stop")
-sleep 4
+wait_for_value 20 "$((before + 1))" capture_count
 after=$(capture_count)
 if [[ "$started" == *"recording=true paused=false"* ]]; then pass "menu \"Start recording\" records the full screen"; else fail "menu \"Start recording\"" "$result $started"; fi
 if [[ "$paused" == *"recording=true paused=true"* && "$resumed" == *"recording=true paused=false"* ]]; then pass "menu \"Pause\" and \"Resume\" pause and resume the recording"; else fail "menu pause and resume" "$paused_result $paused / $resumed_result $resumed"; fi
@@ -744,9 +913,10 @@ $R close-windows 10 >/dev/null
 result=$(press_menu Record "Area…")
 target=$(tools_now)
 start_result=$(press_menu Record "Start recording")
-sleep 1.5
+wait_for_text 10 region-picker windows_now
 picker=$(windows_now)
 $R post-key:53:none 10 >/dev/null
+# Negative check: a recording wrongly started by Esc would show within this time.
 sleep 1
 not_started=$(tools_now)
 # "All displays" when the app keeps every display.
@@ -757,25 +927,25 @@ full=$(tools_now)
 if [[ "$target" == *"target=area"* && "$picker" == *"region-picker"* && "$not_started" == *"recording=false"* && "$full" == *"target=screens"* ]]; then pass "menu \"Area…\" records a picked area, Esc cancels, \"$full_label\" switches back"; else fail "menu area and full screen" "$result $target / $start_result $picker / $not_started / $full_result $full"; fi
 
 result=$(press_menu Record "Draw")
-sleep 1
+wait_for_text 10 "drawing=true" tools_now
 drawing=$(tools_now)
 $R post-key:53:none 10 >/dev/null
-sleep 0.5
+wait_for_text 10 "drawing=false" tools_now
 if [[ "$drawing" == *"drawing=true"* && "$(tools_now)" == *"drawing=false"* ]]; then pass "menu \"Draw\" starts drawing on the screen, Esc ends it"; else fail "menu \"Draw\"" "$result $drawing"; fi
 # Esc ends drawing, the marks stay until closed.
 $R close-windows 10 >/dev/null
 
 result=$(press_menu Record "Measure on screen")
-sleep 1
+wait_for_text 10 "ruler=true" tools_now
 measuring=$(tools_now)
 $R ruler-stop 10 >/dev/null
 if [[ "$measuring" == *"ruler=true"* ]]; then pass "menu \"Measure on screen\" opens the ruler"; else fail "menu \"Measure on screen\"" "$result $measuring"; fi
 
 result=$(press_menu Record "Pick a color, copies hex")
-sleep 1
+wait_for_text 10 "picking=true" tools_now
 picking=$(tools_now)
 $R post-key:53:none 10 >/dev/null
-sleep 0.5
+wait_for_text 10 "picking=false" tools_now
 if [[ "$picking" == *"picking=true"* && "$(tools_now)" == *"picking=false"* ]]; then pass "menu \"Pick a color\" opens the color loupe, Esc closes it"; else fail "menu \"Pick a color\"" "$result $picking"; fi
 
 permissions=$($R permissions 10)
@@ -790,129 +960,142 @@ for row in "Mic|recordMicrophone|microphone=true" "System audio|recordSystemAudi
     fi
     before_value=$(setting_value "$setting")
     press_menu Record "$label" >/dev/null
-    sleep 1
+    wait_for 10 setting_differs "$setting" "$before_value"
     after_value=$(setting_value "$setting")
     press_menu Record "$label" >/dev/null
-    sleep 2
+    wait_for_value 10 "$before_value" setting_value "$setting"
     back_value=$(setting_value "$setting")
     if [ "$before_value" != "$after_value" ] && [ "$before_value" = "$back_value" ]; then pass "menu \"$label\" turns $setting on and off"; else fail "menu \"$label\"" "$before_value → $after_value → $back_value"; fi
 done
 if [[ "$permissions" == *"camera=true"* ]]; then
     press_menu Record "Camera" >/dev/null
-    sleep 2
+    wait_for_text 10 camera windows_now
     camera_on=$(windows_now)
     press_menu Record "Camera" >/dev/null
-    sleep 1
+    wait_for_no_text 10 camera windows_now
     if [[ "$camera_on" == *"camera"* ]]; then pass "menu \"Camera\" shows the camera bubble"; else fail "menu \"Camera\"" "$camera_on"; fi
 else
     echo "SKIP  menu \"Camera\": needs camera=true, macOS would ask"
 fi
 $R close-panel 10 >/dev/null
 
-echo "==> menu panel buttons: Tools"
+section "menu panel buttons: Tools"
 # Each chip opens the toolbox on its tool.
 for row in "{ } JSON|JSON" "XML|XML" "YAML|YAML" "HTML|HTML" "SQL|SQL" "GraphQL|GraphQL" "JWT|JWT" "Base64|Base64" "URL|URL encode" "&; Entities|HTML entities" "Time|Time & dates" "Time zones|Time zones" "⇄ Convert|JSON ↔ YAML ↔ XML ↔ CSV" "0x · Color · Case|Numbers, colors, case" "UUID · Hash|UUID · hash" "Test data|Test data" "Regex|Regex" "QR|QR code"; do
     label="${row%%|*}"
     tool="${row##*|}"
     result=$(press_menu Tools "$label")
-    sleep 1
+    wait_for_value 10 "tool=$tool" $R toolbox-tool 10
     shown=$($R toolbox-tool 10)
     if [ "$result" = "pressed" ] && [[ "$(windows_now)" == *"toolbox"* ]] && [ "$shown" = "tool=$tool" ]; then pass "menu \"$label\" opens the toolbox on $tool"; else fail "menu \"$label\"" "$result $shown"; fi
 done
 $R close-windows 10 >/dev/null
 printf '' | pbcopy
 result=$(press_menu Tools "All tools")
-sleep 1
+wait_for_text 10 toolbox windows_now
 if [ "$result" = "pressed" ] && [[ "$(windows_now)" == *"toolbox"* ]]; then pass "menu \"All tools\" opens the toolbox"; else fail "menu \"All tools\"" "$result $(windows_now)"; fi
 $R close-windows 10 >/dev/null
 # "Compare…" next to the world clock compares times across cities.
 result=$(press_menu Tools "Compare…")
-sleep 1
+wait_for_value 10 "tool=Time zones" $R toolbox-tool 10
 shown=$($R toolbox-tool 10)
 if [ "$result" = "pressed" ] && [[ "$(windows_now)" == *"toolbox"* ]] && [ "$shown" = "tool=Time zones" ]; then pass "menu \"Compare…\" opens the time zone comparison"; else fail "menu \"Compare…\"" "$result $shown $(windows_now)"; fi
 $R close-windows 10 >/dev/null
 
-echo "==> menu panel buttons: Recent and Space"
+section "menu panel buttons: Recent and Space"
 result=$(press_menu Recent "All captures")
-sleep 1
+wait_for_text 10 history windows_now
 if [ "$result" = "pressed" ] && [[ "$(windows_now)" == *"history"* ]]; then pass "menu \"All captures\" opens the history"; else fail "menu \"All captures\"" "$result $(windows_now)"; fi
 $R close-windows 10 >/dev/null
 # The newest capture row opens its editor. The rows are read with the panel open on Recent.
 $R close-panel 10 >/dev/null
 $R press-status-item 10 >/dev/null
 $R press:menubar:Recent 10 >/dev/null
-sleep 0.5
+wait_for 10 recent_capture_shown
 newest=$($R controls:menubar 30 | sed 's/ ;; /\n/g' | grep -E "(ago|just now)$" | head -1 | cut -d'|' -f2)
 result=$(press_menu Recent "$newest")
-sleep 1
+wait_for 10 capture_editor_open
 if [ -n "$newest" ] && [ "$result" = "pressed" ] && [[ "$(windows_now)" == *"screenshot:"* || "$(windows_now)" == *"video:"* ]]; then pass "a recent capture opens in its editor ($newest)"; else fail "a recent capture opens" "$newest $result $(windows_now)"; fi
 $R close-windows 10 >/dev/null
 for row in "Open|history" "All categories|space" "What takes space…|space"; do
     label="${row%%|*}"
     window="${row##*|}"
     result=$(press_menu Space "$label")
-    sleep 1
+    wait_for_text 10 "$window" windows_now
     if [ "$result" = "pressed" ] && [[ "$(windows_now)" == *"$window"* ]]; then pass "Space tab \"$label\" opens the $window window"; else fail "Space tab \"$label\"" "$result $(windows_now)"; fi
     $R close-windows 10 >/dev/null
 done
-# "Clean" on a category asks first; on a made-up home, and Cancel, so nothing real goes.
+# "Review…" on a category opens the window on its list; the menu itself removes nothing and never
+# searches for projects. On a made-up home, so nothing real is listed.
 fake_home=$($R space-fake-home:on 60)
-result=$(press_menu Space "Clean App caches")
-sleep 0.5
-asked=$($R controls:menubar 30 | sed 's/ ;; /\n/g' | grep -cE "^AXButton\|Delete ")
-press_in menubar Cancel >/dev/null
-sleep 0.5
-if [ "$result" = "pressed" ] && [ "$asked" -ge 1 ] && [ -f "$fake_home/Library/Caches/com.example.app/blob.bin" ]; then pass "Space tab \"Clean\" asks first and \"Cancel\" keeps the files"; else fail "Space tab Clean" "$result asked=$asked"; fi
+result=$(press_menu Space "Review App caches")
+wait_for_text 10 "rows=2 checked=2 " $R space-review-state:appCaches 10
+listed=$($R space-review-state:appCaches 10)
+if [ "$result" = "pressed" ] && window_open space && [[ "$listed" == *"rows=2 checked=2 "* ]] && [ -f "$fake_home/Library/Caches/com.example.app/blob.bin" ]; then pass "Space tab \"Review…\" opens the window on the list and keeps the files"; else fail "Space tab Review" "$result $listed"; fi
+$R close-windows 10 >/dev/null
+result=$(press_menu Space "Find projects…")
+wait_for 10 window_open space
+# Negative check: a wrongly started search would show within this time.
+sleep 1
+wait_for_text 10 "list=false" $R space-review-state:projects 10
+listed=$($R space-review-state:projects 10)
+if [ "$result" = "pressed" ] && window_open space && [[ "$listed" == *"list=false"* && "$listed" == *"scanning=false"* ]]; then pass "Space tab \"Find projects…\" opens the project list without searching"; else fail "Space tab Find projects…" "$result $listed"; fi
+$R close-windows 10 >/dev/null
 $R space-fake-home:off 60 >/dev/null
 $R close-panel 10 >/dev/null
 
-echo "==> history window buttons"
+section "history window buttons"
 # Two screenshots of our own to select, compare and delete; the person's captures are only read.
 $R screenshot-full 40 >/dev/null
+# Real time: the screenshot is saved and its editor opens before the next one is taken.
 sleep 1
 $R screenshot-full 40 >/dev/null
+# Real time: the screenshot is saved and its editor opens before the next one is taken.
 sleep 1
 $R close-windows 10 >/dev/null
 read -r own_id _ <<< "$($R latest-capture 10)"
 cards_now() { $R controls:history 30 | sed 's/ ;; /\n/g' | grep -E "^AXButton\|(Screenshot|Clip): " | cut -d'|' -f2-; }
+card_total() { cards_now | wc -l | tr -d ' '; }
+# Every card shown belongs to the app (the sidebar filter has applied).
+only_app_cards() { [ "$(cards_now | grep -cv ": $1, ")" = "0" ]; }
 press_menu Recent "All captures" >/dev/null
-sleep 1
+wait_for_text 10 "Screenshot: " cards_now
 all_cards=$(cards_now | wc -l | tr -d ' ')
 if [ "$all_cards" -ge 2 ]; then pass "history lists every capture as a card ($all_cards)"; else fail "history cards" "$all_cards"; fi
 
 # Filters: only screenshots, only clips, all again.
 press_in history Screenshots >/dev/null
-sleep 0.5
+wait_for_no_text 10 "Clip: " cards_now
 if [ "$(cards_now | grep -c '^Clip: ')" = "0" ] && [ "$(cards_now | grep -c '^Screenshot: ')" -ge 2 ]; then pass "history filter \"Screenshots\" shows only screenshots"; else fail "history filter Screenshots" "$(cards_now | head -3)"; fi
 press_in history Videos >/dev/null
-sleep 0.5
+wait_for_no_text 10 "Screenshot: " cards_now
 if [ "$(cards_now | grep -c '^Screenshot: ')" = "0" ]; then pass "history filter \"Videos\" shows only clips"; else fail "history filter Videos" "$(cards_now | head -3)"; fi
 press_in history All >/dev/null
-sleep 0.5
+wait_for_value 10 "$all_cards" card_total
 if [ "$(cards_now | wc -l | tr -d ' ')" = "$all_cards" ]; then pass "history filter \"All\" shows everything again"; else fail "history filter All" "$(cards_now | wc -l)"; fi
 
 # An app in the sidebar shows only its captures; "All" shows everything again.
 first_app=$($R controls:history 30 | sed 's/ ;; /\n/g' | grep -E "^AXButton\|App: " | head -1 | sed 's/^AXButton|App: //')
 press_in history "App: $first_app" >/dev/null
-sleep 0.5
+wait_for 10 only_app_cards "$first_app"
 others=$(cards_now | grep -cv ": $first_app, ")
 shown_app=$(cards_now | wc -l | tr -d ' ')
 press_in history All >/dev/null
-sleep 0.5
+wait_for_value 10 "$all_cards" card_total
 if [ -n "$first_app" ] && [ "$shown_app" -ge 1 ] && [ "$others" = "0" ] && [ "$(cards_now | wc -l | tr -d ' ')" = "$all_cards" ]; then pass "history sidebar app \"$first_app\" shows only its captures"; else fail "history sidebar app" "$first_app: $shown_app shown, $others of other apps"; fi
 
 # Search: nothing matches a made-up word, clearing it brings the cards back.
 $R "set-value:history:Search by app, URL…=zz-no-such-capture" 10 >/dev/null
-sleep 0.5
+wait_for_value 10 0 card_total
 searched=$(cards_now | wc -l | tr -d ' ')
 $R "set-value:history:Search by app, URL…=" 10 >/dev/null
-sleep 0.5
+wait_for_value 10 "$all_cards" card_total
 if [ "$searched" = "0" ] && [ "$(cards_now | wc -l | tr -d ' ')" = "$all_cards" ]; then pass "history search hides what does not match and clearing it shows all"; else fail "history search" "$searched then $(cards_now | wc -l)"; fi
 
 # A card opens its editor.
 first_card=$(cards_now | head -1)
 press_in history "$first_card" >/dev/null
-sleep 1.5
+wait_for 10 capture_editor_open
 if [[ "$(windows_now)" == *"screenshot:"* || "$(windows_now)" == *"video:"* ]]; then pass "history card opens the capture in its editor"; else fail "history card opens" "$first_card $(windows_now)"; fi
 $R close-windows 10 >/dev/null
 
@@ -920,25 +1103,27 @@ $R close-windows 10 >/dev/null
 open_history_selecting() {
     $R close-windows 10 >/dev/null
     press_menu Recent "All captures" >/dev/null
-    sleep 1
+    wait_for_text 10 "Screenshot: " cards_now
     press_in history Screenshots >/dev/null
     press_in history Select >/dev/null
+    # Real time: the selection mode redraws the cards; the cards expose no selected state.
     sleep 0.5
     press_in history "$(cards_now | sed -n 1p)" >/dev/null
     press_in history "$(cards_now | sed -n 2p)" >/dev/null
+    # Real time: the selection mode redraws the cards; the cards expose no selected state.
     sleep 0.5
 }
 open_history_selecting
 press_in history "Step guide" >/dev/null
-sleep 1.5
+wait_for_text 10 step-guide windows_now
 if [[ "$(windows_now)" == *"step-guide"* ]]; then pass "history \"Select\" two screenshots, \"Step guide\" opens the guide"; else fail "history Step guide" "$(windows_now)"; fi
 open_history_selecting
 press_in history Compare >/dev/null
-sleep 1.5
+wait_for_text 10 compare windows_now
 if [[ "$(windows_now)" == *"compare"* ]]; then pass "history \"Compare\" opens the comparison of the two picked"; else fail "history Compare" "$(windows_now)"; fi
 open_history_selecting
 press_in history Done >/dev/null
-sleep 0.5
+wait_for_no_text 10 "|Done" $R controls:history 30
 history_controls=$($R controls:history 30)
 if [[ "$history_controls" == *"|Select"* && "$history_controls" != *"|Done"* ]]; then pass "history \"Done\" stops selecting"; else fail "history Done" "$history_controls"; fi
 
@@ -952,10 +1137,10 @@ if [[ "$opened" == "open "*"/Captures"* ]]; then pass "history \"Open folder\" o
 if [[ "$history_controls" == *"AXMenuButton|More actions"* ]]; then pass "history cards have a \"More actions\" menu"; else fail "history More actions" "$history_controls"; fi
 $R close-windows 10 >/dev/null
 press_menu Recent "All captures" >/dev/null
-sleep 1
+wait_for_text 10 "Screenshot: " cards_now
 card_menu() { $R "choose:history:More actions => $1" 10; }
 card_menu "Open" >/dev/null
-sleep 1
+wait_for_text 10 "$own_id" windows_now
 if [[ "$(windows_now)" == *"$own_id"* ]]; then pass "history menu \"Open\" opens the editor"; else fail "history menu Open" "$(windows_now)"; fi
 card_menu "Show original in Finder" >/dev/null
 if [[ "$($R system-actions:read 10)" == *"reveal "*"$own_id"* ]]; then pass "history menu \"Show original in Finder\" shows the file"; else fail "history menu reveal" "$($R system-actions:read 10)"; fi
@@ -974,54 +1159,66 @@ $R system-actions:stop 10 >/dev/null
 # Delete… asks first; "Delete" in the question removes our screenshot.
 $R close-windows 10 >/dev/null
 press_menu Recent "All captures" >/dev/null
-sleep 1
+wait_for_text 10 "Screenshot: " cards_now
 before=$(capture_count)
 card_menu "Delete…" >/dev/null
+# Negative check: the capture must still be there while the question is open.
 sleep 0.5
 asked=$(capture_count)
 press_in history Delete >/dev/null
-sleep 1
+wait_for_value 10 "$((before - 1))" capture_count
 after=$(capture_count)
 if [ "$asked" = "$before" ] && [ "$after" = "$((before - 1))" ] && [[ "$($R latest-capture 10)" != "$own_id"* ]]; then pass "history menu \"Delete…\" asks, then deletes only that capture"; else fail "history Delete" "$before → $asked → $after"; fi
 $R close-windows 10 >/dev/null
 
-echo "==> disk space buttons"
+section "disk space buttons"
 # Everything here works on a made-up home and Applications folder; Move to Trash is recorded, not done.
 fake_home=$($R space-fake-home:on 60)
 space_controls() { $R controls:space 30 | sed 's/ ;; /\n/g' | cut -d'|' -f2-; }
+delete_label_shown() { space_controls | grep -qE "^Delete [0-9]+ items?, "; }
 space_state() { $R space-state 10; }
 $R open-space:Clean\ up 10 >/dev/null
-sleep 1
+# open-space opens a new window: wait for its page, the old window counts as "open" before it.
+wait_for 10 space_control_shown "Review App caches"
 $R system-actions:start 10 >/dev/null
 
-# Clean: asks first, Cancel keeps the files, Delete removes them.
-press_in space "Clean App caches" >/dev/null
-sleep 0.5
-delete_label=$(space_controls | grep -E "^Delete " | head -1)
-press_in space Cancel >/dev/null
-sleep 0.5
-if [ -n "$delete_label" ] && [ -f "$fake_home/Library/Caches/com.example.app/blob.bin" ] && ! space_controls | grep -q "^Delete "; then pass "Space \"Clean\" asks first and \"Cancel\" keeps the files"; else fail "Space Clean, Cancel" "$delete_label"; fi
-press_in space "Clean App caches" >/dev/null
-sleep 0.5
-press_in space "$(space_controls | grep -E "^Delete " | head -1)" >/dev/null
-sleep 2
-if [ ! -f "$fake_home/Library/Caches/com.example.app/blob.bin" ] && [[ "$(space_state)" == *"appCaches=Zero KB"* ]]; then pass "Space \"Delete …\" cleans the category"; else fail "Space Delete" "$(space_state)"; fi
+# Review…: the list of the category in place of the categories; the footer asks first, Cancel
+# keeps the files, the confirmation deletes the ticked ones. Only on the made-up home.
+if [ -z "$fake_home" ] || [ ! -d "$fake_home/Library/Caches" ] || [[ "$($R space-review-state:appCaches 10)" == refused* ]]; then
+    fail "disk space buttons need the made-up home" "$fake_home"
+else
+    press_in space "Review App caches" >/dev/null
+    wait_for 10 delete_label_shown
+    delete_label=$(space_controls | grep -E "^Delete [0-9]+ items?, " | head -1)
+    press_in space "$delete_label" >/dev/null
+    asked=$(space_controls | grep -c "^Cancel$")
+    press_in space Cancel >/dev/null
+    no_cancel() { ! space_controls | grep -q "^Cancel$"; }
+    wait_for 10 no_cancel
+    if [ -n "$delete_label" ] && [ "$asked" = "1" ] && [ -f "$fake_home/Library/Caches/com.example.app/blob.bin" ] && ! space_controls | grep -q "^Cancel$"; then pass "Space \"Review…\" lists the category, its footer asks first and \"Cancel\" keeps the files"; else fail "Space Review, Cancel" "$delete_label asked=$asked"; fi
+    press_in space "$delete_label" >/dev/null
+    press_in space "$delete_label" >/dev/null
+    caches_cleaned() { [ ! -f "$fake_home/Library/Caches/com.example.app/blob.bin" ] && [[ "$(space_state)" == *"appCaches=Zero KB"* ]]; }
+    wait_for 15 caches_cleaned
+    if [ ! -f "$fake_home/Library/Caches/com.example.app/blob.bin" ] && [[ "$(space_state)" == *"appCaches=Zero KB"* ]]; then pass "Space \"Delete …\" cleans the category"; else fail "Space Delete" "$(space_state)"; fi
+    press_in space "All categories" >/dev/null
+fi
 
 # Measure again picks up a new cache file.
 mkdir -p "$fake_home/Library/Caches/com.example.other"
 dd if=/dev/zero of="$fake_home/Library/Caches/com.example.other/new.bin" bs=1m count=2 2>/dev/null
 press_in space "Measure again" >/dev/null
-sleep 2
+wait_for_text 20 "appCaches=2" space_state
 if [[ "$(space_state)" == *"appCaches=2"* ]]; then pass "Space \"Measure again\" measures fresh sizes"; else fail "Space Measure again" "$(space_state)"; fi
 
 # Our captures open in the history.
 press_in space Open >/dev/null
-sleep 1
+wait_for_text 10 history windows_now
 if [[ "$(windows_now)" == *"history"* ]]; then pass "Space \"Open\" on the captures row opens the history"; else fail "Space Open" "$(windows_now)"; fi
 
 # Folders: the app data switch flips and comes back, Scan and Stop.
 press_in space Folders >/dev/null
-sleep 0.5
+wait_for_text 10 "Include other apps" space_controls
 before=$(space_state)
 press_in space "Include other apps' private data (Docker, Slack, Telegram…). macOS asks once." >/dev/null
 flipped=$(space_state)
@@ -1030,13 +1227,14 @@ app_data_before=$(echo "$before" | tr ' ' '\n' | grep '^appData=')
 app_data_flipped=$(echo "$flipped" | tr ' ' '\n' | grep '^appData=')
 if [ -n "$app_data_before" ] && [ "$app_data_before" != "$app_data_flipped" ] && [[ "$(space_state)" == *"$app_data_before"* ]]; then pass "Space switch \"Include other apps' private data\" turns on and off"; else fail "Space app data switch" "$before / $flipped"; fi
 press_in space "Scan home folder and Applications" >/dev/null
-sleep 0.3
+wait_for_text 10 "Stop" space_controls
 press_in space Stop >/dev/null
-sleep 1
+wait_for_text 10 "scan=idle" space_state
 if [[ "$(space_state)" == *"scan=idle"* ]]; then pass "Space \"Stop\" stops the scan"; else fail "Space Stop" "$(space_state)"; fi
 press_in space "Scan home folder and Applications" >/dev/null
 for _ in $(seq 1 180); do
     [[ "$(space_state)" == *"scan=done"* ]] && break
+    # Poll step of the scan wait.
     sleep 1
 done
 if [[ "$(space_state)" == *"scan=done"* ]]; then pass "Space \"Scan home folder and Applications\" finishes a scan"; else fail "Space Scan" "$(space_state)"; fi
@@ -1055,7 +1253,7 @@ if [[ "$($R system-actions:read 10)" == *"reveal $fake_home/Library"* ]]; then p
 
 # Largest files: Show, Move to Trash asks, Keep, Move.
 press_in space "Largest files" >/dev/null
-sleep 0.5
+wait_for_text 10 "Show bugbear-test-big.bin in Finder" space_controls
 press_in space "Show bugbear-test-big.bin in Finder" >/dev/null
 if [[ "$($R system-actions:read 10)" == *"reveal $fake_home/Downloads/bugbear-test-big.bin"* ]]; then pass "Space \"Show\" shows the file in Finder"; else fail "Space Show file" "$($R system-actions:read 10)"; fi
 press_in space "Move bugbear-test-big.bin to Trash" >/dev/null
@@ -1068,10 +1266,11 @@ if [[ "$($R system-actions:read 10)" == *"trash $fake_home/Downloads/bugbear-tes
 # Scan again from the folder list starts a fresh scan.
 press_in space Folders >/dev/null
 press_in space "Scan again" >/dev/null
-sleep 0.3
+wait_for_text 10 "scan=running" space_state
 again=$(space_state)
 for _ in $(seq 1 180); do
     [[ "$(space_state)" == *"scan=done"* ]] && break
+    # Poll step of the scan wait.
     sleep 1
 done
 if [[ "$again" == *"scan=running"* && "$(space_state)" == *"scan=done"* ]]; then pass "Space \"Scan again\" scans again"; else fail "Space Scan again" "$again"; fi
@@ -1079,18 +1278,240 @@ $R system-actions:stop 10 >/dev/null
 $R close-windows 10 >/dev/null
 $R space-fake-home:off 60 >/dev/null
 
-echo "==> toolbox buttons"
+section "space review"
+# Review lists with checkboxes, on a made-up home whose Trash is <home>/.TestTrash: nothing here
+# reaches the person's files or their Trash. space-fake-home also sets the project settings for
+# the test (projects in ~/Projects, old after 30 days, to the Trash) and :off puts them back.
+$R close-windows 10 >/dev/null
+settings_before="$(setting_value projectRoots)/$(setting_value oldProjectDays)/$(setting_value projectFoldersToTrash)/$(setting_value dependencyKinds)/$(setting_value hiddenCacheRows)"
+# A Ctrl-C or a crash in this section still puts the project settings back (space-fake-home:off),
+# then does what the runner's own exit trap does.
+space_review_exit() {
+    $R space-fake-home:off 60 >/dev/null
+    if declare -F restore_running_bugbear >/dev/null; then restore_running_bugbear; fi
+}
+trap space_review_exit EXIT
+trap 'exit 130' INT TERM
+fake_home=$($R space-fake-home:on 60)
+review_state() { $R "space-review-state:$1" 10; }
+review_controls() { $R controls:space 30 | sed 's/ ;; /\n/g' | cut -d'|' -f2-; }
+# review_settled <list>: its search or removal is over.
+review_settled() { local state; state=$(review_state "$1"); [[ "$state" == *"scanning=false"* && "$state" == *"removing=false"* ]]; }
+# wait_review <list>: until its search or removal is over. The press before it answers only after
+# the app's moment for redrawing, and the search or removal has started by then (it starts on the press).
+wait_review() { wait_for 30 review_settled "$1"; }
+# find_projects <button>: presses Find projects / Find again in the window on the project list.
+find_projects() {
+    $R "open-space:Clean up:projects" 10 >/dev/null
+    # The button itself, on the project list: the window is "open" before it switches to the list.
+    wait_for 10 space_control_shown "$1"
+    press_in space "$1" >/dev/null
+    wait_review projects
+}
+if [ ! -d "$fake_home/Projects/old-app" ] || [[ "$(review_state projects)" == refused* ]]; then
+    fail "space review needs the made-up home" "$fake_home"
+else
+    $R system-actions:start 10 >/dev/null
+    $R open-space:Clean\ up 10 >/dev/null
+    wait_for 10 space_control_shown "Find projects…"
+    # The Projects row opens the list without searching; the search waits 2 s here, so Stop has
+    # something to stop.
+    press_in space "Find projects…" >/dev/null
+    review_list_shown() { review_controls | grep -qx "Find projects"; }
+    wait_for 10 review_list_shown
+    opened=$(review_state projects)
+    if [[ "$opened" == *"list=false"* && "$opened" == *"scanning=false"* ]] && review_controls | grep -qx "Find projects"; then pass "Space \"Find projects…\" opens the project list without searching"; else fail "Space Find projects…" "$opened"; fi
+    press_in space "Find projects" >/dev/null
+    wait_for_text 10 "scanning=true" $R space-review-state:projects 10
+    searching=$(review_state projects)
+    press_in space Stop >/dev/null
+    wait_for_text 10 "scanning=false" $R space-review-state:projects 10
+    stopped=$(review_state projects)
+    if [[ "$searching" == *"scanning=true"* && "$stopped" == *"scanning=false"* && "$stopped" == *"list=false"* ]]; then pass "Space project search \"Stop\" stops the search and lists nothing"; else fail "Space project Stop" "$searching / $stopped"; fi
+    # Nothing more to stop: the searches below start at once instead of after 2 s.
+    $R space-scan-delay:0 10 >/dev/null
+
+    # Find projects: old-app and fresh-app, only the old one ticked; the build folder of no Gradle
+    # project, the node_modules in git and the link back to the home folder are not listed.
+    press_in space "Find projects" >/dev/null
+    wait_review projects
+    found=$(review_state projects)
+    boxes=$($R controls:space 30 | sed 's/ ;; /\n/g' | grep "^AXCheckBox|" | cut -d'|' -f2-)
+    old_box=$(echo "$boxes" | grep "/old-app/node_modules$" | head -1)
+    fresh_box=$(echo "$boxes" | grep "/fresh-app/node_modules$" | head -1)
+    if [[ "$found" == *"rows=2 checked=1 "* ]] && [ -n "$old_box" ] && [ -n "$fresh_box" ] && ! echo "$boxes" | grep -qE "plain|vendored|link-home"; then pass "Space \"Find projects\" lists old-app and fresh-app, ticks only the old one"; else fail "Space Find projects" "$found / $boxes"; fi
+    press_in space "$fresh_box" >/dev/null
+    ticked=$(review_state projects)
+    press_in space "$fresh_box" >/dev/null
+    unticked=$(review_state projects)
+    if [[ "$ticked" == *"checked=2 "* && "$unticked" == *"checked=1 "* ]]; then pass "Space review checkbox ticks and unticks its folder"; else fail "Space review checkbox" "$ticked / $unticked"; fi
+    press_in space "Select none" >/dev/null
+    none=$(review_state projects)
+    footer_off=$(review_controls | grep -cE "^Move 0 folders, ")
+    press_in space "Select all" >/dev/null
+    all=$(review_state projects)
+    press_in space "Select none" >/dev/null
+    press_in space "$old_box" >/dev/null
+    if [[ "$none" == *"checked=0 selected=0 "* && "$all" == *"checked=2 "* && "$footer_off" = "1" ]]; then pass "Space review \"Select all\" and \"Select none\" tick and untick every row"; else fail "Space review Select all/none" "$none / $all / footer $footer_off"; fi
+    press_in space "Show $old_box in Finder" >/dev/null
+    if [[ "$($R system-actions:read 10)" == *"reveal $old_box"* ]]; then pass "Space review \"Show\" shows the folder in Finder"; else fail "Space review Show" "$($R system-actions:read 10)"; fi
+
+    # Settings → Storage → Project clean-up, on the made-up home's settings.
+    open_settings
+    $R settings-page:Storage 10 >/dev/null
+    wait_for_text 10 "Old after " $R controls:settings 30
+    storage_controls=$($R controls:settings 30 | sed 's/ ;; /\n/g' | cut -d'|' -f2-)
+    days_label=$(echo "$storage_controls" | grep -E "^Old after [0-9]+ days$" | head -1)
+    days_before=$(setting_value oldProjectDays)
+    press_now settings "$days_label#increment" >/dev/null
+    wait_for 5 setting_differs oldProjectDays "$days_before"
+    days_up=$(setting_value oldProjectDays)
+    # The stepper's label says the new days once the window has redrawn.
+    wait_for_text 5 "|Old after $days_up days" $R controls:settings 30
+    days_label=$($R controls:settings 30 | sed 's/ ;; /\n/g' | cut -d'|' -f2- | grep -E "^Old after [0-9]+ days$" | head -1)
+    press_now settings "$days_label#decrement" >/dev/null
+    wait_for_value 5 "$days_before" setting_value oldProjectDays
+    days_back=$(setting_value oldProjectDays)
+    if [ -n "$days_label" ] && [ "$days_up" = "$((days_before + 1))" ] && [ "$days_back" = "$days_before" ]; then pass "settings \"Old after\" steps the days up and down ($days_before → $days_up → $days_back)"; else fail "settings Old after" "$days_label: $days_before → $days_up → $days_back"; fi
+    # Old after 90 days: old-app (60 days) is no longer ticked.
+    $R setting-write:oldProjectDays=90 10 >/dev/null
+    find_projects "Find again"
+    later=$(review_state projects)
+    $R "setting-write:oldProjectDays=$days_before" 10 >/dev/null
+    find_projects "Find again"
+    if [[ "$later" == *"rows=2 checked=0 "* && "$(review_state projects)" == *"rows=2 checked=1 "* ]]; then pass "Space \"Find again\" ticks by the \"Old after\" days of the settings"; else fail "Space Old after 90" "$later / $(review_state projects)"; fi
+
+    # The Trash switch: off, the footer deletes instead of moving to the Trash.
+    trash_before=$(setting_value projectFoldersToTrash)
+    press_now settings "Move project folders to the Trash" >/dev/null
+    wait_for 5 setting_differs projectFoldersToTrash "$trash_before"
+    trash_off=$(setting_value projectFoldersToTrash)
+    find_projects "Find again"
+    delete_footer=$(review_controls | grep -cE "^Delete 1 folder, ")
+    press_now settings "Move project folders to the Trash" >/dev/null
+    wait_for_value 5 "$trash_before" setting_value projectFoldersToTrash
+    trash_back=$(setting_value projectFoldersToTrash)
+    find_projects "Find again"
+    trash_footer=$(review_controls | grep -cE "^Move 1 folder, .+ to the Trash$")
+    if [ "$trash_before" = "1" ] && [ "$trash_off" = "0" ] && [ "$trash_back" = "1" ] && [ "$delete_footer" = "1" ] && [ "$trash_footer" = "1" ]; then pass "settings \"Move project folders to the Trash\" turns off (the footer says Delete) and on"; else fail "settings Trash switch" "$trash_before/$trash_off/$trash_back footer $delete_footer/$trash_footer"; fi
+
+    # Each kind switch flips its kind; with Node modules off nothing is found.
+    kinds_before=$(setting_value dependencyKinds)
+    flipped=0
+    for kind in "Node modules" "Python environments" "CocoaPods" "Rust build output" "Swift build output" "Gradle build output" "Gradle project cache"; do
+        press_now settings "$kind" >/dev/null
+        wait_for 5 setting_differs dependencyKinds "$kinds_before"
+        off=$(setting_value dependencyKinds)
+        if [ "$kind" = "Node modules" ]; then
+            find_projects "Find again"
+            without_node=$(review_state projects)
+        fi
+        press_now settings "$kind" >/dev/null
+        wait_for_value 5 "$kinds_before" setting_value dependencyKinds
+        if [ "$off" != "$kinds_before" ] && [ "$(setting_value dependencyKinds)" = "$kinds_before" ]; then flipped=$((flipped + 1)); fi
+    done
+    find_projects "Find again"
+    if [ "$flipped" = "7" ] && [[ "$without_node" == *"rows=0 "* && "$(review_state projects)" == *"rows=2 checked=1 "* ]]; then pass "settings Project clean-up kind switches turn each kind off and on (Node modules off finds nothing)"; else fail "settings kind switches" "flipped $flipped, $without_node"; fi
+
+    # Each cache switch hides its row and shows it again.
+    flipped=0
+    for title in "uv cache" "Bun cache" "Go modules" "Maven repository" "Hugging Face models" "pre-commit environments" "Editor caches" "Playwright browsers"; do
+        press_now settings "$title" >/dev/null
+        wait_for 5 setting_differs hiddenCacheRows ""
+        hidden=$(setting_value hiddenCacheRows)
+        press_now settings "$title" >/dev/null
+        wait_for_value 5 "" setting_value hiddenCacheRows
+        if [ -n "$hidden" ] && [ -z "$(setting_value hiddenCacheRows)" ]; then flipped=$((flipped + 1)); fi
+    done
+    if [ "$flipped" = "8" ]; then pass "settings Project clean-up cache switches hide each cache row and show it again"; else fail "settings cache switches" "flipped $flipped"; fi
+
+    # Remove stops searching the folder; Add takes a folder inside the home folder and refuses
+    # one outside it with a note (what the folder panel hands it, without the panel).
+    press_in settings "Remove ~/Projects" >/dev/null
+    roots_removed=$(setting_value projectRoots)
+    outside=$($R "space-add-root:/private/tmp" 10)
+    inside=$($R "space-add-root:$HOME/Projects" 10)
+    if [ -z "$roots_removed" ] && [[ "$outside" == "added=false roots= note=Choose a folder inside your home folder, not in Library" && "$inside" == "added=true roots=Projects note=" ]]; then pass "settings \"Remove ~/…\" and \"Add folder…\" change the project folders, a folder outside home is refused with a note"; else fail "settings project folders" "$roots_removed / $outside / $inside"; fi
+    $R close-windows 10 >/dev/null
+
+    # The footer asks first; Cancel keeps the folder, the confirmation moves it to the made-up Trash.
+    mkdir -p "$fake_home/.TestTrash"
+    echo theirs > "$fake_home/.TestTrash/theirs.txt"
+    find_projects "Find again"
+    footer=$(review_controls | grep -E "^Move 1 folder, .+ to the Trash$" | head -1)
+    press_in space "$footer" >/dev/null
+    asked=$(review_state projects)
+    # While it asks, the ticks stay as they are: the checkbox and Select none do nothing.
+    fresh_box=$(review_controls | grep "/fresh-app/node_modules$" | head -1)
+    press_in space "$fresh_box" >/dev/null
+    press_in space "Select none" >/dev/null
+    frozen=$(review_state projects)
+    press_in space Cancel >/dev/null
+    cancelled=$(review_state projects)
+    if [ -n "$footer" ] && [[ "$asked" == *"confirming=true"* && "$cancelled" == *"confirming=false"* && "$cancelled" == *"exists=true"* ]]; then pass "Space review footer asks first and \"Cancel\" keeps the folders"; else fail "Space review Cancel" "$footer / $asked / $cancelled"; fi
+    if [ -n "$fresh_box" ] && [[ "$asked" == *"checked=1 "* && "$frozen" == *"checked=1 "* && "$frozen" == *"confirming=true"* ]]; then pass "Space review ticks cannot change while the footer asks"; else fail "Space review frozen ticks" "$fresh_box / $asked / $frozen"; fi
+    press_in space "$footer" >/dev/null
+    press_in space "$footer" >/dev/null
+    wait_review projects
+    moved=$(review_state projects)
+    if [[ "$moved" == *"trash=node_modules,theirs.txt "* && "$moved" == *"exists=false fresh=true"* && "$moved" == *"rows=1 "* ]]; then pass "Space review confirmation moves the ticked folder to the Trash and keeps the fresh one"; else fail "Space review move" "$moved"; fi
+    for_good=$(review_controls | grep -E "^Delete this folder for good, .+" | head -1)
+    press_in space "$for_good" >/dev/null
+    wait_for_text 10 "askingForGood=true" $R space-review-state:projects 10
+    asked_for_good=$(review_state projects)
+    asked_text=$(review_controls | grep -cE "^Delete this folder, .+ for good\? This cannot be undone\.$")
+    press_in space Cancel >/dev/null
+    kept_for_good=$(review_state projects)
+    press_in space "$for_good" >/dev/null
+    press_in space "$for_good" >/dev/null
+    wait_review projects
+    if [ -n "$for_good" ] && [[ "$asked_for_good" == *"trash=node_modules,theirs.txt "* && "$asked_for_good" == *"askingForGood=true"* && "$kept_for_good" == *"trash=node_modules,theirs.txt "* && "$kept_for_good" == *"askingForGood=false"* && "$kept_for_good" == *"forGood=1"* ]] && [[ "$(review_state projects)" == *"trash=theirs.txt "* ]]; then pass "Space review \"Delete this folder for good\" asks first and deletes only what it moved"; else fail "Space review for good" "$for_good / asked $asked_text: $asked_for_good / $kept_for_good / $(review_state projects)"; fi
+    press_in space "All categories" >/dev/null
+    if review_controls | grep -qx "Review Project folders"; then pass "Space review \"All categories\" goes back, the Projects row offers \"Review Project folders\""; else fail "Space review back" "$(review_controls | tr '\n' ' ')"; fi
+    press_in space "Review Project folders" >/dev/null
+    if review_controls | grep -qx "Find again"; then pass "Space \"Review Project folders\" opens the last search"; else fail "Space Review Project folders"; fi
+
+    # App caches: a row per cache folder, all ticked; removing deletes them, Library/Caches stays.
+    press_in space "All categories" >/dev/null
+    press_in space "Review App caches" >/dev/null
+    wait_for_text 10 "rows=2" $R space-review-state:appCaches 10
+    wait_review appCaches
+    listed=$(review_state appCaches)
+    footer=$(review_controls | grep -E "^Delete 2 items, " | head -1)
+    press_in space "$footer" >/dev/null
+    press_in space "$footer" >/dev/null
+    wait_review appCaches
+    if [[ "$listed" == *"rows=2 checked=2 "* ]] && [ -n "$footer" ] && [ ! -e "$fake_home/Library/Caches/com.example.app" ] && [ ! -e "$fake_home/Library/Caches/com.example.second" ] && [ -d "$fake_home/Library/Caches" ]; then pass "Space \"Review App caches\" lists each cache folder ticked, \"Delete …\" deletes them and keeps Library/Caches"; else fail "Space review App caches" "$listed / $footer / $(ls "$fake_home/Library/Caches")"; fi
+    $R system-actions:stop 10 >/dev/null
+fi
+$R close-windows 10 >/dev/null
+$R space-fake-home:off 60 >/dev/null
+trap - INT TERM
+if declare -F restore_running_bugbear >/dev/null; then trap restore_running_bugbear EXIT; else trap - EXIT; fi
+settings_after="$(setting_value projectRoots)/$(setting_value oldProjectDays)/$(setting_value projectFoldersToTrash)/$(setting_value dependencyKinds)/$(setting_value hiddenCacheRows)"
+# Without the made-up home the automation does not press a button that removes.
+refused_press=$($R "press:space:Move 1 folder, 5 MB to the Trash" 10)
+if [ "$settings_after" = "$settings_before" ] && [[ "$(review_state projects)" == refused* && "$refused_press" == refused* ]]; then pass "space-fake-home:off puts the project settings back and review commands refuse the real home"; else fail "space-fake-home:off restores" "$settings_before → $settings_after, press: $refused_press"; fi
+
+section "toolbox buttons"
 # Every tool gets an input typed into its fields; results are read from its Output and from what
 # its Copy buttons put on the clipboard. Saved time zones are put back at the end.
-tb_open() { $R "toolbox-open:$1" 10 >/dev/null; sleep 0.5; }
-tb_set() { $R "set-value:toolbox:$1=$2" 10 >/dev/null; sleep 0.3; }
+# toolbox-open, set-value and press answer only after the app's moment for redrawing, and a tool
+# computes its output as the field changes, so the next read sees the new output.
+tb_open() { $R "toolbox-open:$1" 10 >/dev/null; }
+tb_set() { $R "set-value:toolbox:$1=$2" 10 >/dev/null; }
 tb_value() { local shown; shown=$($R "control-value:toolbox:$1" 10); echo "${shown#value=}"; }
-tb_press() { press_in toolbox "$1" >/dev/null; sleep 0.3; }
+tb_press() { press_in toolbox "$1" >/dev/null; }
 tb_controls() { $R controls:toolbox 30 | sed 's/ ;; /\n/g'; }
-# tb_copies <label>: presses a copy button and prints what it put on the clipboard (nothing when it put nothing).
+# Something other than the sentinel is on the clipboard (empty is the moment between clearing and writing).
+clipboard_has_copy() { local text; text=$(pbpaste); [ -n "$text" ] && [ "$text" != "bugbear-sentinel" ]; }
+# tb_copies <label>: presses a copy button and prints what it put on the clipboard (nothing when it put
+# nothing). The press answers at once and the clipboard is waited for; a button that copies nothing
+# leaves the sentinel, and the wait ends at its timeout.
 tb_copies() {
     printf 'bugbear-sentinel' | pbcopy
-    tb_press "$1"
+    press_now toolbox "$1" >/dev/null
+    wait_for 2 clipboard_has_copy
     local text
     text=$(pbpaste)
     if [ "$text" != "bugbear-sentinel" ]; then printf '%s' "$text"; fi
@@ -1100,22 +1521,27 @@ toolbox_listing="$WORK/toolbox-controls.txt"
 # tb_every_copy <tool>: every Copy button of the open tool puts something on the clipboard; the
 # tool's controls go to the coverage listing.
 tb_every_copy() {
-    local label copied empty=""
-    tb_controls >> "$toolbox_listing"
+    local label copied controls empty=""
+    # A Copy button without its own name is listed as "Copied" for 1.2 s after a press.
+    wait_for_no_text 3 "|Copied" tb_controls
+    controls=$(tb_controls)
+    echo "$controls" >> "$toolbox_listing"
     while IFS= read -r label; do
         copied=$(tb_copies "$label")
         if [ -z "$copied" ]; then empty="$empty \"$label\""; fi
-    done < <(tb_controls | cut -d'|' -f2- | grep -E "^Copy" | grep -vxF "Copy as…")
+    done < <(echo "$controls" | cut -d'|' -f2- | grep -E "^Copy" | grep -vxF "Copy as…")
     if [ -z "$empty" ]; then pass "toolbox $1: every Copy button copies"; else fail "toolbox $1 Copy buttons" "$empty"; fi
 }
 saved_zones=$($R time-zones 10)
 
 # Sidebar rows open their tool; search narrows the list; Paste & detect picks the tool.
 tb_open JSON
-TOOLS=("JSON" "XML" "YAML" "HTML" "SQL" "GraphQL" "JWT" "Base64" "URL encode" "HTML entities" "Time & dates" "Time zones" "JSON ↔ YAML ↔ XML ↔ CSV" "Numbers, colors, case" "UUID · hash" "Test data" "QR code" "Regex" "JSON diff" "JSONPath" "HTTP message" "Cron" "String length" "Color & contrast")
+# JSON is open already: it comes last, so every row's wait starts from another tool.
+TOOLS=("XML" "YAML" "HTML" "SQL" "GraphQL" "JWT" "Base64" "URL encode" "HTML entities" "Time & dates" "Time zones" "JSON ↔ YAML ↔ XML ↔ CSV" "Numbers, colors, case" "UUID · hash" "Test data" "QR code" "Regex" "JSON diff" "JSONPath" "HTTP message" "Cron" "String length" "Color & contrast" "JSON")
 wrong=""
 for tool in "${TOOLS[@]}"; do
-    tb_press "$tool"
+    press_now toolbox "$tool" >/dev/null
+    wait_for_value 5 "tool=$tool" $R toolbox-tool 10
     if [ "$($R toolbox-tool 10)" != "tool=$tool" ]; then wrong="$wrong \"$tool\""; fi
 done
 if [ -z "$wrong" ]; then pass "toolbox sidebar row opens its tool (${#TOOLS[@]} tools)"; else fail "toolbox sidebar rows" "$wrong"; fi
@@ -1379,18 +1805,18 @@ tb_press "Copy image"
 image_types=$($R pasteboard-types 10)
 tb_set Input "x"
 tb_press "Read from clipboard image"
-sleep 1
+wait_for_value 10 "https://bugbear.test/qr" tb_value Input
 read_back=$(tb_value Input)
 $R system-actions:start 10 >/dev/null
 rm -f "$WORK/qr.png"
 $R "system-actions:files:$WORK/qr.png" 10 >/dev/null
 tb_press "Save PNG…"
-sleep 0.5
+wait_for 10 test -s "$WORK/qr.png"
 $R system-actions:stop 10 >/dev/null
 if [[ "$image_types" == *png* || "$image_types" == *tiff* ]] && [ "$read_back" = "https://bugbear.test/qr" ]; then pass "toolbox QR \"Copy image\" and \"Read from clipboard image\" round trip"; else fail "toolbox QR copy and read" "$image_types / $read_back"; fi
 if file "$WORK/qr.png" 2>/dev/null | grep -q PNG; then pass "toolbox QR \"Save PNG…\" writes the code"; else fail "toolbox QR save"; fi
 tb_press "Read from screen…"
-sleep 1
+wait_for 10 pgrep -x screencapture
 if pgrep -x screencapture >/dev/null; then picking=true; else picking=false; fi
 pkill -x screencapture 2>/dev/null
 if [ "$picking" = true ]; then pass "toolbox QR \"Read from screen…\" starts picking an area"; else fail "toolbox QR read from screen"; fi
@@ -1409,8 +1835,10 @@ tb_every_copy "JSON diff"
 tb_open JSONPath
 tb_set Input '{"items":[{"id":1},{"id":2}]}'
 examples_ok=true
-for example in '$..id' '$.items[*]' '$.items[0]' '$..*'; do
-    tb_press "$example"
+# The first example may be in the field already: it comes last, so every wait starts from another one.
+for example in '$.items[*]' '$.items[0]' '$..*' '$..id'; do
+    press_now toolbox "$example" >/dev/null
+    wait_for_value 5 "$example" tb_value '$.items[*].price'
     if [ "$(tb_value '$.items[*].price')" != "$example" ]; then examples_ok=false; fi
 done
 tb_press '$..id'
@@ -1428,8 +1856,10 @@ if [[ "$(tb_value Input)" == "GET /a?x=1"* ]]; then pass "toolbox HTTP \"Paste\"
 tb_every_copy HTTP
 tb_open Cron
 examples_ok=true
-for example in "*/5 * * * *" "0 9 * * 1-5" "30 2 * * 0" "0 0 1 * *" "@hourly" "0 */6 * * *"; do
-    tb_press "$example"
+# The first example may be in the field already: it comes last, so every wait starts from another one.
+for example in "0 9 * * 1-5" "30 2 * * 0" "0 0 1 * *" "@hourly" "0 */6 * * *" "*/5 * * * *"; do
+    press_now toolbox "$example" >/dev/null
+    wait_for_value 5 "$example" tb_value "minute hour day month weekday"
     if [ "$(tb_value "minute hour day month weekday")" != "$example" ]; then examples_ok=false; fi
 done
 if [ "$examples_ok" = true ]; then pass "toolbox Cron example buttons fill the expression"; else fail "toolbox Cron examples"; fi
@@ -1458,20 +1888,20 @@ $R 'set-value-typing:toolbox:Background color=#FFFFFF' 10 >/dev/null
 tb_press "Swap colors"
 if [ "$(tb_value "Text color")" = "#FFFFFF" ] && [ "$(tb_value "Background color")" = "#000000" ]; then pass "toolbox contrast \"Swap colors\""; else fail "toolbox contrast swap"; fi
 tb_press "Pick the text color"
-sleep 0.5
+wait_for_text 10 "picking=true" tools_now
 picking=$(tools_now)
 $R post-key:53:none 10 >/dev/null
-sleep 0.5
+wait_for_text 10 "picking=false" tools_now
 tb_press "Pick the background color"
-sleep 0.5
+wait_for_text 10 "picking=true" tools_now
 picking_back=$(tools_now)
 $R post-key:53:none 10 >/dev/null
-sleep 0.5
+wait_for_text 10 "picking=false" tools_now
 if [[ "$picking" == *"picking=true"* && "$picking_back" == *"picking=true"* && "$(tools_now)" == *"picking=false"* ]]; then pass "toolbox contrast eyedroppers open the color loupe, Esc closes it"; else fail "toolbox contrast eyedroppers" "$picking"; fi
 tb_controls >> "$toolbox_listing"
 $R close-windows 10 >/dev/null
 
-echo "==> welcome guide buttons"
+section "welcome guide buttons"
 # Every page of the guide; each choice is put back the way the person had it.
 saved_minutes=$(setting_value bufferMinutes)
 saved_buffer_on=$(setting_value startBufferOnLaunch)
@@ -1539,7 +1969,7 @@ done
 if [ -z "$unasked" ]; then pass "guide \"Allow …\" asks macOS for each permission not given yet ($asked shown)"; else fail "guide Allow" "$unasked"; fi
 # "Relaunch" shows when Screen Recording is allowed but the buffer has not started yet.
 $R buffer-needs-permission:on 10 >/dev/null
-sleep 1.5
+wait_for_text 10 Relaunch $R controls:onboarding 30
 relaunch_result=$(press_in onboarding Relaunch)
 onboarding_controls="$onboarding_controls"$'\n'"$($R controls:onboarding 30 | sed 's/ ;; /\n/g' | sed "s#^#onboarding|#")"
 $R buffer-needs-permission:off 10 >/dev/null
@@ -1552,17 +1982,17 @@ press_in onboarding Continue >/dev/null
 press_in onboarding Continue >/dev/null
 onboarding_controls="$onboarding_controls"$'\n'"$($R controls:onboarding 30 | sed 's/ ;; /\n/g' | sed "s#^#onboarding|#")"
 press_in onboarding "Start using $APP_NAME" >/dev/null
-sleep 0.5
+wait_for_no_text 10 onboarding windows_now
 if [[ "$(windows_now)" != *"onboarding"* ]] && [ "$(setting_value onboardingCompleted)" = 1 ]; then pass "guide \"Start using $APP_NAME\" finishes the guide"; else fail "guide Start using Bugbear" "$(windows_now)"; fi
 $R open-onboarding 10 >/dev/null
 press_in onboarding Skip >/dev/null
-sleep 0.5
+wait_for_no_text 10 onboarding windows_now
 if [[ "$(windows_now)" != *"onboarding"* ]]; then pass "guide \"Skip\" closes the guide"; else fail "guide Skip"; fi
 $R system-actions:stop 10 >/dev/null
 if [ -n "$saved_guide_page" ]; then defaults write "$BUNDLE_ID" onboardingPage -int "$saved_guide_page"; fi
 echo "$onboarding_controls" > "$WORK/onboarding-controls.txt"
 
-echo "==> feedback window buttons"
+section "feedback window buttons"
 $R system-actions:start 10 >/dev/null
 $R open-feedback:problem:keep 10 >/dev/null
 feedback_controls=$($R controls:feedback 30)
@@ -1583,22 +2013,22 @@ if [ "$preview_before" != "$preview_after" ]; then pass "feedback \"What will be
 $R "set-value:feedback:Title=Buttons test title" 10 >/dev/null
 $R "set-value:feedback:Details=Typed by the e2e test" 10 >/dev/null
 press_in feedback "Open on GitHub" >/dev/null
-sleep 1
+wait_for_text 10 "open https://github.com/" $R system-actions:read 10
 opened=$($R system-actions:read 10)
 if [[ "$opened" == *"open https://github.com/"*"Buttons"*"test"*"title"* ]]; then pass "feedback title and details are typed, \"Open on GitHub\" opens the filled form"; else fail "feedback Open on GitHub" "$opened"; fi
 $R open-feedback:problem:keep 10 >/dev/null
 press_in feedback Cancel >/dev/null
-sleep 0.5
+wait_for_no_text 10 feedback windows_now
 if [[ "$(windows_now)" != *"feedback"* ]]; then pass "feedback \"Cancel\" closes the window"; else fail "feedback Cancel"; fi
 $R system-actions:stop 10 >/dev/null
 
-echo "==> update badge buttons"
+section "update badge buttons"
 $R system-actions:start 10 >/dev/null
 $R update-fake:available 10 >/dev/null
 $R close-panel 10 >/dev/null
 $R press-status-item 10 >/dev/null
 press_in menubar "Update to 9.9.9" >/dev/null
-sleep 0.5
+wait_for_text 10 "Update now" $R controls:popover 30
 popover_controls=$($R controls:popover 30)
 echo "$popover_controls" | sed 's/ ;; /\n/g' | sed "s#^#update|#" > "$WORK/update-controls.txt"
 press_in popover "#42 Fake change for tests" >/dev/null
@@ -1606,28 +2036,30 @@ link=$($R system-actions:read 10)
 press_in popover "Another fake change" >/dev/null
 commit_link=$($R system-actions:read 10)
 press_in popover Later >/dev/null
-sleep 0.5
+wait_for_no_text 10 "|Later" $R controls:popover 30
 later=$($R controls:popover 30)
 press_in menubar "Update to 9.9.9" >/dev/null
-sleep 0.5
+wait_for_text 10 "Update now" $R controls:popover 30
 press_in popover "Update now" >/dev/null
+# Real time: the update starts; its result is read at the end of the section.
 sleep 0.5
 if [[ "$popover_controls" == *"|Update now"* && "$link" == *"open https://github.com/"*"/pull/42"* && "$later" != *"|Later"* ]]; then pass "update badge opens the changes, a change links to its pull request, \"Later\" closes"; else fail "update badge details" "$link / $later"; fi
 if [[ "$commit_link" == *"open https://github.com/"*"/commit/def5678"* ]]; then pass "update badge: a change without a pull request links to its commit"; else fail "update badge commit link" "$commit_link"; fi
 if [[ "$($R system-actions:read 10)" == *"update"* ]]; then pass "update badge \"Update now\" starts the update"; else fail "update now" "$($R system-actions:read 10)"; fi
 $R update-fake:failed 10 >/dev/null
 press_in menubar "The update failed, show why" >/dev/null
-sleep 0.5
+wait_for_text 10 "Show log" $R controls:popover 30
 $R controls:popover 30 | sed 's/ ;; /\n/g' | sed "s#^#update|#" >> "$WORK/update-controls.txt"
 press_in popover "Show log" >/dev/null
 press_in popover "Check again" >/dev/null
-sleep 0.5
+wait_for_text 10 "check for updates" $R system-actions:read 10
 actions=$($R system-actions:read 10)
 if [[ "$actions" == *"update.log"* && "$actions" == *"check for updates"* ]]; then pass "failed update \"Show log\" and \"Check again\""; else fail "failed update buttons" "$actions"; fi
 $R update-fake:idle 10 >/dev/null
 $R close-panel 10 >/dev/null
 open_settings
 $R "settings-page:Updates and feedback" 10 >/dev/null
+wait_for_text 10 "|Check now" $R controls:settings 30
 if [[ "$($R controls:settings 30)" == *"|Check now"* ]]; then
     # A fresh record, so only "Check now" can put "check for updates" in it.
     $R system-actions:start 10 >/dev/null
@@ -1642,20 +2074,20 @@ fi
 $R system-actions:stop 10 >/dev/null
 $R close-windows 10 >/dev/null
 
-echo "==> what's new buttons"
+section "what's new buttons"
 $R whats-new 10 >/dev/null
-sleep 1
+wait_for_text 10 whats-new windows_now
 $R controls:whats-new 30 | sed 's/ ;; /\n/g' | sed "s#^#whats-new|#" > "$WORK/whats-new-controls.txt"
 press_in whats-new "Got it" >/dev/null
-sleep 0.5
+wait_for_no_text 10 whats-new windows_now
 if [[ "$(windows_now)" != *"whats-new"* ]]; then pass "What's New \"Got it\" closes it"; else fail "What's New Got it" "$(windows_now)"; fi
 
-echo "==> step guide and comparison buttons"
+section "step guide and comparison buttons"
 $R screenshot-full 40 >/dev/null
 $R screenshot-full 40 >/dev/null
 $R close-windows 10 >/dev/null
 $R "guide-latest:2:$WORK" 30 >/dev/null
-sleep 1
+wait_for_text 10 step-guide windows_now
 $R controls:step-guide 30 | sed 's/ ;; /\n/g' | sed "s#^#step-guide|#" > "$WORK/guide-controls.txt"
 $R "set-value:step-guide:Caption of step 1=first" 10 >/dev/null
 $R "set-value:step-guide:Caption of step 2=second" 10 >/dev/null
@@ -1672,7 +2104,7 @@ $R "system-actions:files:$WORK/guide-test.pdf" 10 >/dev/null
 press_in step-guide "Save PDF…" >/dev/null
 $R "system-actions:files:$WORK/guide-test.png" 10 >/dev/null
 press_in step-guide "Save PNG…" >/dev/null
-sleep 1
+wait_for 10 test -s "$WORK/guide-test.png"
 $R system-actions:stop 10 >/dev/null
 press_in step-guide "Remove step 2" >/dev/null
 if [ "$moved_up" = "value=second" ] && [ "$moved_down" = "value=first" ]; then pass "step guide \"Move step up\" and \"Move step down\" reorder the captions"; else fail "step guide move" "$moved_up $moved_down"; fi
@@ -1680,7 +2112,7 @@ if [[ "$guide_image" == *png* || "$guide_image" == *tiff* ]] && file "$WORK/guid
 if [ "$($R control-value:step-guide:"Caption of step 2" 10)" = "not found" ]; then pass "step guide \"Remove step\" takes it out"; else fail "step guide remove"; fi
 $R close-windows 10 >/dev/null
 $R compare-latest 30 >/dev/null
-sleep 1
+wait_for_text 10 compare windows_now
 $R controls:compare 30 | sed 's/ ;; /\n/g' | sed "s#^#compare|#" > "$WORK/compare-controls.txt"
 compare_ok=""
 for mode in "Side by side" "Slider" "Changes"; do
@@ -1694,10 +2126,11 @@ $R close-windows 10 >/dev/null
 if [ "$($R compare-latest:video 30)" = "opened" ]; then
     $R controls:compare 30 | sed 's/ ;; /\n/g' | sed "s#^#compare|#" >> "$WORK/compare-controls.txt"
     press_in compare "Play both" >/dev/null
-    sleep 1
+    wait_for_text 10 "|Pause both" $R controls:compare 30
     playing=$($R controls:compare 30)
     press_in compare "Pause both" >/dev/null
     paused=$($R control-value:compare:Position 10)
+    # Real time: the position of paused videos must stay the same over this time.
     sleep 0.6
     still=$($R control-value:compare:Position 10)
     press_in compare "Position#increment" >/dev/null
@@ -1712,9 +2145,9 @@ else
     fail "clip comparison did not open"
 fi
 
-echo "==> design overlay and recording bar buttons"
+section "design overlay and recording bar buttons"
 $R overlay-test:2 10 >/dev/null
-sleep 0.5
+wait_for_text 10 design-overlay windows_now
 $R controls:design-overlay 30 | sed 's/ ;; /\n/g' | sed "s#^#design-overlay|#" > "$WORK/overlay-controls.txt"
 alpha_before=$($R overlay-state 10)
 press_in design-overlay "Opacity#increment" >/dev/null
@@ -1731,7 +2164,7 @@ press_in design-overlay "Close the overlay" >/dev/null
 if [[ "$($R overlay-close 10)" == "open=false" ]]; then pass "design overlay \"Close the overlay\""; else fail "design overlay close"; fi
 
 $R draw-toggle 10 >/dev/null
-sleep 0.5
+wait_for_text 10 recording-bar windows_now
 $R controls:recording-bar 30 | sed 's/ ;; /\n/g' | sed "s#^#recording-bar|#" > "$WORK/bar-controls.txt"
 bar=$($R controls:recording-bar 30 | sed 's/ ;; /\n/g' | cut -d'|' -f2-)
 tool_label=$(echo "$bar" | grep -E "^Rectangle" | head -1)
@@ -1748,16 +2181,18 @@ draw_label=$(echo "$bar" | grep -E "^Stop drawing" | head -1)
 press_in recording-bar "$draw_label" >/dev/null
 not_drawing=$(tools_now)
 press_in recording-bar "Close the drawing bar" >/dev/null
-sleep 0.5
+wait_for_no_text 10 recording-bar windows_now
 if [[ "$picked" == *"liveTool=rectangle"* && "$picked" == *"liveColor=yellow"* && "$picked" == *"fade=true"* && "$fade_flipped" == *"fade=false"* && "$(tools_now)" == *"fade=true"* ]]; then pass "drawing bar tool, color and fade buttons"; else fail "drawing bar tool, color, fade" "$picked / $fade_flipped"; fi
 if [ "$undo" = pressed ] && [ "$clear" = pressed ] && [[ "$not_drawing" == *"drawing=false"* && "$(windows_now)" != *"recording-bar"* ]]; then pass "drawing bar undo, clear, stop drawing and close"; else fail "drawing bar" "$undo $clear $not_drawing $(windows_now)"; fi
 live_field() { echo "$1" | tr ' ' '\n' | grep "^$2=" | cut -d= -f2-; }
 # Text on the screen: with Text, a click puts a field there; Return keeps the text as a mark,
 # Esc drops it. Typed with real keys, so any keyboard layout works.
 $R "activate-app:$BROWSER" 10 >/dev/null
+wait_browser_front
+# Real time: the window becomes key a moment after the app is in front.
 sleep 0.5
 $R draw-toggle 10 >/dev/null
-sleep 0.5
+wait_for_text 10 recording-bar windows_now
 press_in recording-bar "Text" >/dev/null
 press_in recording-bar "coral" >/dev/null
 # Marks stay for this check: a mark that fades after 3.8 s must not make it flaky.
@@ -1767,28 +2202,28 @@ lx=$(live_field "$live" x); ly=$(live_field "$live" y); lw=$(live_field "$live" 
 text_x=$((lx + lw / 3))
 text_y=$((ly + lh / 3))
 $R "post-click:$text_x,$text_y" 10 >/dev/null
-sleep 0.5
+wait_for_text 10 "typing=true" $R live-state 10
 typing=$($R live-state 10)
 $R post-text:Login 10 >/dev/null
 $R post-key:36:none 10 >/dev/null
-sleep 0.5
+wait_for_text 10 "lastText=Login" $R live-state 10
 typed=$($R live-state 10)
 text_pixels=$(live_field "$($R "screen-color:$text_x,$text_y,160,50:FF6B4A" 20)" coral)
 if [ "$(live_field "$typing" typing)" = "true" ] && [ "$(live_field "$typed" lastKind)" = "text" ] && [ "$(live_field "$typed" lastText)" = "Login" ] && [ "$(live_field "$typed" typing)" = "false" ]; then pass "drawing bar \"Text\": a click and typing put text on the screen"; else fail "drawing text on the screen" "$typing / $typed"; fi
 if [ "${text_pixels:-0}" -gt 150 ] 2>/dev/null; then pass "the text shows on the screen"; else fail "the text shows on the screen" "$text_pixels"; fi
 marks_before=$(live_field "$typed" marks)
 $R "post-click:$((text_x + 200)),$((text_y + 150))" 10 >/dev/null
-sleep 0.5
+wait_for_text 10 "typing=true" $R live-state 10
 $R post-text:Dropped 10 >/dev/null
 $R post-key:53:none 10 >/dev/null
-sleep 0.5
+wait_for_text 10 "typing=false" $R live-state 10
 cancelled=$($R live-state 10)
 if [ "$(live_field "$cancelled" typing)" = "false" ] && [ "$(live_field "$cancelled" drawing)" = "true" ] && [ "$(live_field "$cancelled" lastText)" = "Login" ] && [ "$(live_field "$cancelled" marks)" -le "$marks_before" ]; then pass "Esc drops the text being typed and keeps drawing"; else fail "Esc while typing text" "$cancelled"; fi
 press_in recording-bar "Marks stay (click to fade)" >/dev/null
 $R draw-hide 10 >/dev/null
 before=$(capture_count)
 press_menu Record "Start recording" >/dev/null
-sleep 2
+wait_for_text 15 "Stop and throw the recording away" $R controls:recording-bar 30
 bar=$($R controls:recording-bar 30 | sed 's/ ;; /\n/g' | cut -d'|' -f2-)
 $R controls:recording-bar 30 | sed 's/ ;; /\n/g' | sed "s#^#recording-bar|#" >> "$WORK/bar-controls.txt"
 press_in recording-bar "$(echo "$bar" | grep -E "^Pause the recording" | head -1)" >/dev/null
@@ -1796,16 +2231,18 @@ paused=$(tools_now)
 press_in recording-bar "$($R controls:recording-bar 30 | sed 's/ ;; /\n/g' | cut -d'|' -f2- | grep -E "^Resume the recording" | head -1)" >/dev/null
 resumed=$(tools_now)
 press_in recording-bar "Stop and throw the recording away without saving" >/dev/null
+# Negative check: a recording wrongly saved would show up as a new capture within this time.
 sleep 2
 if [[ "$paused" == *"paused=true"* && "$resumed" == *"paused=false"* && "$(tools_now)" == *"recording=false"* && "$(capture_count)" = "$before" ]]; then pass "recording bar pause, resume and \"throw away\" saves nothing"; else fail "recording bar" "$paused / $resumed / $(capture_count)"; fi
 press_menu Record "Start recording" >/dev/null
-sleep 2
+stop_button_shown() { $R controls:recording-bar 30 | sed 's/ ;; /\n/g' | cut -d'|' -f2- | grep -qx Stop; }
+wait_for 15 stop_button_shown
 press_in recording-bar Stop >/dev/null
-sleep 4
+wait_for_value 20 "$((before + 1))" capture_count
 if [ "$(capture_count)" = "$((before + 1))" ]; then pass "recording bar \"Stop\" saves the recording"; else fail "recording bar Stop"; fi
 $R close-windows 10 >/dev/null
 
-echo "==> every control has a check"
+section "every control has a check"
 # The controls on screen now, against scripts/check/controls.txt: a new button without a check fails.
 listing="$WORK/controls.txt"
 : > "$listing"
@@ -1813,12 +2250,13 @@ $R close-panel 10 >/dev/null
 $R press-status-item 10 >/dev/null
 for tab in Capture Record Tools Recent Space; do
     $R "press:menubar:$tab" 10 >/dev/null
+    # Real time: the panel draws the tab before its controls are read.
     sleep 0.5
     $R controls:menubar 30 | sed 's/ ;; /\n/g' | sed "s#^#menubar/$tab|#" >> "$listing"
 done
 $R close-panel 10 >/dev/null
 press_menu Capture "Open settings: buffer, shortcuts, storage and more" >/dev/null
-sleep 1
+wait_for_text 10 settings windows_now
 $R tall-window:settings 10 >/dev/null
 # Settings shows one page at a time: list every page.
 for page in "General" "Buffer and recording" "Bug reports" "Storage" "Shortcuts" "Updates and feedback"; do
@@ -1827,7 +2265,7 @@ for page in "General" "Buffer and recording" "Bug reports" "Storage" "Shortcuts"
 done
 $R close-windows 10 >/dev/null
 press_menu Recent "All captures" >/dev/null
-sleep 1
+wait_for_text 10 history windows_now
 $R controls:history 30 | sed 's/ ;; /\n/g' | sed "s#^#history|#" >> "$listing"
 $R "menu-items:history:More actions" 10 | sed 's/ ;; /\n/g' | sed "s#^#history-menu|AXMenuItem|#" >> "$listing"
 $R close-windows 10 >/dev/null
@@ -1837,13 +2275,43 @@ for listed in onboarding feedback update whats-new guide compare overlay bar pic
 done
 # The toolbox controls were listed tool by tool in "toolbox buttons".
 if [ -s "$WORK/toolbox-controls.txt" ]; then sed "s#^#toolbox|#" "$WORK/toolbox-controls.txt" | sort -u >> "$listing"; else fail "toolbox controls listing is empty: run the toolbox section first"; fi
-# Disk Space on a made-up home: every section, with its questions open.
-$R space-fake-home:on 60 >/dev/null
+# Disk Space on a made-up home: every section, with its questions open. Nothing that removes is
+# pressed unless the made-up home is in use.
+listing_home=$($R space-fake-home:on 60)
 list_space() { $R controls:space 30 | sed 's/ ;; /\n/g' | sed "s#^#space|#" >> "$listing"; }
+if [ -z "$listing_home" ] || [ ! -d "$listing_home/Projects" ] || [[ "$($R space-review-state:projects 10)" == refused* ]]; then
+    fail "the Space controls need the made-up home" "$listing_home"
+else
 $R open-space:Clean\ up 10 >/dev/null
-sleep 1
-$R "press:space:Clean App caches" 10 >/dev/null
+wait_for 10 space_control_shown "Review App caches"
 list_space
+# A cache list with its confirmation open, then the project list: found, asking, and after the move.
+$R "press:space:Review App caches" 10 >/dev/null
+wait_for_text 10 "Delete " $R controls:space 30
+list_space
+$R "press:space:$($R controls:space 30 | sed 's/ ;; /\n/g' | cut -d'|' -f2- | grep -E "^Delete [0-9]+ items?, " | head -1)" 10 >/dev/null
+list_space
+$R "press:space:Cancel" 10 >/dev/null
+$R "open-space:Clean up:projects" 10 >/dev/null
+wait_for 10 space_control_shown "Find projects"
+list_space
+$R "press:space:Find projects" 10 >/dev/null
+# Real time: catches the project search while it still runs.
+sleep 0.3
+list_space
+wait_for_text 15 "scanning=false" $R space-review-state:projects 10
+list_space
+project_footer=$($R controls:space 30 | sed 's/ ;; /\n/g' | cut -d'|' -f2- | grep -E "^Move 1 folder, " | head -1)
+$R "press:space:$project_footer" 10 >/dev/null
+list_space
+$R "press:space:$project_footer" 10 >/dev/null
+# Real time: the folder is moved and the list redraws.
+sleep 1.5
+list_space
+# "Delete … for good" asking, then Cancel: the folder stays in the made-up Trash.
+$R "press:space:$($R controls:space 30 | sed 's/ ;; /\n/g' | cut -d'|' -f2- | grep -E "^Delete this folder for good, " | head -1)" 10 >/dev/null
+list_space
+$R "press:space:Cancel" 10 >/dev/null
 $R "press:space:Folders" 10 >/dev/null
 list_space
 $R space-scan 60 >/dev/null
@@ -1852,14 +2320,15 @@ list_space
 $R "press:space:Largest files" 10 >/dev/null
 $R "press:space:Move bugbear-test-big.bin to Trash" 10 >/dev/null
 list_space
+fi
 $R close-windows 10 >/dev/null
 $R space-fake-home:off 60 >/dev/null
 $R screenshot-full 40 >/dev/null
-sleep 2
+wait_for_text 10 "Save to folder" $R controls:screenshot: 30
 $R controls:screenshot: 30 | sed 's/ ;; /\n/g' | sed "s#^#screenshot:|#" >> "$listing"
 $R close-windows 10 >/dev/null
 $R save:5 60 >/dev/null
-sleep 3
+wait_for_text 10 "Save to folder" $R controls:video: 30
 $R controls:video: 30 | sed 's/ ;; /\n/g' | sed "s#^#video:|#" >> "$listing"
 $R close-windows 10 >/dev/null
 # A window that did not open lists nothing, and nothing to list would pass without looking.
@@ -1868,7 +2337,7 @@ for area in menubar/Capture menubar/Record menubar/Tools menubar/Recent menubar/
 done
 if coverage=$(python3 -I scripts/check/control-coverage.py "$listing"); then pass "every control of every window has a check ($(wc -l < "$listing" | tr -d ' ') controls)"; else fail "controls without a check" "$coverage"; fi
 
-echo "==> settings buttons"
+section "settings buttons"
 open_settings
 permissions=$($R permissions 10)
 # Each switch flips its setting, and pressing again puts it back.
@@ -1880,11 +2349,11 @@ for row in "Keep all displays (pick one or all side by side in the editor)|captu
         continue
     fi
     first=$(setting_value "$key")
-    press_in settings "$label" >/dev/null
-    sleep 0.5
+    press_now settings "$label" >/dev/null
+    wait_for 10 setting_differs "$key" "$first"
     second=$(setting_value "$key")
-    press_in settings "$label" >/dev/null
-    sleep 0.5
+    press_now settings "$label" >/dev/null
+    wait_for_value 10 "$first" setting_value "$key"
     third=$(setting_value "$key")
     if [ "$first" != "$second" ] && [ "$first" = "$third" ]; then pass "settings switch \"$label\" turns $key on and off"; else fail "settings switch \"$label\"" "$first → $second → $third"; fi
 done
@@ -1895,7 +2364,7 @@ for row in "Choose…|choose folder" "Show in Finder|/Captures" "Open at login|l
     label="${row%%|*}"
     expected="${row##*|}"
     press_in settings "$label" >/dev/null
-    sleep 0.5
+    wait_for_text 10 "$expected" $R system-actions:read 10
     recorded=$($R system-actions:read 10)
     if [[ "$recorded" == *"$expected"* ]]; then pass "settings button \"$label\" asks macOS for the right thing"; else fail "settings button \"$label\"" "$recorded"; fi
 done
@@ -1903,8 +2372,10 @@ press_in settings "Open at login" >/dev/null
 # Permissions page: each permission has Allow… (not given yet) or Open… (given), and each asks
 # macOS or opens its own part of System Settings.
 $R settings-page:Permissions 10 >/dev/null
-sleep 0.5
+wait_for_text 10 "Screen & System Audio Recording" $R controls:settings 30
 permission_controls=$($R controls:settings 30 | sed 's/ ;; /\n/g' | cut -d'|' -f2-)
+# actions_since <count>: what the buttons recorded after the first <count> actions.
+actions_since() { $R system-actions:read 10 | sed 's/ ;; /\n/g' | tail -n +$(($1 + 1)); }
 pressed=0
 wrong=""
 for row in "Screen & System Audio Recording|ScreenCapture|Screen Recording" "Accessibility|Privacy_Accessibility|Accessibility" "Microphone|Privacy_Microphone|Microphone" "Camera|Privacy_Camera|Camera" "Browsers (Automation)|Privacy_Automation|Automation"; do
@@ -1914,19 +2385,19 @@ for row in "Screen & System Audio Recording|ScreenCapture|Screen Recording" "Acc
     asked="${rest##*|}"
     before_count=$($R system-actions:read 10 | sed 's/ ;; /\n/g' | grep -c .)
     if echo "$permission_controls" | grep -qx "Open $title in System Settings"; then
-        press_in settings "Open $title in System Settings" >/dev/null
+        press_now settings "Open $title in System Settings" >/dev/null
         expected="$pane"
     else
-        press_in settings "Allow $title" >/dev/null
+        press_now settings "Allow $title" >/dev/null
         expected="$asked"
     fi
-    sleep 0.5
-    recorded=$($R system-actions:read 10 | sed 's/ ;; /\n/g' | tail -n +$((before_count + 1)))
+    wait_for_text 10 "$expected" actions_since "$before_count"
+    recorded=$(actions_since "$before_count")
     if [[ "$recorded" == *"$expected"* ]]; then pressed=$((pressed + 1)); else wrong="$wrong $title:$recorded"; fi
 done
 if [ "$pressed" = "5" ]; then pass "settings permissions page asks macOS or opens System Settings for each permission"; else fail "settings permissions page" "$wrong"; fi
 $R buffer-needs-permission:on 10 >/dev/null
-sleep 1.5
+wait_for_text 10 Relaunch $R controls:settings 30
 relaunch_result=$(press_in settings Relaunch)
 $R buffer-needs-permission:off 10 >/dev/null
 if [ "$relaunch_result" = "pressed" ] && [[ "$($R system-actions:read 10)" == *"relaunch"* ]]; then pass "settings \"Relaunch\" restarts the app after Screen Recording is allowed"; else fail "settings Relaunch" "$relaunch_result"; fi
@@ -1934,13 +2405,16 @@ $R settings-page:General 10 >/dev/null
 $R system-actions:stop 10 >/dev/null
 
 started_before=$(grep -c "buffer\[.*\] started" "$LOG")
-press_in settings "Show the mouse pointer" >/dev/null
-sleep 0.5
+cursor_before=$(setting_value showsCursor)
+press_now settings "Show the mouse pointer" >/dev/null
+# The setting is saved before the buffer restarts with it.
+wait_for 10 setting_differs showsCursor "$cursor_before"
 press_in settings "Restart buffer" >/dev/null
-sleep 3
+wait_for 20 buffer_started_above "$started_before"
+started_mid=$(grep -c "buffer\[.*\] started" "$LOG")
 press_in settings "Show the mouse pointer" >/dev/null
 press_in settings "Restart buffer" >/dev/null
-sleep 3
+wait_for 20 buffer_started_above "$started_mid"
 if [ "$(grep -c "buffer\[.*\] started" "$LOG")" -gt "$started_before" ]; then pass "settings \"Restart buffer\" restarts the buffer with the new settings"; else fail "settings \"Restart buffer\""; fi
 
 for row in "Report a problem…|feedback" "Suggest a feature…|feedback" "Show the welcome guide|onboarding" "Show what's new|whats-new"; do
@@ -1948,31 +2422,32 @@ for row in "Report a problem…|feedback" "Suggest a feature…|feedback" "Show 
     window="${row##*|}"
     open_settings
     press_in settings "$label" >/dev/null
-    sleep 1
+    wait_for_text 10 "$window" windows_now
     if [[ "$(windows_now)" == *"$window"* ]]; then pass "settings \"$label\" opens the $window window"; else fail "settings \"$label\"" "$(windows_now)"; fi
 done
 
 open_settings
 fields_before=$($R fields-count 10)
 press_in settings "New field" >/dev/null
-sleep 0.5
+wait_for 10 fields_count_not "$fields_before"
 fields_added=$($R fields-count 10)
 press_in settings "Remove field#last" >/dev/null
-sleep 0.5
+wait_for_value 10 "$fields_before" $R fields-count 10
 fields_after=$($R fields-count 10)
 if [ "$fields_added" != "$fields_before" ] && [ "$fields_after" = "$fields_before" ]; then pass "settings \"New field\" adds a report field and \"Remove field\" removes it"; else fail "settings add and remove field" "$fields_before / $fields_added / $fields_after"; fi
 
 # A suggested name adds a field with that name.
 open_settings
 $R "settings-page:Bug reports" 10 >/dev/null
+wait_for_text 10 "|Include Device" $R controls:settings 30
 fields_before=$($R fields-count 10)
 suggestion=$($R controls:settings 30 | sed 's/ ;; /\n/g' | grep -E "^AXButton\|(Stand|Build|Test account|Browser profile|Feature flag|Severity)$" | head -1 | cut -d'|' -f2)
 press_in settings "$suggestion" >/dev/null
-sleep 0.5
+wait_for 10 fields_count_not "$fields_before"
 fields_added=$($R fields-count 10)
 newest_field=$($R fields-read 10 | tr ',' '\n' | tail -1)
 press_in settings "Remove field#last" >/dev/null
-sleep 0.5
+wait_for_value 10 "$fields_before" $R fields-count 10
 if [ -n "$suggestion" ] && [ "$newest_field" = "$suggestion=" ] && [ "$fields_added" != "$fields_before" ] && [ "$($R fields-count 10)" = "$fields_before" ]; then pass "settings suggestion \"$suggestion\" adds a field with that name"; else fail "settings field suggestion" "$suggestion $fields_before / $fields_added, newest $newest_field"; fi
 
 # A changed shortcut and "Reset to defaults"; a shortcut button waits for keys, Esc cancels.
@@ -1981,12 +2456,18 @@ if [ -n "$(defaults read "$BUNDLE_ID" customHotKeys 2>/dev/null | tr -d '{}() \n
     echo "SKIP  settings \"Reset to defaults\": the person has their own shortcuts"
 else
     press_in settings "Save the last 30 s: ⌥⇧1" >/dev/null
+    # Real time: the shortcut button waits for keys; Esc follows.
     sleep 0.5
     $R post-key:53:none 10 >/dev/null
     $R hotkey-set:ruler:25:cmd,shift 10 >/dev/null
+    has_custom_ruler_hotkey() { defaults read "$BUNDLE_ID" customHotKeys 2>/dev/null | grep -q ruler; }
+    no_custom_ruler_hotkey() { ! has_custom_ruler_hotkey; }
+    # The shortcut is saved before Reset, so a Reset that does nothing fails.
+    wait_for 5 has_custom_ruler_hotkey
     open_settings
-    press_in settings "Reset to defaults" >/dev/null
-    sleep 0.5
+    press_now settings "Reset to defaults" >/dev/null
+    # Reset writes the preferences; they are read from outside the app.
+    wait_for 10 no_custom_ruler_hotkey
     if [ "$($R control-value:settings:"Save the last 30 s: ⌥⇧1" 10)" != "not found" ] && ! defaults read "$BUNDLE_ID" customHotKeys 2>/dev/null | grep -q ruler; then pass "settings \"Reset to defaults\" restores the shortcuts, a shortcut button keeps its keys after Esc"; else fail "settings shortcuts reset"; fi
 fi
 
@@ -2000,7 +2481,7 @@ $R setting-write:maxCapturesGB=0 10 >/dev/null
 $R setting-write:keepCrashClipsDays=36500 10 >/dev/null
 open_settings
 press_in settings "Clean up now" >/dev/null
-sleep 2
+wait_for 15 recent_log_has "clean up now: deleted 0"
 if tail -20 "$LOG" | grep -q "clean up now: deleted 0"; then pass "settings \"Clean up now\" applies the rules (nothing that old to delete)"; else fail "settings \"Clean up now\""; fi
 $R "setting-write:keepCapturesDays=$saved_days" 10 >/dev/null
 $R "setting-write:maxCapturesGB=$saved_gb" 10 >/dev/null
@@ -2016,9 +2497,11 @@ for row in "Keep the last|bufferMinutes" "Buffer frame rate|framesPerSecond" "Re
     shown="${shown#value=}"
     before=$(setting_value "$key")
     other=$($R "menu-items:settings:$label" 10 | sed 's/ ;; /\n/g' | grep -vxF "$shown" | head -1)
-    $R "choose:settings:$label => $other" 10 >/dev/null
+    $R "choose-now:settings:$label => $other" 10 >/dev/null
+    wait_for 5 setting_differs "$key" "$before"
     changed=$(setting_value "$key")
-    $R "choose:settings:$label => $shown" 10 >/dev/null
+    $R "choose-now:settings:$label => $shown" 10 >/dev/null
+    wait_for_value 5 "$before" setting_value "$key"
     after=$(setting_value "$key")
     # Never leave a storage limit (or any choice) changed when choosing back did not work.
     if [ "$after" != "$before" ]; then $R "setting-write:$key=$before" 10 >/dev/null; fi
@@ -2027,7 +2510,7 @@ done
 $R cleanup-pause:off 10 >/dev/null
 $R close-windows 10 >/dev/null
 
-echo "==> settings pages and report fields"
+section "settings pages and report fields"
 open_settings
 # Each sidebar button shows its own page: a control of that page appears, one of another goes.
 for row in "General|Open at login" "Buffer and recording|Keep the last" "Bug reports|Copy bug report as" "Storage|Clean up now" "Shortcuts|Reset to defaults" "Updates and feedback|Report a problem…"; do
@@ -2084,12 +2567,13 @@ if [[ "$report" == *"- Model: "* && "$report" != *"- Device: "* && "$report" != 
 $R close-windows 10 >/dev/null
 $R settings-page:General 10 >/dev/null
 $R screenshot-full 40 >/dev/null
-sleep 2
+wait_for_text 10 "Save to folder" $R controls:screenshot: 30
 edit_result=$(press_in screenshot: Edit)
-sleep 1
+wait_for_text 10 "|Include Device" $R controls:settings 30
 shown=$($R controls:settings 30)
 if [ "$edit_result" = "pressed" ] && [[ "$shown" == *"|Include Device"* ]]; then pass "editor \"Edit\" next to Environment opens Settings on Bug reports"; else fail "editor Edit environment" "$edit_result"; fi
 $R "setting-write:hiddenEnvironmentFields=Appearance" 10 >/dev/null
+# Real time: the report reads the setting a moment after it is written.
 sleep 1
 $R report:markdown 10 >/dev/null
 report=$(pbpaste)
@@ -2103,7 +2587,7 @@ $R "report-settings-restore:$WORK/report-settings-2.json" 10 >/dev/null
 if [ "$(setting_value hiddenEnvironmentFields)" = "$saved_hidden" ] && [ "$(setting_value renamedEnvironmentFields)" = "$saved_renamed" ] && [ "$($R fields-read 10)" = "$saved_fields" ]; then pass "the person's field settings are put back"; else fail "field settings restore"; fi
 $R close-windows 10 >/dev/null
 
-echo "==> screenshot editor buttons"
+section "screenshot editor buttons"
 # Saves go to a test folder, not the person's Desktop/Bugbear.
 saved_output=$(setting_value outputFolderPath)
 out_dir="$WORK/editor-out"
@@ -2112,7 +2596,7 @@ mkdir -p "$out_dir"
 $R "setting-write:outputFolderPath=$out_dir" 10 >/dev/null
 $R close-windows 10 >/dev/null
 $R screenshot-full 40 >/dev/null
-sleep 2
+wait_for_text 10 "Save to folder" $R controls:screenshot: 30
 editor_state() { $R editor-state 10; }
 editor_controls() { $R controls:screenshot: 30 | sed 's/ ;; /\n/g'; }
 state_field() { echo "$1" | tr ' ' '\n' | grep "^$2=" | cut -d= -f2-; }
@@ -2144,7 +2628,7 @@ press_in screenshot: "No fill" >/dev/null
 if [ "$filled" = true ] && [ "$(state_field "$(editor_state)" filled)" = false ]; then pass "editor \"Fill\" and \"No fill\" switch the fill"; else fail "editor fill" "$filled $(editor_state)"; fi
 $R system-actions:start 10 >/dev/null
 press_in screenshot: "Pick any color" >/dev/null
-sleep 0.5
+wait_for_text 10 NSColorPanel windows_now
 if [[ "$(windows_now)" == *"NSColorPanel"* ]]; then pass "editor \"Pick any color\" opens the color panel"; else fail "editor \"Pick any color\"" "$(windows_now)"; fi
 $R close-color-panel 10 >/dev/null
 
@@ -2164,7 +2648,8 @@ press_in screenshot: "$delete_label#last" >/dev/null
 if [ -n "$delete_label" ] && [ "$(state_field "$(editor_state)" marks)" -eq "$marks_before" ]; then pass "editor layer \"$delete_label\" removes that mark"; else fail "editor layer delete" "$delete_label $(editor_state)"; fi
 width_before=$(state_field "$(editor_state)" width)
 press_in screenshot: "Combine with another screenshot: places other images to the right" >/dev/null
-sleep 1
+editor_wider() { [ "$(state_field "$(editor_state)" width)" -gt "$1" ]; }
+wait_for 10 editor_wider "$width_before"
 if [ "$(state_field "$(editor_state)" width)" -gt "$width_before" ]; then pass "editor \"Combine\" places another screenshot to the right"; else fail "editor combine" "$width_before $(editor_state)"; fi
 
 # Zoom, environment, badge.
@@ -2217,12 +2702,12 @@ $R "choose:screenshot:File type => $format_shown" 10 >/dev/null
 format_back=$(state_field "$(editor_state)" format)
 if [ -n "$format_item" ] && [ "$format_other" != "$format_before" ] && [ "$format_back" = "$format_before" ]; then pass "editor \"File type\" shows the format to save in and picks another ($format_before → $format_other)"; else fail "editor file type" "$format_shown/$format_item: $format_before → $format_other → $format_back"; fi
 press_in screenshot: "Save to folder" >/dev/null
-sleep 1
+wait_for 10 dir_has_file "$out_dir"
 saved=$(ls "$out_dir" | head -1)
 if [ -n "$saved" ] && $R system-actions:read 10 | grep -q "reveal $out_dir/"; then pass "editor \"Save to folder\" writes the picture to the chosen folder and shows it ($saved)"; else fail "editor save to folder" "$saved"; fi
 printf '' | pbcopy
 press_in screenshot: "Copy  ⌘C" >/dev/null
-sleep 0.5
+wait_for_text 10 png $R pasteboard-types 10
 if [ "$($R pasteboard-types 10)" != "" ] && $R pasteboard-types 10 | grep -q "png"; then pass "editor \"Copy ⌘C\" puts the picture on the clipboard"; else fail "editor copy picture" "$($R pasteboard-types 10)"; fi
 printf '' | pbcopy
 $R system-actions:stop 10 >/dev/null
@@ -2240,7 +2725,7 @@ $R "choose:screenshot:File type => $($R "menu-items:screenshot:File type" 10 | s
 left=$(editor_state)
 $R close-windows 10 >/dev/null
 $R screenshot-full 40 >/dev/null
-sleep 2
+wait_for_text 10 "screenshot:" windows_now
 opened=$(editor_state)
 not_kept=""
 for field in tool color size filled badge corner format; do
@@ -2252,7 +2737,7 @@ $R close-windows 10 >/dev/null
 defaults delete "$BUNDLE_ID.tests" 2>/dev/null
 $R "setting-write:outputFolderPath=$saved_output" 10 >/dev/null
 
-echo "==> video editor buttons"
+section "video editor buttons"
 saved_output=$(setting_value outputFolderPath)
 out_dir="$WORK/video-out"
 rm -rf "$out_dir"
@@ -2261,18 +2746,20 @@ $R "setting-write:outputFolderPath=$out_dir" 10 >/dev/null
 video_state() { $R video-state 10; }
 vfield() { echo "$1" | tr ' ' '\n' | grep "^$2=" | cut -d= -f2-; }
 # A 10 s clip: right after the app starts the buffer holds less, so wait and save again.
+video_has_duration() { [ -n "$(vfield "$(video_state)" duration)" ]; }
 for _ in 1 2 3; do
     $R close-windows 10 >/dev/null
     $R save:10 60 >/dev/null
-    sleep 3
+    wait_for 10 video_has_duration
     clip_length=$(vfield "$(video_state)" duration)
     if awk "BEGIN { exit !(${clip_length:-0} >= 9.5) }"; then break; fi
+    # Real time: the buffer needs 10 s of video before the next save is long enough.
     sleep 8
 done
 $R system-actions:start 10 >/dev/null
 
 press_in video: "Play" >/dev/null
-sleep 1
+wait_for_text 10 "playing=true" video_state
 playing=$(vfield "$(video_state)" playing)
 press_in video: "Pause" >/dev/null
 if [ "$playing" = true ] && [ "$(vfield "$(video_state)" playing)" = false ]; then pass "video \"Play\" and \"Pause\" play and stop the clip"; else fail "video play and pause" "$playing"; fi
@@ -2307,22 +2794,27 @@ click_control() {
     local left top width height
     read -r left top width height <<< "$frame"
     $R "post-click:$(( left + width / 2 )),$(( top + height / 2 ))" 10 >/dev/null
-    sleep 0.5
     echo "clicked"
 }
+# video_field_is <field> <value>: the editor state shows that value (the caller waits for a click this way).
+video_field_is() { [ "$(vfield "$(video_state)" "$1")" = "$2" ]; }
 before_count=$(vfield "$(video_state)" overlays)
 $R video-seek:2 10 >/dev/null
 for row in "Text|text" "Arrow|arrow" "Box|rectangle" "Blur|blur"; do
     tool_label="${row%%|*}"
     tool_name="${row##*|}"
     click_control "$tool_label" >/dev/null
+    wait_for 5 video_field_is tool "$tool_name"
     picked=$(vfield "$(video_state)" tool)
     click_control "$tool_label" >/dev/null
+    wait_for 5 video_field_is tool select
     put_down=$(vfield "$(video_state)" tool)
     if [ "$picked" = "$tool_name" ] && [ "$put_down" = "select" ]; then pass "video a real click on \"$tool_label\" picks the tool and puts it down"; else fail "video real click on $tool_label" "$picked $put_down"; fi
 done
 click_control "Arrow" >/dev/null
+wait_for 5 video_field_is tool arrow
 $R "post-drag:$(at 0.3 0.3):$(at 0.5 0.5)" 10 >/dev/null
+# Real time: the mark is drawn and the video redraws the frame.
 sleep 1.5
 drawn=$(video_state)
 shown=$($R video-frame-diff 20)
@@ -2331,11 +2823,13 @@ if [ "$(vfield "$drawn" overlays)" = "$((before_count + 1))" ] && [ "$(vfield "$
 # With Select, a drag away from the selected mark leaves it where it is.
 box_before=$(vfield "$drawn" lastBox)
 $R "post-drag:$(at 0.85 0.85):$(at 0.95 0.9)" 10 >/dev/null
+# Real time: the drag is handled; the state is read right after (also for "did not move" checks).
 sleep 0.8
 box_after=$(vfield "$(video_state)" lastBox)
 if [ "$box_after" = "$box_before" ]; then pass "video a drag away from the selected mark does not move it"; else fail "video drag away moved the mark" "$box_before → $box_after"; fi
 # Dragged on the mark far past the edge, it moves and stops at the edge of the frame.
 $R "post-drag:$(at 0.4 0.4):$(at 1.4 0.45)" 10 >/dev/null
+# Real time: the drag is handled; the state is read right after (also for "did not move" checks).
 sleep 0.8
 moved=$(vfield "$(video_state)" lastBox)
 if [ "$moved" != "$box_before" ] && inside "$moved"; then pass "video a mark dragged past the edge stays inside the frame"; else fail "video drag past the edge" "$box_before → $moved"; fi
@@ -2343,6 +2837,7 @@ if [ "$moved" != "$box_before" ] && inside "$moved"; then pass "video a mark dra
 $R video-seek:end 10 >/dev/null
 press_in video: "Box" >/dev/null
 $R "post-drag:$(at 0.2 0.6):$(at 0.4 0.8)" 10 >/dev/null
+# Real time: the box is drawn at the last frame.
 sleep 1
 last_drawn=$(video_state)
 if [ "$(vfield "$last_drawn" overlays)" = "$((before_count + 2))" ] && [ "$(vfield "$last_drawn" lastLength)" = "3.0" ]; then pass "video a box drawn at the last frame shows for 3 s"; else fail "video draw at the end" "$last_drawn"; fi
@@ -2353,13 +2848,15 @@ press_in video: "Undo the last change (⌘Z)" >/dev/null
 # and Done shows (and saves) only that part.
 between() { awk "BEGIN { exit !($1 >= $2 && $1 <= $3) }"; }
 click_control "Crop" >/dev/null
-sleep 1
+wait_for_text 10 "tool=crop" video_state
 picking=$(video_state)
 if [ "$(vfield "$picking" tool)" = "crop" ] && [ "$(vfield "$picking" render)" = "$(vfield "$picking" source)" ]; then pass "video \"Crop\" shows the whole frame to pick from"; else fail "video crop tool" "$picking"; fi
 $R "post-drag:$(at 0.25 0.25):$(at 0.75 0.75)" 10 >/dev/null
+# Real time: the drag is handled; the state is read right after (also for "did not move" checks).
 sleep 0.8
 drawn_crop=$(vfield "$(video_state)" crop)
 $R "post-drag:$(at 0.75 0.75):$(at 0.9 0.75)" 10 >/dev/null
+# Real time: the drag is handled; the state is read right after (also for "did not move" checks).
 sleep 0.8
 resized_crop=$(vfield "$(video_state)" crop)
 IFS=, read -r crop_left crop_top crop_right crop_bottom <<< "$resized_crop"
@@ -2370,16 +2867,18 @@ rm -rf "$crop_out"
 mkdir -p "$crop_out"
 $R "setting-write:outputFolderPath=$crop_out" 10 >/dev/null
 press_in video: "Save to folder" >/dev/null
-waited=0
-while [ -z "$(ls "$crop_out" 2>/dev/null)" ] && [ "$waited" -lt 60 ]; do sleep 1; waited=$((waited + 1)); done
-sleep 1
+# The file appears while the export still writes it; the editor shows it in Finder once it is written.
+wait_for 60 dir_has_file "$crop_out"
+wait_for_text 30 "reveal $crop_out/" $R system-actions:read 10
 crop_file="$crop_out/$(ls "$crop_out" | head -1)"
 crop_dimensions=$(avmediainfo "$crop_file" 2>/dev/null | grep -m1 "Dimensions:" | sed -E 's/.*Dimensions: ([0-9]+) x ([0-9]+).*/\1 \2/')
 $R "setting-write:outputFolderPath=$out_dir" 10 >/dev/null
 read -r crop_file_width crop_file_height <<< "$crop_dimensions"
 if [ -n "$crop_file_width" ] && awk "BEGIN { exit !($crop_file_width / $crop_file_height > 1.15 * $(vfield "$picking" source | tr x /)) }"; then pass "video saving while cropping writes only the cropped part (${crop_file_width}x${crop_file_height})"; else fail "video save while cropping" "$crop_dimensions"; fi
 click_control "Done" >/dev/null
-sleep 1.5
+# The preview re-renders for the cropped part: smaller than the whole frame.
+crop_rendered() { local state; state=$(video_state); [ "$(vfield "$state" tool)" = select ] && [ "$(vfield "$state" render)" != "$(vfield "$state" source)" ]; }
+wait_for 10 crop_rendered
 cropped_state=$(video_state)
 render=$(vfield "$cropped_state" render)
 source_size=$(vfield "$cropped_state" source)
@@ -2387,31 +2886,39 @@ render_width=${render%x*}
 source_width=${source_size%x*}
 if [ "$(vfield "$cropped_state" tool)" = "select" ] && between "$render_width" "$(( source_width * 62 / 100 ))" "$(( source_width * 68 / 100 ))"; then pass "video \"Done\" shows only the cropped part ($render of $source_size)"; else fail "video cropped preview" "$cropped_state"; fi
 click_control "Crop" >/dev/null
-sleep 0.8
+wait_for_text 10 "tool=crop" video_state
 click_control "Reset" >/dev/null
+wait_for_text 10 "crop=none" video_state
 click_control "Done" >/dev/null
-sleep 1.5
+wait_for 10 video_field_is tool select
+# The preview re-renders for the whole frame again.
+whole_frame_rendered() { local state; state=$(video_state); [ "$(vfield "$state" render)" = "$(vfield "$state" source)" ]; }
+wait_for 10 whole_frame_rendered
 reset_state=$(video_state)
 if [ "$(vfield "$reset_state" crop)" = "none" ] && [ "$(vfield "$reset_state" render)" = "$(vfield "$reset_state" source)" ]; then pass "video \"Reset\" keeps the whole frame again"; else fail "video reset the crop" "$reset_state"; fi
 # Text by a click, typed right on the video: a click with Text used to play the video instead.
 area_at() { awk "BEGIN { printf \"%d,%d,%d,%d\", $sx + $sw * $1, $sy + $sh * $2, $sw * $3, $sh * $4 }"; }
 $R video-seek:2 10 >/dev/null
 click_control "Text" >/dev/null
+wait_for 5 video_field_is tool text
 $R "post-click:$(at 0.3 0.3)" 10 >/dev/null
-sleep 1.2
+wait_for_text 10 "typing=true" video_state
 placed=$(video_state)
 $R post-text:Total 10 >/dev/null
 $R post-key:36:none 10 >/dev/null
-sleep 1.5
+video_typed() { local shown; shown=$(video_state); [[ "$shown" == *"lastText=Total"* && "$shown" == *"typing=false"* ]]; }
+wait_for 10 video_typed
 typed=$(video_state)
 if [ "$(vfield "$placed" lastKind)" = "text" ] && [ "$(vfield "$placed" typing)" = "true" ] && [ "$(vfield "$typed" lastText)" = "Total" ] && [ "$(vfield "$typed" typing)" = "false" ] && [ "$(vfield "$typed" playing)" = "false" ]; then pass "video a click with Text places text and it is typed right on the video"; else fail "video text by a click" "$placed / $typed"; fi
 text_pixels=$(vfield "$($R "screen-color:$(area_at 0.27 0.27 0.2 0.12):$(vfield "$typed" lastColor)" 20)" coral)
 if [ "$(vfield "$typed" typing)" = "false" ] && [ "${text_pixels:-0}" -gt 150 ] 2>/dev/null; then pass "video the typed text shows on the video in the editor"; else fail "video text not shown" "$text_pixels"; fi
 # An arrow drawn with the mouse shows in the editor window, not only in the saved file.
 click_control "Arrow" >/dev/null
+wait_for 5 video_field_is tool arrow
 arrow_front=$($R front-app 10)
 arrow_hit=$($R "windows-at:$(at 0.55 0.3)" 10)
 $R "post-drag:$(at 0.55 0.3):$(at 0.75 0.6)" 10 >/dev/null
+# Real time: the arrow is drawn and the screen shows it before the pixels are counted.
 sleep 1.5
 arrow_state="front=$arrow_front windows=$arrow_hit $(video_state)"
 arrow_pixels=$(vfield "$($R "screen-color:$(area_at 0.53 0.28 0.24 0.34):$(vfield "$arrow_state" lastColor)" 20)" coral)
@@ -2422,6 +2929,7 @@ read -r bx by bw bh <<< "$(bar_frame)"
 length_before=$(vfield "$arrow_state" lastLength)
 if [ -n "$bx" ]; then
     $R "post-drag:$((bx + bw - 3)),$((by + bh / 2)):$((bx + bw + 60)),$((by + bh / 2))" 10 >/dev/null
+    # Real time: the drag is handled; the state is read right after (also for "did not move" checks).
     sleep 0.8
 fi
 length_after=$(vfield "$(video_state)" lastLength)
@@ -2430,6 +2938,7 @@ read -r bx by bw bh <<< "$(bar_frame)"
 start_before=$(vfield "$(video_state)" lastStart)
 if [ -n "$bx" ]; then
     $R "post-drag:$((bx + bw / 2)),$((by + bh / 2)):$((bx + bw / 2 + 50)),$((by + bh / 2))" 10 >/dev/null
+    # Real time: the drag is handled; the state is read right after (also for "did not move" checks).
     sleep 0.8
 fi
 start_after=$(vfield "$(video_state)" lastStart)
@@ -2507,13 +3016,9 @@ press_in video: "Copy" >/dev/null
 if pbpaste | grep -q "Environment"; then pass "video environment \"Copy\" puts the environment on the clipboard"; else fail "video environment copy"; fi
 $R settings-page:General 10 >/dev/null
 edit_result=$(press_in video: Edit)
-# Opened for the first time in a run, the window lists its controls after a moment.
-shown=""
-for _ in 1 2 3 4 5; do
-    sleep 1
-    shown=$($R controls:settings 30)
-    if [[ "$shown" == *"|Include Device"* ]]; then break; fi
-done
+# Opened for the first time in a run, Settings lists its controls after a moment, on the Bug reports page.
+wait_for_text 5 "|Include Device" $R controls:settings 30
+shown=$($R controls:settings 30)
 if [ "$edit_result" = "pressed" ] && [[ "$shown" == *"|Include Device"* ]]; then pass "video \"Edit\" next to Environment opens Settings on Bug reports"; else fail "video Edit environment" "$edit_result windows=$(windows_now) edits=$($R controls:video 30 | sed 's/ ;; /\n/g' | grep -c '|Edit$') settings=$($R controls:settings 30 | cut -c1-200)"; fi
 report_start=$(setting_value bugReportFormat)
 printf '' | pbcopy
@@ -2534,15 +3039,15 @@ if [[ "$result" == ok* ]]; then pass "video picker \"GIF frame rate\" picks anot
 press_in video: "MP4" >/dev/null
 if [ "$gif" = GIF ] && [ "$(vfield "$(video_state)" format)" = MP4 ] && [[ "$gif_rate" == value=*fps* ]]; then pass "video \"GIF\" and \"MP4\" switch the format, GIF shows its frame rate"; else fail "video format" "$gif $gif_rate"; fi
 press_in video: "Save to folder" >/dev/null
-waited=0
-while [ -z "$(ls "$out_dir" 2>/dev/null)" ] && [ "$waited" -lt 60 ]; do sleep 1; waited=$((waited + 1)); done
-sleep 1
+# The file appears while the export still writes it; the editor shows it in Finder once it is written.
+wait_for 60 dir_has_file "$out_dir"
+wait_for_text 30 "reveal $out_dir/" $R system-actions:read 10
 saved=$(ls "$out_dir" | head -1)
 if [[ "$saved" == *.mp4 ]] && $R system-actions:read 10 | grep -q "reveal $out_dir/"; then pass "video \"Save to folder\" exports the edited clip ($saved)"; else fail "video save to folder" "$saved"; fi
 printf '' | pbcopy
 press_in video: "Copy MP4" >/dev/null
-waited=0
-while ! $R pasteboard-types 10 | grep -q "file-url" && [ "$waited" -lt 60 ]; do sleep 1; waited=$((waited + 1)); done
+# The export takes a while.
+wait_for_text 60 "file-url" $R pasteboard-types 10
 if $R pasteboard-types 10 | grep -q "file-url"; then pass "video \"Copy MP4\" puts the exported file on the clipboard"; else fail "video copy file" "$($R pasteboard-types 10)"; fi
 printf '' | pbcopy
 $R system-actions:stop 10 >/dev/null
@@ -2552,7 +3057,7 @@ press_in video: "Show keystrokes" >/dev/null
 left=$(video_state)
 $R close-windows 10 >/dev/null
 $R save:5 60 >/dev/null
-sleep 3
+wait_for_text 10 "video:" windows_now
 opened=$(video_state)
 if [ "$(vfield "$opened" format)" = GIF ] && [ "$(vfield "$opened" keys)" = "$(vfield "$left" keys)" ]; then pass "a new clip opens with the last format and switches"; else fail "video editor memory" "$left / $opened"; fi
 press_in video: "MP4" >/dev/null
@@ -2560,7 +3065,7 @@ press_in video: "Show keystrokes" >/dev/null
 $R close-windows 10 >/dev/null
 $R "setting-write:outputFolderPath=$saved_output" 10 >/dev/null
 
-echo "==> the bear stays in sight"
+section "the bear stays in sight"
 # On a Mac with a notch a new menu bar item goes leftmost and macOS hides it behind the notch.
 probe=$($R status-item-probe 10)
 if [[ "$probe" == *"occlusionVisible=true"* ]]; then pass "the bear is visible after launch ($probe)"; else fail "the bear is visible after launch" "$probe"; fi
@@ -2572,15 +3077,15 @@ elif [[ "$result" == "notch=true hiddenBefore=true hiddenAfter=false"* || "$resu
 # ⌥⇧B opens the menu, also when the bear is hard to reach.
 $R close-panel 10 >/dev/null
 $R post-key:11:option,shift 10 >/dev/null
-sleep 1
+wait_for 10 menu_panel_open
 if $R windows-debug 10 | tr '|' '\n' | grep "MenuBarExtraWindow" | grep -q "visible=true"; then pass "⌥⇧B opens the Bugbear menu"; else fail "⌥⇧B opens the Bugbear menu"; fi
 $R close-panel 10 >/dev/null
 
-echo "==> tooltips"
+section "tooltips"
 # Hover a toolbar button in the screenshot editor, and a tab in the menu panel with the app not
 # active (how the panel is used): a tooltip appears in both.
 $R screenshot-full 40 >/dev/null
-sleep 3
+wait_for_text 10 "Save to folder" $R controls:screenshot: 30
 result=$($R "tooltip-probe:screenshot,120,82" 15)
 if echo "$result" | grep -q "tooltips=1"; then pass "tooltip on an editor tool"; else fail "tooltip on an editor tool" "$result"; fi
 result=$($R editor-checks 30)
@@ -2601,17 +3106,17 @@ done
 if echo "$editor_checks" | grep -q "deleteInEditorWindow=true"; then pass "Delete in the editor window removes the selected mark with the focus away from the canvas"; else fail "Delete key" "$editor_checks"; fi
 $R close-windows 10 >/dev/null
 $R press-status-item 10 >/dev/null
-sleep 1
+wait_for_text 10 "|Recent" $R controls:menubar 30
 result=$($R "tooltip-probe:menubar,40,175" 15)
 if echo "$result" | grep -q "active=false tooltips=1"; then pass "tooltip in the menu panel while the app is not active"; else fail "tooltip in the menu panel" "$result"; fi
 $R close-panel 10 >/dev/null
 
-echo "==> what's new"
+section "what's new"
 $R whats-new 10 >/dev/null
 if $R windows-debug 10 | tr '|' '\n' | grep "visible=true" | grep -q "720x"; then pass "What's New window opens"; else fail "What's New window"; fi
 $R close-windows 10 >/dev/null
 
-echo "==> welcome guide fits the screen"
+section "welcome guide fits the screen"
 # Opened fresh, the guide keeps its own size and stays inside the screen, so Continue is reachable.
 frame_key="NSWindow Frame Bugbear.onboarding"
 defaults delete "$BUNDLE_ID" "$frame_key" 2>/dev/null
@@ -2620,7 +3125,7 @@ if python3 scripts/test/lib/window-fits.py "$result"; then pass "welcome guide f
 $R close-windows 10 >/dev/null
 defaults delete "$BUNDLE_ID" "$frame_key" 2>/dev/null
 
-echo "==> report a problem"
+section "report a problem"
 for kind in problem idea; do
     result=$($R "open-feedback:$kind" 10)
     if [[ "$result" == "opened inside=true"* ]]; then pass "the $kind window opens on screen ($result)"; else fail "the $kind window opens on screen" "$result"; fi
@@ -2640,7 +3145,7 @@ if [[ "$result" == "offered=false open=false crash=false canSend=false moved=tru
 result=$($R feedback-switch 10)
 if [[ "$result" == "kind=idea" ]]; then pass "asking for an idea while the problem window is open shows the idea form"; else fail "switching the feedback window" "$result"; fi
 
-echo "==> disk space"
+section "disk space"
 fixture="$WORK/space"
 mkdir -p "$fixture/videos" "$fixture/notes"
 # Real data, not sparse files: the scan counts what is allocated on disk. "Largest files" lists 50 MB and up.
@@ -2663,7 +3168,7 @@ if echo "$result" | grep -q "cacheGone=true homebrewKept=true otherLogGone=true 
 result=$($R space-measure 120)
 if echo "$result" | grep -q "^free="; then pass "categories measured"; else fail "measure" "$result"; fi
 $R open-space:Folders 10 >/dev/null
-sleep 1
+wait_for 10 window_open space
 if $R windows-debug 10 | tr '|' '\n' | grep "visible=true" | grep -q "level=0"; then pass "Space window opens"; else fail "Space window"; fi
 $R close-windows 10 >/dev/null
 
@@ -2676,7 +3181,7 @@ fi
 $R setting:readBrowserURL:true 10 >/dev/null
 $R browser-accessibility-off 10 >/dev/null
 
-echo "==> quitting stops the screen capture"
+section "quitting stops the screen capture"
 # pkill (updates, reinstalls) used to end Bugbear mid-capture, and macOS kept showing
 # "Bugbear - Currently Sharing" after it was gone.
 $R buffer-start 30 >/dev/null
@@ -2685,6 +3190,7 @@ pkill -x Bugbear 2>/dev/null
 # It has to quit by itself: wait_for_bugbear_to_quit would end it with kill -9 and hide a hang.
 waited=0
 while pgrep -x Bugbear >/dev/null && [ "$waited" -lt 30 ]; do
+    # Poll step.
     sleep 0.2
     waited=$((waited + 1))
 done
@@ -2705,6 +3211,7 @@ done < <(ls "$CAPTURES_DIR" 2>/dev/null)
 echo "removed $removed captures the tests made"
 pbcopy < "$WORK/clipboard-before.txt"
 if [ "$(defaults read "$BUNDLE_ID" recentAnnotationColors 2>/dev/null)" = "$(cat "$WORK/palette-before.txt")" ]; then pass "the tests leave the person's editor colors as they were"; else fail "editor colors changed by the tests" "$(defaults read "$BUNDLE_ID" recentAnnotationColors 2>/dev/null | tr -d '\n ')"; fi
+print_section_times
 echo
 echo "$PASSES passed, $FAILURES failed."
 [ "$FAILURES" = "0" ]

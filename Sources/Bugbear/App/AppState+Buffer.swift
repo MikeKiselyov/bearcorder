@@ -7,15 +7,36 @@ import QuartzCore
 extension AppState {
     // MARK: Buffer
 
-    var bufferConfiguration: BufferConfiguration {
-        return BufferConfiguration(
+    /// The settings one display's buffer runs with: native resolution and the recording frame rate
+    /// for a display a recorded area touches, the buffer's own for the rest.
+    func bufferConfiguration(for display: CGDirectDisplayID) -> BufferConfiguration {
+        var configuration = BufferConfiguration(
             retentionSeconds: settings.bufferSeconds,
             framesPerSecond: settings.framesPerSecond,
-            maxHeight: nativeResolutionForArea ? 0 : settings.maxHeight,
+            maxHeight: settings.maxHeight,
             showsCursor: settings.showsCursor,
             systemAudio: settings.recordSystemAudio,
             microphone: settings.recordMicrophone
         )
+        if nativeDisplaysForArea.contains(display) {
+            configuration.maxHeight = 0
+            configuration.framesPerSecond = max(settings.recordingFramesPerSecond, settings.framesPerSecond)
+        }
+        return configuration
+    }
+
+    /// The displays an area (global AppKit points) touches.
+    func displaysTouched(by area: CGRect) -> Set<CGDirectDisplayID> {
+        let screens = NSScreen.screens
+        var frames: [CGRect] = []
+        for screen in screens {
+            frames.append(screen.frame)
+        }
+        var touched: Set<CGDirectDisplayID> = []
+        for index in AreaDisplays.touched(area: area, frames: frames) {
+            touched.insert(AppState.displayID(of: screens[index]))
+        }
+        return touched
     }
 
     static func displayID(of screen: NSScreen) -> CGDirectDisplayID {
@@ -24,7 +45,7 @@ extension AppState {
     }
 
     /// Main display first, then the others when "all displays" is on.
-    private func displaysToCapture() -> [CGDirectDisplayID] {
+    func displaysToCapture() -> [CGDirectDisplayID] {
         var ids: [CGDirectDisplayID] = [CGMainDisplayID()]
         if settings.captureAllDisplays || allDisplaysForArea {
             for screen in NSScreen.screens {
@@ -92,7 +113,6 @@ extension AppState {
             await buffer.stop()
         }
         buffers = []
-        let configuration = bufferConfiguration
         do {
             if failingBufferStartsForTests > 0 {
                 failingBufferStartsForTests -= 1
@@ -100,7 +120,7 @@ extension AppState {
             }
             for (index, displayID) in displaysToCapture().enumerated() {
                 let buffer = ScreenBuffer(displayID: displayID)
-                var displayConfiguration = configuration
+                var displayConfiguration = bufferConfiguration(for: displayID)
                 // Audio lives on the primary buffer only.
                 if index > 0 {
                     displayConfiguration.systemAudio = false
@@ -162,6 +182,78 @@ extension AppState {
             }
         }
         refreshStatus()
+    }
+
+    /// Adds the displays a recording needs that the running buffer does not capture yet, and leaves
+    /// the running ones as they are (with what they hold). False when the buffer is not running or a
+    /// display could not start; the caller then restarts the whole buffer.
+    func addMissingBuffers() async -> Bool {
+        let previous = bufferStart
+        let adding = Task { () -> Bool in
+            await previous?.value
+            return await addMissingBuffersNow()
+        }
+        bufferStart = Task {
+            _ = await adding.value
+        }
+        return await adding.value
+    }
+
+    private func addMissingBuffersNow() async -> Bool {
+        if bufferState != .running || buffers.isEmpty { return false }
+        for displayID in displaysToCapture() where !buffers.contains(where: { buffer in buffer.displayID == displayID }) {
+            let buffer = ScreenBuffer(displayID: displayID)
+            var configuration = bufferConfiguration(for: displayID)
+            // Audio lives on the primary buffer, which already runs.
+            configuration.systemAudio = false
+            configuration.microphone = false
+            buffer.onStop = { [weak self] error in
+                self?.bufferStopped(error)
+            }
+            do {
+                try await buffer.start(configuration, allowedWindowNumbers: allowedWindowNumbers)
+            } catch {
+                Log.error("adding display \(displayID) to the buffer failed: \(error.localizedDescription)")
+                await buffer.stop()
+                return false
+            }
+            buffers.append(buffer)
+            Log.info("recording: display \(displayID) added to the buffer")
+        }
+        updateQuietZones()
+        return true
+    }
+
+    /// Restarts one display's buffer at native resolution when its stream did not take the change.
+    /// Runs on the start chain, so a recording that ends meanwhile restarts the buffer after it, not
+    /// beside it.
+    func restartBufferForArea(_ displayID: CGDirectDisplayID) async {
+        let previous = bufferStart
+        let restart = Task {
+            await previous?.value
+            await restartBufferForAreaNow(displayID)
+        }
+        bufferStart = restart
+        await restart.value
+    }
+
+    private func restartBufferForAreaNow(_ displayID: CGDirectDisplayID) async {
+        // The recording ended meanwhile: its own restart puts the buffer back to the settings.
+        if (recording == nil && !isStartingRecording) || bufferState != .running { return }
+        guard let buffer = buffers.first(where: { buffer in buffer.displayID == displayID }) else { return }
+        var configuration = bufferConfiguration(for: displayID)
+        if buffer !== primaryBuffer {
+            configuration.systemAudio = false
+            configuration.microphone = false
+        }
+        Log.info("buffer[\(displayID)] restarting at native resolution")
+        do {
+            try await buffer.start(configuration, allowedWindowNumbers: allowedWindowNumbers)
+        } catch {
+            Log.error("buffer[\(displayID)] restart at native resolution failed: \(error.localizedDescription)")
+            bufferStopped(error)
+        }
+        updateQuietZones()
     }
 
     func bufferStopped(_ error: Error?) {

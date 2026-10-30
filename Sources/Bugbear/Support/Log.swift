@@ -20,9 +20,24 @@ enum Log {
         write("INFO  " + message)
     }
 
+    /// Self-tests set this to see the error lines without reading the log file. Returning true keeps
+    /// the line out of the log file: a test's made-up error, with its temporary paths, is not the
+    /// person's log.
+    nonisolated(unsafe) static var errorObserver: ((String) -> Bool)?
+
     static func error(_ message: String) {
+        var keptOut = false
+        if let observer = errorObserver {
+            keptOut = observer(message)
+        }
         logger.error("\(message, privacy: .public)")
+        if keptOut { return }
         write("ERROR " + message)
+    }
+
+    /// Waits until the lines logged so far are in the file.
+    static func waitForWrites() {
+        queue.sync {}
     }
 
     private static func write(_ line: String) {

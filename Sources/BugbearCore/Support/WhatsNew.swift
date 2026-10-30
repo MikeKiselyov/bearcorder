@@ -1,8 +1,8 @@
 import Foundation
 
 /// Release notes written for people (not commit messages), shown once after an update.
-public struct WhatsNewRelease: Equatable {
-    public struct Item: Equatable {
+public struct WhatsNewRelease: Equatable, Sendable {
+    public struct Item: Equatable, Sendable {
         /// SF Symbol name.
         public var symbol: String
         public var title: String

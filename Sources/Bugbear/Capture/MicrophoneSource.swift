@@ -3,7 +3,7 @@ import AVFoundation
 /// Captures the default microphone and hands host-time stamped buffers to a sink.
 final class MicrophoneSource: NSObject, AVCaptureAudioDataOutputSampleBufferDelegate {
     private let session = AVCaptureSession()
-    private let queue = DispatchQueue(label: "bugbear.microphone")
+    let queue = DispatchQueue(label: "bugbear.microphone")
     private var configured = false
     var onSample: ((CMSampleBuffer) -> Void)?
 

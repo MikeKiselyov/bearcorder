@@ -24,6 +24,7 @@ FAILURES=0
 # Limits for a "fast and smooth" verdict.
 MAX_IDLE_CPU=15        # % of one core, average
 MAX_RECORDING_CPU=15   # % of one core, average (about 5 on a still screen since 0.10.0)
+MAX_AREA_RECORDING_CPU=15  # % of one core, average, an area on the built-in display with every display in the buffer
 MAX_MEMORY_MB=350
 MAX_SAVE_SECONDS=3     # for a 30 s clip
 
@@ -61,7 +62,7 @@ verdict() {
 }
 
 echo "==> build"
-scripts/build-app.sh >/dev/null 2>&1 || { echo "build failed"; exit 1; }
+build_test_app || exit 1
 # Quit the person's Bugbear and keep a copy of their settings before any test setting is written.
 quit_running_bugbear
 defaults write "$BUNDLE_ID" automationEnabled -bool true
@@ -87,6 +88,20 @@ verdict "recording CPU average %" "$rec_avg" "$MAX_RECORDING_CPU"
 echo "      peak ${rec_peak}%"
 verdict "recording memory MB" "$rec_mem" "$MAX_MEMORY_MB"
 scripts/dev/bugbear-command.sh draw-toggle; sleep 1
+scripts/dev/bugbear-command.sh record-stop; sleep 8
+scripts/dev/bugbear-command.sh close-windows; sleep 2
+
+echo "==> recording an area on the built-in display (15 s)"
+# Every display is in the buffer for an area recording; only the built-in one, which the area is on,
+# runs at native resolution and the recording frame rate.
+display_count=$(scripts/dev/bugbear-run.sh screens 10 | tr ';' '\n' | grep -c ':')
+if [ "$display_count" -lt 2 ]; then echo "      (one display: the buffer has only the built-in one)"; fi
+scripts/dev/bugbear-command.sh "record-area:0.2,0.2,0.4,0.4:builtin"; sleep 3
+echo "      buffers $(scripts/dev/bugbear-run.sh buffer-sizes 10)"
+read -r area_avg area_peak area_mem <<< "$(sample 15)"
+verdict "area recording CPU average %" "$area_avg" "$MAX_AREA_RECORDING_CPU"
+echo "      peak ${area_peak}%"
+verdict "area recording memory MB" "$area_mem" "$MAX_MEMORY_MB"
 scripts/dev/bugbear-command.sh record-stop; sleep 8
 scripts/dev/bugbear-command.sh close-windows; sleep 2
 

@@ -83,29 +83,23 @@ struct DiskRing: View {
     }
 }
 
-/// One cleanable thing with its size and a two-step Delete (click, then confirm).
+/// One cleanable thing with its size and Review… (Open for our captures, which are never reviewed here).
 struct CleanupRow: View {
     @Bindable var model: SpaceModel
     let category: CleanupCategory
     var compact = false
     var tint: TileTint = .coral
+    /// Review…: the window opens the list in place, the menu panel opens the window on it.
+    let onReview: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            row
-            if model.confirmingID == category.id && model.cleaningID != category.id {
-                confirmation
-            }
-        }
-        .padding(.vertical, compact ? 6 : 10)
-    }
-
-    private var row: some View {
         let bytes = model.sizes[category.id] ?? 0
-        return HStack(alignment: compact ? .center : .top, spacing: 12) {
+        HStack(alignment: compact ? .center : .top, spacing: 12) {
             IconTile(systemImage: category.symbol, tint: tint, size: compact ? 26 : 30)
             VStack(alignment: .leading, spacing: 2) {
-                Text(category.title).font(.system(size: 13, weight: .semibold))
+                Text(category.title)
+                    .font(.system(size: 13, weight: .semibold))
+                    .lineLimit(compact ? 2 : nil)
                 if !compact {
                     Text(category.detail)
                         .font(.system(size: 12))
@@ -119,32 +113,7 @@ struct CleanupRow: View {
                 .foregroundStyle(Theme.textSecondary)
             actions
         }
-    }
-
-    /// Asked after Clean, on its own line so the buttons keep their full names: what goes, how
-    /// much, and that it cannot be undone.
-    private var confirmation: some View {
-        let size = SpaceModel.format(model.sizes[category.id] ?? 0)
-        return VStack(alignment: .leading, spacing: 8) {
-            Text(L("space.clean.question", size, category.title))
-                .font(.system(size: 12))
-                .fixedSize(horizontal: false, vertical: true)
-            HStack(spacing: 8) {
-                Spacer(minLength: 0)
-                Button(L("space.clean.cancel")) { model.confirmingID = nil }
-                    .buttonStyle(SecondaryButtonStyle())
-                    .keyboardShortcut(.cancelAction)
-                    .tip(L("space.clean.cancel.tip"))
-                Button(L("space.clean.confirm", size)) {
-                    Task { await model.clean(category) }
-                }
-                .buttonStyle(AccentButtonStyle())
-                .tip(L("space.clean.confirm.tip"))
-            }
-        }
-        .padding(10)
-        .background(Theme.control)
-        .clipShape(RoundedRectangle(cornerRadius: 10))
+        .padding(.vertical, compact ? 6 : 10)
     }
 
     @ViewBuilder
@@ -155,17 +124,15 @@ struct CleanupRow: View {
                 WindowManager.shared.openHistory()
             }
             .buttonStyle(SecondaryButtonStyle())
+            .fixedSize()
             .tip(L("space.captures.open.tip"))
         case .deleteContents:
-            if model.cleaningID == category.id {
-                ProgressView().controlSize(.small).frame(width: 60)
-            } else {
-                Button(L("space.clean")) { model.confirmingID = category.id }
-                    .buttonStyle(SecondaryButtonStyle())
-                    .accessibilityLabel(L("space.clean.label", category.title))
-                    .disabled((model.sizes[category.id] ?? 0) == 0 || model.cleaningID != nil || model.confirmingID == category.id)
-                    .tip(L("space.clean.tip", category.title))
-            }
+            Button(L("space.review"), action: onReview)
+                .buttonStyle(SecondaryButtonStyle())
+                .fixedSize()
+                .accessibilityLabel(L("space.review.label", category.title))
+                .disabled((model.sizes[category.id] ?? 0) == 0)
+                .tip(L("space.review.tip", category.title))
         }
     }
 }
@@ -189,17 +156,12 @@ struct SpaceView: View {
     }
 
     @State private var model = SpaceModel.shared
-    @State private var section: Section
-
-    init(section: Section = .cleanUp) {
-        _section = State(initialValue: section)
-    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             DiskBar(total: model.volumeTotal, free: model.volumeFree)
             HStack {
-                Picker(selection: $section) {
+                Picker(selection: $model.section) {
                     ForEach(Section.allCases) { item in
                         Text(item.title).tag(item)
                     }
@@ -218,7 +180,7 @@ struct SpaceView: View {
                 }
             }
             Divider().overlay(Theme.border)
-            switch section {
+            switch model.section {
             case .cleanUp:
                 cleanUp
             case .folders:
@@ -240,7 +202,16 @@ struct SpaceView: View {
 
     // MARK: Clean up
 
+    @ViewBuilder
     private var cleanUp: some View {
+        if let id = model.openReviewID {
+            reviewPage(id)
+        } else {
+            categoryList
+        }
+    }
+
+    private var categoryList: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Text(L("space.cleanable", SpaceModel.format(model.cleanableBytes)))
@@ -261,13 +232,127 @@ struct SpaceView: View {
                 .foregroundStyle(Theme.textSecondary)
             ScrollView {
                 VStack(spacing: 0) {
+                    ProjectsRow(model: model) { model.showReview(SpaceModel.projectsID) }
+                    Divider().overlay(Theme.border)
                     ForEach(model.visibleCategories) { category in
-                        CleanupRow(model: model, category: category)
+                        CleanupRow(model: model, category: category) { model.showReview(category.id) }
                         Divider().overlay(Theme.border)
                     }
                 }
             }
         }
+    }
+
+    /// One review list in place of the categories: projects or a cache category.
+    private func reviewPage(_ id: String) -> some View {
+        let category = CleanupCategory.all.first { item in item.id == id }
+        let isProjects = id == SpaceModel.projectsID
+        var title = L("space.projects.title")
+        var detail = L("space.projects.detail")
+        if let category = category {
+            title = category.title
+            detail = category.detail
+        }
+        return VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 10) {
+                Button {
+                    model.showReview(nil)
+                } label: {
+                    Label(L("space.review.back"), systemImage: "chevron.left")
+                }
+                .buttonStyle(SecondaryButtonStyle())
+                .tip(L("space.review.back.tip"))
+                Text(title)
+                    .font(.system(size: 15, weight: .semibold))
+                    .lineLimit(1)
+                Spacer(minLength: 8)
+                if isProjects {
+                    projectControls
+                }
+            }
+            Text(detail)
+                .font(.system(size: 12))
+                .foregroundStyle(Theme.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+            if isProjects {
+                projectList
+            } else if let review = model.cacheReviews[id] {
+                SpaceReviewView(review: review, model: model)
+            } else {
+                HStack(spacing: 8) {
+                    ProgressView().controlSize(.small)
+                    Text(L("space.review.listing"))
+                        .font(.system(size: 12))
+                        .foregroundStyle(Theme.textSecondary)
+                }
+                Spacer(minLength: 0)
+            }
+        }
+        .task(id: id) {
+            guard let category = category else {
+                if !isProjects {
+                    model.showReview(nil)
+                }
+                return
+            }
+            if await model.openReview(for: category) == nil {
+                model.showReview(nil)
+            }
+        }
+    }
+
+    /// Find projects, or its progress and Stop while it runs.
+    @ViewBuilder
+    private var projectControls: some View {
+        if model.isScanningProjects {
+            ProgressView().controlSize(.small)
+            Text(L("space.projects.searching"))
+                .font(.system(size: 12))
+                .foregroundStyle(Theme.textSecondary)
+            Button(L("space.projects.stop")) { model.stopProjectScan() }
+                .buttonStyle(SecondaryButtonStyle())
+                .tip(L("space.projects.stop.tip"))
+        } else {
+            let removing = model.projectReview?.isRemoving ?? false
+            Button(model.projectReview == nil ? L("space.projects.find") : L("space.projects.findAgain")) {
+                Task { await model.scanProjects() }
+            }
+            .buttonStyle(AccentButtonStyle(isEnabled: !removing))
+            .disabled(removing)
+            .tip(L("space.projects.find.tip"))
+        }
+    }
+
+    @ViewBuilder
+    private var projectList: some View {
+        if !model.unreadableProjectRoots.isEmpty {
+            Text(L("space.projects.unreadable", unreadableNames))
+                .font(.system(size: 11))
+                .foregroundStyle(Theme.warning)
+                .lineLimit(1)
+                .truncationMode(.tail)
+        }
+        if let review = model.projectReview {
+            SpaceReviewView(review: review, model: model)
+        } else if !model.isScanningProjects {
+            let roots = AppSettings.shared.projectRoots
+            Text(roots.isEmpty ? L("space.projects.noRoots") : L("space.projects.prompt", roots.joined(separator: ", ")))
+                .font(.system(size: 12))
+                .foregroundStyle(Theme.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+        } else {
+            Spacer(minLength: 0)
+        }
+    }
+
+    /// The project folders that could not be read, by name: "Documents, Desktop".
+    private var unreadableNames: String {
+        var names: [String] = []
+        for url in model.unreadableProjectRoots {
+            names.append(url.lastPathComponent)
+        }
+        return names.joined(separator: ", ")
     }
 
     // MARK: Folders
@@ -594,7 +679,8 @@ struct SpaceTabSection: View {
     static let tints: [TileTint] = [.coral, .purple, .blue, .green, .yellow]
 
     var body: some View {
-        let shown = Array(model.visibleCategories.prefix(5))
+        // Four categories and the project folders, as many rows as fit without much scrolling.
+        let shown = Array(model.visibleCategories.prefix(4))
         VStack(alignment: .leading, spacing: 10) {
             DiskRing(total: model.volumeTotal, free: model.volumeFree, parts: ringParts(shown))
                 .frame(maxWidth: .infinity)
@@ -612,10 +698,17 @@ struct SpaceTabSection: View {
             }
             VStack(spacing: 6) {
                 ForEach(Array(shown.enumerated()), id: \.element.id) { index, category in
-                    CleanupRow(model: model, category: category, compact: true, tint: SpaceTabSection.tints[index % SpaceTabSection.tints.count])
-                        .padding(.horizontal, 10)
-                        .glassCard(cornerRadius: 12)
+                    CleanupRow(model: model, category: category, compact: true, tint: SpaceTabSection.tints[index % SpaceTabSection.tints.count]) {
+                        WindowManager.shared.openSpace(section: .cleanUp, category: category.id)
+                    }
+                    .padding(.horizontal, 10)
+                    .glassCard(cornerRadius: 12)
                 }
+                ProjectsRow(model: model, compact: true) {
+                    WindowManager.shared.openSpace(section: .cleanUp, category: SpaceModel.projectsID)
+                }
+                .padding(.horizontal, 10)
+                .glassCard(cornerRadius: 12)
             }
             if let message = model.message {
                 Text(message).font(.system(size: 11)).foregroundStyle(Theme.success).fixedSize(horizontal: false, vertical: true)

@@ -6,12 +6,13 @@
 #   scripts/test/all.sh --quick   # unit tests, self-test, lint and the release check (~2 min), no permissions
 #
 # Suites:
-#   unit       swift test: parsers, converters, reports, timelines, disk tree (BugbearCore)
+#   unit       swift test --parallel: parsers, converters, reports, timelines, disk tree (BugbearCore)
 #   self-test  media pipeline: export, edits, GIF, size limits, annotations, OCR, QR, stitching
 #   controls   every control in scripts/check/controls.txt has a check in the tests
 #   lint       shellcheck on every script (when shellcheck is installed)
 #   workflows  actionlint on the CI workflows (when actionlint is installed)
 #   release    a release build has no automation, self-test or media tools in it
+#   app-build  the test app (with automation), built and signed once for e2e, features and perf
 #   e2e        the real app: buffer, saving, recording with pause, audio, markers, crash watch, updates
 #   features   the real app with a browser: scrolling screenshot, ruler, color picker, overlay,
 #              area recording, shortcuts, reports, displays, menu panel, disk space
@@ -45,7 +46,7 @@ run_suite() {
     local status=$?
     local seconds=$(($(date +%s) - started))
     local summary
-    summary=$(grep -E "passed, [0-9]+ failed|Executed [0-9]+ tests|ALL CHECKS PASSED|ALL PERFORMANCE CHECKS PASSED|control coverage ok|shellcheck clean|actionlint clean|release has no automation|FAILED" "$log" | tail -1 | sed -E 's/^[[:space:]]+//')
+    summary=$(grep -E "passed, [0-9]+ failed|Executed [0-9]+ tests|ALL CHECKS PASSED|ALL PERFORMANCE CHECKS PASSED|test app built|control coverage ok|shellcheck clean|actionlint clean|release has no automation|FAILED" "$log" | tail -1 | sed -E 's/^[[:space:]]+//')
     # A suite that stops halfway can still exit 0 (its exit trap runs last); no summary line
     # means it did not finish.
     if [ "$status" = "0" ] && [ -z "$summary" ]; then
@@ -74,6 +75,13 @@ self_test() {
     .build/debug/Bugbear --self-test "$folder"
 }
 
+# Run by name through run_suite: the build and signing the e2e, features and perf suites share.
+# shellcheck disable=SC2329
+build_test_app_once() {
+    BUGBEAR_AUTOMATION=1 scripts/build-app.sh || return 1
+    echo "test app built"
+}
+
 # Run by name through run_suite. shellcheck says nothing when all is well: say how many it checked.
 # shellcheck disable=SC2329
 lint_scripts() {
@@ -90,7 +98,27 @@ lint_workflows() {
     echo "actionlint clean: ${#workflows[@]} workflows"
 }
 
-run_suite unit swift test
+# Run by name through run_suite. The parallel runner prints "[n/total] Testing ..." lines and no
+# "Executed N tests" summary (its own line says "0 tests"), so one line per test is counted.
+# shellcheck disable=SC2329
+unit_tests() {
+    local output="$LOGS/unit-output.txt"
+    local status=0
+    swift test --parallel >"$output" 2>&1 || status=$?
+    cat "$output"
+    if [ "$status" != "0" ]; then
+        return "$status"
+    fi
+    local total
+    total=$(grep -c -E '^\[[0-9]+/[0-9]+\] Testing ' "$output" || true)
+    if [ "$total" = "0" ]; then
+        echo "no test count in the output"
+        return 1
+    fi
+    echo "Executed $total tests, with 0 failures"
+}
+
+run_suite unit unit_tests
 run_suite self-test self_test
 run_suite controls python3 -I scripts/check/control-coverage.py
 run_suite release scripts/check/no-automation.sh
@@ -103,9 +131,26 @@ if command -v actionlint >/dev/null; then
     run_suite workflows lint_workflows
 fi
 if [ "$QUICK" = "0" ]; then
-    run_suite e2e scripts/test/e2e.sh
-    run_suite features scripts/test/e2e-features.sh
-    run_suite perf scripts/test/perf.sh
+    # One automation build for the three suites below: they use it as it is (BUGBEAR_APP_BUILT).
+    run_suite app-build build_test_app_once
+    # Without a fresh build the three suites would test an old app: they are not run.
+    case "${RESULTS[${#RESULTS[@]} - 1]}" in
+        ok*)
+            export BUGBEAR_APP_BUILT=1
+            run_suite e2e scripts/test/e2e.sh
+            run_suite features scripts/test/e2e-features.sh
+            run_suite perf scripts/test/perf.sh
+            ;;
+        *)
+            for skipped in e2e features perf; do
+                echo "==> $skipped"
+                echo "    FAILED - not run: app-build failed"
+                NAMES+=("$skipped")
+                RESULTS+=("FAIL  not run: app-build failed")
+                TIMES+=(0)
+            done
+            ;;
+    esac
 fi
 
 echo

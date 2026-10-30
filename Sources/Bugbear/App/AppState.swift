@@ -62,9 +62,11 @@ final class AppState {
     private(set) var lastExternalAppName = ""
     @ObservationIgnored private var launched = false
     @ObservationIgnored var recordingRegion: RegionSelector.Selection?
-    /// While an area is recorded the buffer runs at the display's full resolution, so a "720p" area
-    /// really comes out 1280×720 instead of a crop of the downscaled buffer.
-    @ObservationIgnored var nativeResolutionForArea = false
+    /// While an area is recorded the displays it touches run at their full resolution (and the
+    /// recording frame rate), so a "720p" area really comes out 1280×720 instead of a crop of the
+    /// downscaled buffer. The other displays keep the buffer's resolution. Grows when the area is moved
+    /// onto another display, never shrinks during a recording.
+    @ObservationIgnored var nativeDisplaysForArea: Set<CGDirectDisplayID> = []
     /// The one display a recording keeps: the one under the pointer when "Record all displays" is
     /// off. Nil records every buffered display side by side, or the area wherever it is.
     @ObservationIgnored var recordingDisplay: CGDirectDisplayID?

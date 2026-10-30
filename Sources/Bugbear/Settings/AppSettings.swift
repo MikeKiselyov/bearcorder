@@ -8,7 +8,8 @@ import Observation
 final class AppSettings {
     static let shared = AppSettings()
 
-    private let defaults = UserDefaults.standard
+    private let defaults: UserDefaults
+    private let home: URL
 
     var bufferMinutes: Int {
         didSet { defaults.set(bufferMinutes, forKey: "bufferMinutes") }
@@ -75,8 +76,10 @@ final class AppSettings {
     /// Fields added to every capture's environment, report and badge (Stand, Build, Test account…).
     var reportFields: [EnvironmentSnapshot.Field] {
         didSet {
-            if let data = try? JSONEncoder().encode(reportFields) {
-                defaults.set(data, forKey: "reportFields")
+            do {
+                defaults.set(try JSONEncoder().encode(reportFields), forKey: "reportFields")
+            } catch {
+                Log.error("settings: could not save the report fields: \(error)")
             }
         }
     }
@@ -117,7 +120,80 @@ final class AppSettings {
         didSet { defaults.set(saveOnCrash, forKey: "saveOnCrash") }
     }
 
-    private init() {
+    /// Folders (below the home folder, stored relative to it) searched for projects in Space.
+    var projectRoots: [String] {
+        didSet {
+            let cleaned = AppSettings.projectRootsInsideHome(projectRoots, home: home)
+            if cleaned != projectRoots {
+                projectRoots = cleaned
+                return
+            }
+            defaults.set(projectRoots, forKey: "projectRoots")
+        }
+    }
+    /// A project not touched for this many days counts as old (1 to 365).
+    var oldProjectDays: Int {
+        didSet {
+            let clamped = min(max(oldProjectDays, 1), 365)
+            if clamped != oldProjectDays {
+                oldProjectDays = clamped
+                return
+            }
+            defaults.set(oldProjectDays, forKey: "oldProjectDays")
+        }
+    }
+    /// Project folders removed from Space go to the Trash instead of being deleted at once.
+    var projectFoldersToTrash: Bool {
+        didSet { defaults.set(projectFoldersToTrash, forKey: "projectFoldersToTrash") }
+    }
+    /// The kinds of dependency and build folders Space looks for in projects.
+    var dependencyKinds: Set<DependencyKind> {
+        didSet { defaults.set(dependencyKinds.map { $0.rawValue }.sorted(), forKey: "dependencyKinds") }
+    }
+    /// Ids of the extra cache rows hidden in Space; empty shows all of them.
+    var hiddenCacheRows: Set<String> {
+        didSet { defaults.set(hiddenCacheRows.sorted(), forKey: "hiddenCacheRows") }
+    }
+
+    /// The usual project folders that exist in this home folder, relative to it.
+    static func defaultProjectRoots(home: URL) -> [String] {
+        let names = ["Projects", "Developer", "Cursor", "Code", "src", "Documents", "Desktop"]
+        var existing: [String] = []
+        for name in names {
+            var isFolder: ObjCBool = false
+            let path = home.appendingPathComponent(name).path
+            if FileManager.default.fileExists(atPath: path, isDirectory: &isFolder), isFolder.boolValue {
+                existing.append(name)
+            }
+        }
+        return existing
+    }
+
+    /// Keeps only folders inside home, as paths relative to it. An absolute path inside home is made
+    /// relative; anything outside home, home itself, paths with `..` and anything in ~/Library
+    /// (app data, iCloud Drive, cloud storage) are dropped.
+    static func projectRootsInsideHome(_ paths: [String], home: URL) -> [String] {
+        let homePath = home.standardizedFileURL.path
+        var result: [String] = []
+        for path in paths {
+            var relative = path
+            if path.hasPrefix("/") {
+                let standardized = URL(fileURLWithPath: path).standardizedFileURL.path
+                if !standardized.hasPrefix(homePath + "/") { continue }
+                relative = String(standardized.dropFirst(homePath.count + 1))
+            }
+            let parts = relative.split(separator: "/", omittingEmptySubsequences: true)
+            if parts.isEmpty || parts.contains("..") || parts.contains(".") { continue }
+            if parts[0] == "Library" { continue }
+            let joined = parts.joined(separator: "/")
+            if !result.contains(joined) { result.append(joined) }
+        }
+        return result
+    }
+
+    init(defaults: UserDefaults = .standard, home: URL = FileManager.default.homeDirectoryForCurrentUser) {
+        self.defaults = defaults
+        self.home = home
         defaults.register(defaults: [
             "bufferMinutes": 3,
             "framesPerSecond": 15,
@@ -144,6 +220,11 @@ final class AppSettings {
             "keepCrashClipsDays": 7,
             "offerCrashReports": true,
             "maxCapturesGB": 0,
+            "projectRoots": AppSettings.defaultProjectRoots(home: home),
+            "oldProjectDays": 30,
+            "projectFoldersToTrash": true,
+            "dependencyKinds": DependencyKind.allCases.map { $0.rawValue },
+            "hiddenCacheRows": [String](),
         ])
         bufferMinutes = defaults.integer(forKey: "bufferMinutes")
         framesPerSecond = defaults.integer(forKey: "framesPerSecond")
@@ -171,9 +252,22 @@ final class AppSettings {
         AppSettings.keepCrashClipsForEarlierUsers(defaults, domain: Bundle.main.bundleIdentifier ?? "")
         keepCrashClipsDays = defaults.integer(forKey: "keepCrashClipsDays")
         offerCrashReports = defaults.bool(forKey: "offerCrashReports")
+        projectRoots = AppSettings.projectRootsInsideHome(defaults.stringArray(forKey: "projectRoots") ?? [], home: home)
+        oldProjectDays = min(max(defaults.integer(forKey: "oldProjectDays"), 1), 365)
+        projectFoldersToTrash = defaults.bool(forKey: "projectFoldersToTrash")
+        var savedKinds: Set<DependencyKind> = []
+        for rawValue in defaults.stringArray(forKey: "dependencyKinds") ?? [] {
+            if let kind = DependencyKind(rawValue: rawValue) { savedKinds.insert(kind) }
+        }
+        dependencyKinds = savedKinds
+        hiddenCacheRows = Set(defaults.stringArray(forKey: "hiddenCacheRows") ?? [])
         reportFields = []
-        if let data = defaults.data(forKey: "reportFields"), let fields = try? JSONDecoder().decode([EnvironmentSnapshot.Field].self, from: data) {
-            reportFields = fields
+        if let data = defaults.data(forKey: "reportFields") {
+            do {
+                reportFields = try JSONDecoder().decode([EnvironmentSnapshot.Field].self, from: data)
+            } catch {
+                Log.error("settings: could not read the report fields, using none: \(error)")
+            }
         }
         hiddenEnvironmentFields = defaults.stringArray(forKey: "hiddenEnvironmentFields") ?? []
         renamedEnvironmentFields = defaults.dictionary(forKey: "renamedEnvironmentFields") as? [String: String] ?? [:]
@@ -201,7 +295,7 @@ final class AppSettings {
     /// Where saved files go. The default Desktop/Bugbear folder is made on first use.
     var outputFolder: URL {
         let folder = URL(fileURLWithPath: outputFolderPath, isDirectory: true)
-        try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        AppPaths.ensureFolder(folder)
         return folder
     }
 
@@ -216,6 +310,15 @@ final class AppSettings {
 }
 
 enum AppPaths {
+    /// Makes the folder when it is missing; a failure is logged, the caller goes on.
+    static func ensureFolder(_ url: URL) {
+        do {
+            try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+        } catch {
+            Log.error("paths: could not create \(url.path): \(error)")
+        }
+    }
+
     /// Set by `--readme-media` so the demo captures never mix with real ones.
     nonisolated(unsafe) static var supportOverride: URL?
 
@@ -225,25 +328,25 @@ enum AppPaths {
         if let override = supportOverride {
             folder = override
         }
-        try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        AppPaths.ensureFolder(folder)
         return folder
     }
 
     static var buffer: URL {
         let folder = support.appendingPathComponent("Buffer", isDirectory: true)
-        try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        AppPaths.ensureFolder(folder)
         return folder
     }
 
     static var captures: URL {
         let folder = support.appendingPathComponent("Captures", isDirectory: true)
-        try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        AppPaths.ensureFolder(folder)
         return folder
     }
 
     static var temporary: URL {
         let folder = FileManager.default.temporaryDirectory.appendingPathComponent(AppInfo.storageName, isDirectory: true)
-        try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        AppPaths.ensureFolder(folder)
         return folder
     }
 
@@ -257,7 +360,7 @@ enum AppPaths {
 
     /// Returns a URL in `folder` that does not exist yet.
     static func uniqueURL(in folder: URL, name: String, ext: String) -> URL {
-        try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        AppPaths.ensureFolder(folder)
         var candidate = folder.appendingPathComponent(name).appendingPathExtension(ext)
         var counter = 2
         while FileManager.default.fileExists(atPath: candidate.path) {

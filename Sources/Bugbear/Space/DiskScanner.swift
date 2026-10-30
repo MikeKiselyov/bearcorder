@@ -58,14 +58,6 @@ enum DiskScanner {
 
     private static let sizeKeys: Set<URLResourceKey> = [.totalFileAllocatedSizeKey, .fileAllocatedSizeKey, .isRegularFileKey]
 
-    static func allocatedSize(of url: URL) -> Int64 {
-        guard let values = try? url.resourceValues(forKeys: sizeKeys), values.isRegularFile == true else { return 0 }
-        if let total = values.totalFileAllocatedSize {
-            return Int64(total)
-        }
-        return Int64(values.fileAllocatedSize ?? 0)
-    }
-
     /// Bytes used by everything inside `folder`, leaving out the `excluded` paths.
     static func size(of folder: URL, excluding excluded: Set<String> = []) -> Int64 {
         guard let walker = FileManager.default.enumerator(at: folder, includingPropertiesForKeys: Array(sizeKeys), options: [], errorHandler: { _, _ in true }) else { return 0 }
@@ -75,7 +67,7 @@ enum DiskScanner {
                 walker.skipDescendants()
                 continue
             }
-            total += allocatedSize(of: url)
+            total += FileSizes.allocated(url)
         }
         return total
     }
@@ -88,23 +80,6 @@ enum DiskScanner {
             total += size(of: home.appendingPathComponent(folder), excluding: excluded)
         }
         return total
-    }
-
-    /// Deletes what is inside the category's folders (the folders themselves stay). Items macOS
-    /// protects are left as they are. Returns the bytes freed.
-    static func clean(_ category: CleanupCategory, home: URL) -> Int64 {
-        let before = size(of: category, home: home)
-        let excluded = excludedPaths(of: category, home: home)
-        let files = FileManager.default
-        for folder in category.folders {
-            let url = home.appendingPathComponent(folder)
-            guard let items = try? files.contentsOfDirectory(at: url, includingPropertiesForKeys: nil, options: []) else { continue }
-            for item in items where !excluded.contains(item.standardizedFileURL.path) && !isAppleFolder(item) {
-                try? files.removeItem(at: item)
-            }
-        }
-        let after = size(of: category, home: home)
-        return max(0, before - after)
     }
 
     private static func excludedPaths(of category: CleanupCategory, home: URL) -> Set<String> {
@@ -158,7 +133,7 @@ enum DiskScanner {
                     walker.skipDescendants()
                     continue
                 }
-                let bytes = allocatedSize(of: url)
+                let bytes = FileSizes.allocated(url)
                 if bytes == 0 { continue }
                 let relative = String(path.dropFirst(rootPath.count + 1))
                 var components: [String] = [root.name]
