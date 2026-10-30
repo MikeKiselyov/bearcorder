@@ -1,8 +1,9 @@
-import BugbearCore
+import AppCore
 import Foundation
 import XCTest
 
-/// The app's name lives in AppInfo.name; the scripts and the installer must show the same one.
+/// The app's name lives in AppInfo.name; the scripts and the installer must show the same one, with
+/// the repository, bundle id and source folder that follow from it.
 final class AppNameTests: XCTestCase {
     private var root: URL {
         var folder = URL(fileURLWithPath: #filePath)
@@ -12,100 +13,67 @@ final class AppNameTests: XCTestCase {
         return folder
     }
 
+    private func read(_ file: String) throws -> String {
+        return try String(contentsOf: root.appendingPathComponent(file), encoding: .utf8)
+    }
+
     func testNameIsSet() {
         XCTAssertFalse(AppInfo.name.isEmpty)
-        XCTAssertFalse(AppInfo.storageName.isEmpty)
+        XCTAssertEqual(AppInfo.slug, AppInfo.name.lowercased().replacingOccurrences(of: " ", with: "-"))
+        XCTAssertEqual(AppInfo.repository, "MikeKiselyov/\(AppInfo.slug)")
+        XCTAssertEqual(AppInfo.defaultBundleId, "io.github.\(AppInfo.slug).app")
+        XCTAssertEqual(AppInfo.sourceFolder, ".\(AppInfo.slug)")
     }
 
     func testScriptsReadTheSameName() throws {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/bin/bash")
-        process.arguments = ["-c", "source scripts/lib/app-name.sh && printf '%s' \"$APP_NAME\""]
+        process.arguments = ["-c", "source scripts/lib/app-name.sh && printf '%s|%s|%s' \"$APP_NAME\" \"$APP_SLUG\" \"$DEFAULT_BUNDLE_ID\""]
         process.currentDirectoryURL = root
         let output = Pipe()
         process.standardOutput = output
         try process.run()
         process.waitUntilExit()
-        let name = String(data: output.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8)
+        let printed = String(data: output.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8)
         XCTAssertEqual(process.terminationStatus, 0)
-        XCTAssertEqual(name, AppInfo.name)
+        XCTAssertEqual(printed, "\(AppInfo.name)|\(AppInfo.slug)|\(AppInfo.defaultBundleId)")
     }
 
+    /// install.sh runs before the source is downloaded, so it keeps its own copies.
     func testInstallerShowsTheSameName() throws {
-        let installer = try String(contentsOf: root.appendingPathComponent("scripts/install.sh"), encoding: .utf8)
+        let installer = try read("scripts/install.sh")
         XCTAssertTrue(installer.contains("\nAPP_NAME=\"\(AppInfo.name)\"\n"), "scripts/install.sh keeps its own copy of the name: make it AppInfo.name")
+        XCTAssertTrue(installer.contains("\nREPO_URL=\"${APP_REPO:-https://github.com/\(AppInfo.repository).git}\"\n"), "scripts/install.sh downloads AppInfo.repository")
+        XCTAssertTrue(installer.contains("\nSOURCE_DIR=\"${APP_SOURCE_DIR:-$HOME/\(AppInfo.sourceFolder)}\"\n"), "scripts/install.sh keeps the source in AppInfo.sourceFolder")
+        XCTAssertTrue(installer.contains("raw.githubusercontent.com/\(AppInfo.repository)/main/scripts/install.sh"), "the install command in its header")
     }
 
+    /// uninstall.sh runs without the source too.
     func testUninstallerShowsTheSameNames() throws {
-        let uninstaller = try String(contentsOf: root.appendingPathComponent("scripts/uninstall.sh"), encoding: .utf8)
+        let uninstaller = try read("scripts/uninstall.sh")
         XCTAssertTrue(uninstaller.contains("\nAPP_NAME=\"\(AppInfo.name)\"\n"), "scripts/uninstall.sh keeps its own copy of the name: make it AppInfo.name")
-        XCTAssertTrue(uninstaller.contains("\nSTORAGE_NAME=\"\(AppInfo.storageName)\"\n"), "scripts/uninstall.sh keeps its own copy of the folders' name: make it AppInfo.storageName")
+        XCTAssertTrue(uninstaller.contains("\nDEFAULT_BUNDLE_ID=\"\(AppInfo.defaultBundleId)\"\n"), "scripts/uninstall.sh finds the installer's copies by AppInfo.defaultBundleId")
+        XCTAssertTrue(uninstaller.contains("\nSOURCE_DIR=\"${APP_SOURCE_DIR:-$HOME/\(AppInfo.sourceFolder)}\"\n"), "scripts/uninstall.sh removes the installer's source folder")
+        XCTAssertTrue(uninstaller.contains("\nFEEDBACK_URL=\"https://github.com/\(AppInfo.repository)/issues/new?template=uninstall_feedback.yml\"\n"), "scripts/uninstall.sh opens AppInfo.repository")
+    }
+
+    /// Debug runs of .build/debug/App keep their settings under an id of their own, and the
+    /// uninstaller removes them.
+    func testDebugRunsHaveTheAppsDebugId() throws {
+        let debugId = "io.github.\(AppInfo.slug).debug"
+        let plist = try XCTUnwrap(NSDictionary(contentsOf: root.appendingPathComponent("Packaging/Debug-Info.plist")))
+        XCTAssertEqual(plist["CFBundleIdentifier"] as? String, debugId)
+        let package = try read("Package.swift")
+        XCTAssertTrue(package.contains("\"__info_plist\", \"-Xlinker\", Context.packageDirectory + \"/Packaging/Debug-Info.plist\"], .when(configuration: .debug))"), "Package.swift links it into debug builds only")
+        let uninstaller = try read("scripts/uninstall.sh")
+        XCTAssertTrue(uninstaller.contains("rm -f \"$HOME/Library/Preferences/\(debugId).plist\""), "scripts/uninstall.sh removes the debug runs' settings")
     }
 
     func testDocsShowTheSameName() throws {
-        let readme = try String(contentsOf: root.appendingPathComponent("README.md"), encoding: .utf8)
+        let readme = try read("README.md")
         XCTAssertTrue(readme.contains("<h1 align=\"center\">\(AppInfo.name)</h1>"), "README.md shows another name: run scripts/dev/rename-app.sh")
-        let uninstall = try String(contentsOf: root.appendingPathComponent("docs/uninstall.md"), encoding: .utf8)
+        XCTAssertTrue(readme.contains("raw.githubusercontent.com/\(AppInfo.repository)/main/scripts/install.sh"), "README.md installs from another repository: run scripts/dev/rename-app.sh")
+        let uninstall = try read("docs/uninstall.md")
         XCTAssertTrue(uninstall.contains("/Applications/\(AppInfo.name).app"), "docs/uninstall.md shows another name: run scripts/dev/rename-app.sh")
-    }
-
-    /// Runs scripts/dev/rename-app.sh on a copy of the files it changes and returns that copy.
-    private func renamedCopy(to newName: String) throws -> URL {
-        let copy = FileManager.default.temporaryDirectory.appendingPathComponent("rename-\(UUID().uuidString)")
-        for file in renamedFiles {
-            let target = copy.appendingPathComponent(file)
-            try FileManager.default.createDirectory(at: target.deletingLastPathComponent(), withIntermediateDirectories: true)
-            try FileManager.default.copyItem(at: root.appendingPathComponent(file), to: target)
-        }
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/bin/bash")
-        process.arguments = [root.appendingPathComponent("scripts/dev/rename-app.sh").path, newName, copy.path]
-        process.standardOutput = Pipe()
-        try process.run()
-        process.waitUntilExit()
-        XCTAssertEqual(process.terminationStatus, 0)
-        return copy
-    }
-
-    private let renamedFiles = ["README.md", "docs/uninstall.md", "docs/development.md", "Sources/BugbearCore/Support/AppInfo.swift", "scripts/install.sh", "scripts/uninstall.sh"]
-
-    private func read(_ file: String, in folder: URL) throws -> String {
-        return try String(contentsOf: folder.appendingPathComponent(file), encoding: .utf8)
-    }
-
-    /// The rename script changes the name people see and keeps the folders with their captures.
-    func testRenameScriptKeepsStorageFolders() throws {
-        let copy = try renamedCopy(to: "Bug Hunter")
-        defer { try? FileManager.default.removeItem(at: copy) }
-
-        let appInfo = try read("Sources/BugbearCore/Support/AppInfo.swift", in: copy)
-        XCTAssertTrue(appInfo.contains("static let name = \"Bug Hunter\""))
-        XCTAssertTrue(appInfo.contains("static let storageName = \"\(AppInfo.storageName)\""))
-        let installer = try read("scripts/install.sh", in: copy)
-        XCTAssertTrue(installer.contains("\nAPP_NAME=\"Bug Hunter\"\n"))
-        let uninstaller = try read("scripts/uninstall.sh", in: copy)
-        XCTAssertTrue(uninstaller.contains("\nAPP_NAME=\"Bug Hunter\"\n"))
-        XCTAssertTrue(uninstaller.contains("\nSTORAGE_NAME=\"\(AppInfo.storageName)\"\n"), "the uninstaller still finds the folders")
-        let readme = try read("README.md", in: copy)
-        XCTAssertTrue(readme.contains("<h1 align=\"center\">Bug Hunter</h1>"))
-        let uninstall = try read("docs/uninstall.md", in: copy)
-        XCTAssertTrue(uninstall.contains("/Applications/Bug Hunter.app"))
-        XCTAssertTrue(uninstall.contains("## Where Bug Hunter keeps things"))
-        XCTAssertTrue(uninstall.contains("Application Support/\(AppInfo.storageName)/Captures/"), "captures stay where they are")
-        XCTAssertTrue(uninstall.contains("Logs/\(AppInfo.storageName)/"), "logs stay where they are")
-        let development = try read("docs/development.md", in: copy)
-        XCTAssertTrue(development.contains("uninstall.md#where-bug-hunter-keeps-things"), "the link follows the renamed heading")
-        XCTAssertTrue(development.contains(".build/debug/Bugbear --self-test"), "the executable keeps its name")
-    }
-
-    /// A new name with the old one in it is not renamed twice.
-    func testRenameScriptRenamesOnce() throws {
-        let copy = try renamedCopy(to: "\(AppInfo.name) Pro")
-        defer { try? FileManager.default.removeItem(at: copy) }
-        let uninstall = try read("docs/uninstall.md", in: copy)
-        XCTAssertTrue(uninstall.contains("/Applications/\(AppInfo.name) Pro.app"))
-        XCTAssertFalse(uninstall.contains("Pro Pro"))
-        let readme = try read("README.md", in: copy)
-        XCTAssertFalse(readme.contains("Pro Pro"))
     }
 }

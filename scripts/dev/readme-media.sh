@@ -17,7 +17,7 @@ command -v ffmpeg >/dev/null || { echo "ffmpeg is needed: brew install ffmpeg"; 
 echo "==> rendering"
 swift build >/dev/null
 # English sizes and dates (1.5 GB, not 1,5 GB) whatever the Mac's region is.
-"$(swift build --show-bin-path)/Bugbear" --readme-media "$WORK" -AppleLocale en_US -AppleLanguages "(en)" | tail -1
+"$(swift build --show-bin-path)/App" --readme-media "$WORK" -AppleLocale en_US -AppleLanguages "(en)" | tail -1
 mkdir -p "$OUT"
 
 # A GIF from numbered frames. Every frame shows for $3 seconds, the last one for $4.

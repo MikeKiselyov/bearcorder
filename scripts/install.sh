@@ -1,20 +1,20 @@
 #!/bin/bash
-# One-command install: gets the source, builds Bugbear on this Mac and puts it in Applications.
+# One-command install: gets the source, builds the app on this Mac and puts it in Applications.
 # Run it again any time to update.
 #
-#   curl -fsSL https://raw.githubusercontent.com/MikeKiselyov/bugbear-app/main/scripts/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/MikeKiselyov/bearcorder/main/scripts/install.sh | bash
 #
 # Options (environment variables):
-#   BUGBEAR_REPO        git URL to install from (default: the main GitHub repository)
-#   BUGBEAR_SOURCE_DIR  where the source is kept (default: ~/.bugbear)
-#   NO_COLOR            plain text, no colors or animation
+#   APP_REPO        git URL to install from (default: the main GitHub repository)
+#   APP_SOURCE_DIR  where the source is kept (default: ~/.bearcorder)
+#   NO_COLOR        plain text, no colors or animation
 set -euo pipefail
 
-# The name people see. This file runs before the source is downloaded, so it keeps its own copy;
-# a unit test checks it matches AppInfo.name.
-APP_NAME="Bugbear"
-REPO_URL="${BUGBEAR_REPO:-https://github.com/MikeKiselyov/bugbear-app.git}"
-SOURCE_DIR="${BUGBEAR_SOURCE_DIR:-$HOME/.bugbear}"
+# The name people see, the repository and the source folder. This file runs before the source is
+# downloaded, so it keeps its own copies; a unit test checks they match AppInfo.
+APP_NAME="Bearcorder"
+REPO_URL="${APP_REPO:-https://github.com/MikeKiselyov/bearcorder.git}"
+SOURCE_DIR="${APP_SOURCE_DIR:-$HOME/.bearcorder}"
 
 # Colors and the spinner only in a real terminal.
 FANCY=0
@@ -62,7 +62,7 @@ logo() {
         printf '%s\n' "$line"
     done
     echo
-    printf '   %sBug%sbear%s\n' "$BOLD$H" "$C" "$N"
+    printf '   %s%s%s\n' "$BOLD$H" "$APP_NAME" "$N"
     printf '   %sScreenshots, recordings and a dev toolbox%s\n' "$DIM" "$N"
     printf '   %sfor people who build and test software.%s\n' "$DIM" "$N"
     echo

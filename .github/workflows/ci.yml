@@ -85,22 +85,22 @@ jobs:
         run: |
           swift build
           mkdir -p build/self-test
-          .build/debug/Bugbear --self-test build/self-test
+          .build/debug/App --self-test build/self-test
       - name: Every control has a check
         run: python3 -I scripts/check/control-coverage.py
       - name: A release has no automation
         run: scripts/check/no-automation.sh
       - name: The app bundle (resources, Info.plist, signature)
         env:
-          BUGBEAR_SIGN_IDENTITY: "-"
+          APP_SIGN_IDENTITY: "-"
         run: |
           scripts/build-app.sh
           source scripts/lib/app-name.sh
           app="build/$APP_NAME.app"
-          test -f "$app/Contents/Resources/Bugbear_Bugbear.bundle/en.lproj/menubar.strings"
-          test -d "$app/Contents/Resources/Bugbear_Bugbear.bundle/WhatsNew"
+          test -f "$app/Contents/Resources/App_App.bundle/en.lproj/menubar.strings"
+          test -d "$app/Contents/Resources/App_App.bundle/WhatsNew"
           plutil -lint "$app/Contents/Info.plist"
-          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$app/Contents/Info.plist")" = "$("$app/Contents/MacOS/Bugbear" --version)"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$app/Contents/Info.plist")" = "$("$app/Contents/MacOS/$APP_NAME" --version)"
           codesign --verify --strict "$app"
       - name: Self-test pictures
         if: failure()
@@ -128,12 +128,12 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          version=$(.build/debug/Bugbear --version)
+          version=$(.build/debug/App --version)
           if git rev-parse --verify --quiet "refs/tags/v$version" >/dev/null; then
             echo "v$version is already released."
             exit 0
           fi
           mkdir -p build
-          .build/debug/Bugbear --release-notes > build/release-notes.md
+          .build/debug/App --release-notes > build/release-notes.md
           source scripts/lib/app-name.sh
           gh release create "v$version" --target "$GITHUB_SHA" --title "$APP_NAME $version" --notes-file build/release-notes.md

@@ -1,5 +1,5 @@
 import XCTest
-@testable import BugbearCore
+@testable import AppCore
 
 final class FeedbackReportTests: XCTestCase {
     private func queryValue(_ url: URL, _ name: String) -> String? {
@@ -11,9 +11,9 @@ final class FeedbackReportTests: XCTestCase {
     }
 
     func testRedactHidesHomeAndUserName() {
-        let text = "Saved /Users/janedoe/Desktop/Bugbear/a.png for janedoe"
+        let text = "Saved /Users/janedoe/Desktop/Sample/a.png for janedoe"
         let redacted = FeedbackReport.redact(text, homePath: "/Users/janedoe", userName: "janedoe")
-        XCTAssertEqual(redacted, "Saved ~/Desktop/Bugbear/a.png for <user>")
+        XCTAssertEqual(redacted, "Saved ~/Desktop/Sample/a.png for <user>")
     }
 
     func testRedactMatchesWholeNamesOnly() {
@@ -48,7 +48,7 @@ final class FeedbackReportTests: XCTestCase {
             kind: .problem,
             title: "Clip is black",
             details: "Saved the last minute, the clip is black & silent + short",
-            environment: [EnvironmentSnapshot.Field(name: "Bugbear", value: "0.10.0")],
+            environment: [EnvironmentSnapshot.Field(name: "Sample", value: "0.10.0")],
             logLines: ["line one", "line two"]
         )
         let url = try XCTUnwrap(report.issueURL(repository: "owner/repo"))
@@ -61,7 +61,7 @@ final class FeedbackReportTests: XCTestCase {
         // "&" and "+" must survive as text, not split the query or turn into spaces.
         XCTAssertEqual(queryValue(url, "description"), "Saved the last minute, the clip is black & silent + short")
         XCTAssertTrue(url.absoluteString.contains("%2B"))
-        XCTAssertEqual(queryValue(url, "environment"), "Bugbear: 0.10.0")
+        XCTAssertEqual(queryValue(url, "environment"), "Sample: 0.10.0")
         XCTAssertEqual(queryValue(url, "logs"), "line one\nline two")
     }
 
@@ -135,12 +135,12 @@ final class FeedbackReportTests: XCTestCase {
     }
 
     func testCrashSummaryReadsTheReport() throws {
-        let header = "{\"app_name\":\"Bugbear\",\"bug_type\":\"309\"}"
-        let body = "{\"exception\":{\"type\":\"EXC_BAD_ACCESS\",\"signal\":\"SIGSEGV\"},\"termination\":{\"indicator\":\"Segmentation fault: 11\"},\"asi\":{\"libswiftCore.dylib\":[\"Fatal error: boom\"]},\"faultingThread\":1,\"usedImages\":[{\"name\":\"Bugbear\"},{\"name\":\"AppKit\"}],\"threads\":[{\"frames\":[{\"imageIndex\":1,\"symbol\":\"idle\"}]},{\"frames\":[{\"imageIndex\":0,\"symbol\":\"Editor.draw()\"},{\"imageIndex\":1,\"symbol\":\"-[NSView display]\"},{\"imageIndex\":7}]}]}"
+        let header = "{\"app_name\":\"Sample\",\"bug_type\":\"309\"}"
+        let body = "{\"exception\":{\"type\":\"EXC_BAD_ACCESS\",\"signal\":\"SIGSEGV\"},\"termination\":{\"indicator\":\"Segmentation fault: 11\"},\"asi\":{\"libswiftCore.dylib\":[\"Fatal error: boom\"]},\"faultingThread\":1,\"usedImages\":[{\"name\":\"Sample\"},{\"name\":\"AppKit\"}],\"threads\":[{\"frames\":[{\"imageIndex\":1,\"symbol\":\"idle\"}]},{\"frames\":[{\"imageIndex\":0,\"symbol\":\"Editor.draw()\"},{\"imageIndex\":1,\"symbol\":\"-[NSView display]\"},{\"imageIndex\":7}]}]}"
         let summary = try XCTUnwrap(CrashSummary.parse(reportText: header + "\n" + body))
         XCTAssertEqual(summary.reason, "EXC_BAD_ACCESS (SIGSEGV) - Segmentation fault: 11")
         XCTAssertEqual(summary.message, "Fatal error: boom")
-        XCTAssertEqual(summary.frames, ["Bugbear  Editor.draw()", "AppKit  -[NSView display]", "???  ?"])
+        XCTAssertEqual(summary.frames, ["Sample  Editor.draw()", "AppKit  -[NSView display]", "???  ?"])
         XCTAssertTrue(summary.text.contains("Crashed thread:"))
     }
 

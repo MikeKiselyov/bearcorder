@@ -1,5 +1,5 @@
 import XCTest
-@testable import BugbearCore
+@testable import AppCore
 
 final class ReleaseVersionTests: XCTestCase {
     /// The real catalog: newest first, ids 1, 2, 3..., each version higher than the one before.
@@ -62,7 +62,7 @@ final class ReleaseVersionTests: XCTestCase {
     }
 
     func testCatalogURL() {
-        XCTAssertEqual(UpdateInfo.catalogURL(repository: "a/b", branch: "main")?.absoluteString, "https://raw.githubusercontent.com/a/b/main/Sources/BugbearCore/Support/WhatsNewCatalog.swift")
+        XCTAssertEqual(UpdateInfo.catalogURL(repository: "a/b", branch: "main")?.absoluteString, "https://raw.githubusercontent.com/a/b/main/Sources/AppCore/Support/WhatsNewCatalog.swift")
         XCTAssertNil(UpdateInfo.catalogURL(repository: "", branch: "main"))
     }
 
@@ -70,9 +70,9 @@ final class ReleaseVersionTests: XCTestCase {
     // answered 404 once the branch was deleted after the merge.
     func testUpdatesAlwaysComeFromMain() {
         let catalog = UpdateInfo.updateCatalogURL(repository: FeedbackReport.defaultRepository)
-        XCTAssertEqual(catalog?.absoluteString, "https://raw.githubusercontent.com/MikeKiselyov/bugbear-app/main/Sources/BugbearCore/Support/WhatsNewCatalog.swift")
+        XCTAssertEqual(catalog?.absoluteString, "https://raw.githubusercontent.com/\(AppInfo.repository)/main/Sources/AppCore/Support/WhatsNewCatalog.swift")
         let compare = UpdateInfo.updateCompareURL(repository: FeedbackReport.defaultRepository, builtCommit: "abc1234")
-        XCTAssertEqual(compare?.absoluteString, "https://api.github.com/repos/MikeKiselyov/bugbear-app/compare/abc1234...main")
+        XCTAssertEqual(compare?.absoluteString, "https://api.github.com/repos/\(AppInfo.repository)/compare/abc1234...main")
         XCTAssertNil(UpdateInfo.updateCompareURL(repository: FeedbackReport.defaultRepository, builtCommit: ""))
     }
 

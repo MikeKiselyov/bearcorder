@@ -12,7 +12,7 @@ source "$(dirname "$0")/../lib/common.sh"
 
 # Long enough that Swift keeps them as C strings, where `strings` sees them.
 MARKERS=(
-    "Bugbear.automation"
+    "automation: could not write result"
     "automationEnabled"
     "README media written to"
     "Snapshots written to"
@@ -41,10 +41,10 @@ build() {
         die "swift build $* failed"
     fi
 }
-build -c release --product Bugbear --scratch-path "$SCRATCH"
-release="$(swift build -c release --scratch-path "$SCRATCH" --show-bin-path)/Bugbear"
-build --product Bugbear
-debug="$(swift build --show-bin-path)/Bugbear"
+build -c release --product App --scratch-path "$SCRATCH"
+release="$(swift build -c release --scratch-path "$SCRATCH" --show-bin-path)/App"
+build --product App
+debug="$(swift build --show-bin-path)/App"
 
 in_debug="$(markers_in "$debug")"
 if [ "$(echo "$in_debug" | grep -c .)" != "${#MARKERS[@]}" ]; then

@@ -1,4 +1,4 @@
-# Everything Bugbear does
+# Everything Bearcorder does
 
 A full list in plain words, for testers, developers, designers and support. The short version is in
 the [README](../README.md). Everything here runs on your Mac; nothing is uploaded anywhere.
@@ -24,7 +24,7 @@ the [README](../README.md). Everything here runs on your Mac; nothing is uploade
   <img src="images/menu.gif" width="300" alt="The menu bar panel and its tabs">
 </p>
 
-Bugbear lives in the menu bar as a bear with a magnifying glass. Click it, or press `⌥⇧B` from any
+Bearcorder lives in the menu bar as a bear with a magnifying glass. Click it, or press `⌥⇧B` from any
 app, to open the menu. Its tabs:
 
 - **Capture**: save the last 30 seconds, 1 minute or 3 minutes of the screen, and every kind of
@@ -39,12 +39,12 @@ At the bottom of the Capture tab, **Environment** shows what goes into every rep
 the display, the app in front, its page, language, light or dark, time. **Edit** next to it opens the
 report fields in Settings. If every field is turned off, it says so and offers to choose fields.
 
-The bear stays visible on a Mac with a notch: if macOS hides it behind the notch, Bugbear moves it
+The bear stays visible on a Mac with a notch: if macOS hides it behind the notch, Bearcorder moves it
 next to the system icons.
 
 ## Catch a bug that already happened
 
-Bugbear keeps the last 1 to 5 minutes of the screen on disk, all the time, and deletes older parts as
+Bearcorder keeps the last 1 to 5 minutes of the screen on disk, all the time, and deletes older parts as
 it goes. The bug you could not reproduce is already recorded:
 
 <p align="center">
@@ -82,7 +82,7 @@ it goes. The bug you could not reproduce is already recorded:
 | `⌥⇧4` | an area you pick |
 | `⌥⇧5` | a window |
 | menu | the full screen, or all displays in one picture |
-| menu | a **scrolling screenshot**: Bugbear scrolls the area and glues one long picture |
+| menu | a **scrolling screenshot**: Bearcorder scrolls the area and glues one long picture |
 | `⌥⇧O` | copies the text in an area you pick |
 
 A new screenshot is on the clipboard at once, ready for `⌘V` in a chat or ticket, and the editor
@@ -288,8 +288,11 @@ what goes and press the button at the bottom, for example "Move 2 folders, 1.2 G
 Caches are deleted for good, since the tools download or build them again; project folders go to the
 Trash. It asks once more, and every item is checked again right before it is removed. Something that
 changed since the scan or a link is not removed, and the list says why. Folders tracked by git are
-left out of the list. Maven rows start unticked: libraries you installed with mvn install may not
-come back.
+left out of the list, and so are folders that are a git repository of their own. When git cannot
+answer (no developer tools, a repository it does not trust), the folder is left out too. Maven rows
+start unticked: libraries you installed with mvn install may not come back. In App caches, JetBrains
+IDEs' caches are not listed (indexes and local history), and Poetry's row starts unticked (it holds
+its virtual environments).
 
 <p align="center">
   <img src="images/space-review.png" width="720" alt="The Review list of App caches: some rows ticked and the delete button at the bottom">
@@ -297,16 +300,20 @@ come back.
 
 **Find projects** in the Disk Space window searches your project folders for node_modules, Python
 environments, Pods, Rust and Swift build folders and Gradle folders. Projects not touched for 30 days are
-ticked, the others are not. Ticked folders go to the Trash, so you can put them back. **Delete … for
-good** after a removal asks once more, then deletes only what Bugbear moved to the Trash, not the
-rest of it.
+ticked, the others are not; a project too big to date is listed unticked. Ticked folders go to the
+Trash, so you can put them back. **Delete … for good** after a removal asks once more, then deletes
+only what Bearcorder moved to the Trash, not the rest of it. A folder whose own list of files changed in
+the Trash since then (something put into it or renamed in it) is kept; changes deeper inside are not
+looked at.
 
 <p align="center">
   <img src="images/space-window.png" width="720" alt="The Disk Space window with the folders Find projects found">
 </p>
 
 The Disk Space window also walks down the biggest folders and lists files over 50 MB, with Show in
-Finder and Move to Trash.
+Finder and Move to Trash. Files inside apps and packages (the Photos library, virtual machines such as
+.utm, .pvm or .vmwarevm, disk bundles such as .sparsebundle) are not listed; the folders view still
+shows how much they take. Move to Trash takes only the file the scan saw.
 
 The **Project clean-up** group in Settings → Storage sets the folders to search (inside your home
 folder, not in Library), after how many days a project counts as old, whether folders go to the Trash or are deleted
@@ -325,7 +332,7 @@ Settings has pages in a sidebar:
 - **Permissions**: see below.
 - **Buffer and recording**: how long the buffer is, frame rates, displays, sound, clicks and keys,
   showing what you type.
-- **Bug reports**: Markdown or Jira; every field Bugbear fills in, with a switch and your own name
+- **Bug reports**: Markdown or Jira; every field Bearcorder fills in, with a switch and your own name
   for it; your own fields like stand, build or test account; crash clips and system logs. Open
   captures follow a change at once.
 - **Storage**: space used, automatic clean-up and project clean-up.
@@ -338,7 +345,7 @@ Settings has pages in a sidebar:
   <img src="images/settings-permissions.png" width="420" alt="Settings: Permissions">
 </p>
 
-The Permissions page lists what Bugbear may use, whether it is allowed, and what it is for. **Allow…**
+The Permissions page lists what Bearcorder may use, whether it is allowed, and what it is for. **Allow…**
 asks macOS for a missing one; for Screen Recording and Accessibility macOS shows its window only the
 first time, so pressing Allow… again opens System Settings instead. **Open…** shows an allowed one in
 System Settings.
@@ -351,7 +358,7 @@ System Settings.
 | Camera | the camera bubble |
 | Browsers (Automation) | the page address in reports |
 
-After allowing Screen Recording, Quit & Reopen in System Settings opens Bugbear again by itself.
+After allowing Screen Recording, Quit & Reopen in System Settings opens Bearcorder again by itself.
 
 ## Updates and feedback
 
@@ -359,7 +366,7 @@ After allowing Screen Recording, Quit & Reopen in System Settings opens Bugbear 
   <img src="images/feedback-problem.png" width="420" alt="Report a problem">
 </p>
 
-- Bugbear checks for a new version every 6 hours and shows a badge in the menu. Update now rebuilds
+- Bearcorder checks for a new version every 6 hours and shows a badge in the menu. Update now rebuilds
   it on your Mac and restarts it; What's new shows what changed, with pictures.
 - **Report a problem** or **suggest a feature** from the menu: it opens a filled-in GitHub issue,
   and can attach a zip of the logs.

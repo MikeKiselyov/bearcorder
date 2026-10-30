@@ -1,11 +1,11 @@
 name: Report a problem
-description: Something in Bugbear does not work as it should.
+description: Something in Bearcorder does not work as it should.
 labels: ["bug"]
 body:
   - type: markdown
     attributes:
       value: |
-        Thanks for the report. The quickest way is **Report a problem** in Bugbear's menu: it fills in the version, macOS and logs for you.
+        Thanks for the report. The quickest way is **Report a problem** in Bearcorder's menu: it fills in the version, macOS and logs for you.
   - type: textarea
     id: description
     attributes:
@@ -17,7 +17,7 @@ body:
     id: environment
     attributes:
       label: Environment
-      description: Bugbear version, macOS version and Mac model.
+      description: Bearcorder version, macOS version and Mac model.
       render: text
     validations:
       required: true
@@ -25,11 +25,11 @@ body:
     id: crash
     attributes:
       label: Crash or error
-      description: Filled in by Bugbear when it quit unexpectedly or hit an error.
+      description: Filled in by Bearcorder when it quit unexpectedly or hit an error.
       render: text
   - type: textarea
     id: logs
     attributes:
       label: Log
-      description: The last lines of ~/Library/Logs/Bugbear/bugbear.log. Drag the zip Bugbear made into this issue for the full logs.
+      description: The last lines of ~/Library/Logs/Bearcorder/Bearcorder.log. Drag the zip Bearcorder made into this issue for the full logs.
       render: text

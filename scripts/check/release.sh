@@ -10,7 +10,7 @@ set -euo pipefail
 # shellcheck source=../lib/common.sh
 source "$(dirname "$0")/../lib/common.sh"
 BASE="${1:?usage: scripts/check/release.sh <base ref>}"
-CATALOG="Sources/BugbearCore/Support/WhatsNewCatalog.swift"
+CATALOG="Sources/AppCore/Support/WhatsNewCatalog.swift"
 
 # latest_version reads the top "version:" from catalog source on stdin; 0.0.0 when there is none.
 latest_version() {
@@ -27,7 +27,12 @@ if [ -z "$app_changes" ]; then
 fi
 
 new_source=$(cat "$CATALOG" 2>/dev/null || true)
-old_source=$(git show "$merge_base:$CATALOG" 2>/dev/null || true)
+# The catalog where it was at the base: a branch that moves it still compares with the old one.
+old_catalog=$(git ls-tree -r --name-only "$merge_base" | grep '/WhatsNewCatalog\.swift$' | head -1 || true)
+old_source=""
+if [ -n "$old_catalog" ]; then
+    old_source=$(git show "$merge_base:$old_catalog" 2>/dev/null || true)
+fi
 new_version=$(echo "$new_source" | latest_version)
 old_version=$(echo "$old_source" | latest_version)
 echo "Version on $BASE: $old_version, in this branch: $new_version"

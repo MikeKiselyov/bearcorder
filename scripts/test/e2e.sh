@@ -3,7 +3,7 @@
 #
 #   scripts/test/e2e.sh            build, launch, run every scenario, print PASS/FAIL
 #
-# Needs Screen Recording permission for Bugbear (granted once in System Settings).
+# Needs Screen Recording permission for the app (granted once in System Settings).
 # Turns on the local automation hook for the run and turns it off afterwards.
 # The microphone and camera are skipped: they would show permission prompts.
 set -uo pipefail
@@ -16,11 +16,17 @@ if [ -f "$ROOT/.env" ]; then
     source "$ROOT/.env"
     set +a
 fi
-BUNDLE_ID="${BUGBEAR_BUNDLE_ID:-io.github.bugbear.app}"
+# DEFAULT_BUNDLE_ID for a .env without APP_BUNDLE_ID.
+# shellcheck disable=SC1091
+source "$ROOT/scripts/lib/app-name.sh"
+BUNDLE_ID="${APP_BUNDLE_ID:-$DEFAULT_BUNDLE_ID}"
 # shellcheck disable=SC1091
 source "$ROOT/scripts/test/lib/test-app.sh"
-LOG="$HOME/Library/Logs/Bugbear/bugbear.log"
-R=scripts/dev/bugbear-run.sh
+LOG="$HOME/Library/Logs/$APP_NAME/$APP_NAME.log"
+# Reads only this run's lines of the person's log (run_log), never deletes it.
+# shellcheck disable=SC1091
+source "$ROOT/scripts/test/lib/run-log.sh"
+R=scripts/dev/app-run.sh
 # shellcheck disable=SC1091
 source "$ROOT/scripts/test/lib/e2e-helpers.sh"
 FAILURES=0
@@ -29,12 +35,12 @@ PASSES=0
 pass() { echo "PASS  $1"; PASSES=$((PASSES + 1)); }
 fail() { echo "FAIL  $1 ${2:-}"; FAILURES=$((FAILURES + 1)); }
 
-# Sends a command and prints its result, read from the app's result file (scripts/dev/bugbear-run.sh);
+# Sends a command and prints its result, read from the app's result file (scripts/dev/app-run.sh);
 # "TIMEOUT" when no result came within the timeout.
 run() {
     local command="$1"
     local timeout="${2:-60}"
-    scripts/dev/bugbear-run.sh "$command" "$timeout" || true
+    scripts/dev/app-run.sh "$command" "$timeout" || true
 }
 
 field() { echo "$1" | tr ' ' '\n' | grep "^$2=" | head -1 | cut -d= -f2-; }
@@ -50,8 +56,8 @@ at_least() { python3 -c "import sys; sys.exit(0 if float('$1') >= float('$2') el
 
 echo "==> build"
 build_test_app || exit 1
-# Quit the person's Bugbear and keep a copy of their settings before any test setting is written.
-quit_running_bugbear
+# Quit the person's copy of the app and keep a copy of their settings before any test setting is written.
+quit_running_app
 defaults write "$BUNDLE_ID" automationEnabled -bool true
 # Editor choices made by the tests go to a store of their own (EditorMemory); start it empty.
 defaults delete "$BUNDLE_ID.tests" 2>/dev/null
@@ -68,7 +74,8 @@ python3 -m http.server 8765 --bind 127.0.0.1 --directory "$FEED_DIR" >/dev/null 
 FEED_PID=$!
 defaults write "$BUNDLE_ID" updateCompareURL "http://127.0.0.1:8765/compare.json"
 defaults write "$BUNDLE_ID" updateCatalogURL "http://127.0.0.1:8765/catalog.swift"
-rm -f "$LOG"
+log_lines_before=$(log_line_count)
+log_first_before=$(log_first_line)
 open "$TEST_APP"
 echo "==> waiting 20 s with a mostly static screen"
 # Real time: the buffer fills while the screen stays almost still.
@@ -94,7 +101,7 @@ else
 fi
 # Negative check: a restart of the buffer after the editor opens would show in the log within this time.
 sleep 3
-if grep -q "buffer\[.*\] stopping" "$LOG"; then fail "buffer keeps running after the editor opens" "it restarted"; else pass "buffer keeps running after the editor opens"; fi
+if run_log | grep "buffer\[.*\] stopping" >/dev/null; then fail "buffer keeps running after the editor opens" "it restarted"; else pass "buffer keeps running after the editor opens"; fi
 run close-windows >/dev/null
 
 # 3. Save the whole buffer: should be about as long as what the buffer holds.
@@ -224,7 +231,7 @@ if [ -n "$file" ] && [ -f "$file" ]; then
     duration=$(media_duration "$file")
     # The clip goes back to 5 s before the marker. The app logs how far back the marker was when the
     # save started; that has to match the test's own clock, and the clip has to match that.
-    marker_ago=$(grep "save reaches back to a marker" "$LOG" | tail -1 | sed 's/.*marker \([0-9.]*\)s ago.*/\1/')
+    marker_ago=$(run_log | grep "save reaches back to a marker" | tail -1 | sed 's/.*marker \([0-9.]*\)s ago.*/\1/')
     measured_ago=$(echo "$saved_at - $marked_at" | bc)
     expected=$(echo "${marker_ago:-0} + 5" | bc)
     if [ -n "$marker_ago" ] && near "$marker_ago" "$measured_ago" 1.5 && near "$duration" "$expected" 0.6; then pass "save after ⌥⇧M reaches back to the marker (${duration}s, marker ${marker_ago}s ago)"; else fail "save after a marker" "got $duration, expected $expected (marker ${marker_ago:-not logged}s ago, the test measured ${measured_ago}s)"; fi
@@ -243,17 +250,17 @@ sleep 1
 # The crash clip is checked for at least 30 s: the buffer must hold more than that at the crash.
 wait_for 60 buffer_holds 31
 crash_time=$(date -v-1S "+%Y-%m-%d %H:%M:%S.00 %z")
-printf '{"app_name":"E2E Crasher","timestamp":"%s","bundleID":"io.github.bugbear.e2e","bug_type":"309","name":"E2E Crasher"}\n{}\n' "$crash_time" > "$crash_folder/E2E Crasher-test.ips"
+printf '{"app_name":"E2E Crasher","timestamp":"%s","bundleID":"io.github.example.e2e","bug_type":"309","name":"E2E Crasher"}\n{}\n' "$crash_time" > "$crash_folder/E2E Crasher-test.ips"
 saved=""
 for _ in $(seq 1 60); do
-    saved=$(grep "crash clip saved" "$LOG" | tail -1)
+    saved=$(run_log | grep "crash clip saved" | tail -1)
     if [ -n "$saved" ]; then break; fi
     # Poll step.
     sleep 1
 done
 if [ -n "$saved" ]; then
     capture_id="${saved##*→ }"
-    capture_folder=$(find "$HOME/Library/Application Support/Bugbear" -type d -name "$capture_id" 2>/dev/null | head -1)
+    capture_folder=$(find "$HOME/Library/Application Support/$APP_NAME" -type d -name "$capture_id" 2>/dev/null | head -1)
     duration=$(media_duration "$capture_folder/original.mp4")
     if at_least "${duration:-0}" 30; then pass "crash saves the time before it (${duration}s clip)"; else fail "crash clip length" "got $duration"; fi
     if [ -f "$capture_folder/crash-report.ips" ]; then pass "crash report kept next to the clip"; else fail "crash report kept next to the clip" "$capture_folder"; fi
@@ -280,13 +287,13 @@ fi
 rm -rf "$crash_folder"
 
 # 10. The system log collector ran for the saved clips.
-if grep -q "system log for .*: [0-9]* lines" "$LOG"; then pass "system log collected ($(grep "system log for" "$LOG" | tail -1 | sed 's/.*system log for //'))"; else fail "system log collected" "no 'system log for' line"; fi
+if run_log | grep "system log for .*: [0-9]* lines" >/dev/null; then pass "system log collected ($(run_log | grep "system log for" | tail -1 | sed 's/.*system log for //'))"; else fail "system log collected" "no 'system log for' line"; fi
 
 # 11. Update check finds a newer release and lists its commits; the same version is no update.
 result=$(run update-check 30)
 if echo "$result" | grep -q 'version: "99.0.0"' && echo "$result" | grep -q "newCommitCount: 2"; then pass "update check finds version 99.0.0 with 2 commits"; else fail "update check" "$result"; fi
 if echo "$result" | grep -q 'title: "Better crop"' && echo "$result" | grep -q "pullRequest: Optional(5)" && echo "$result" | grep -q "changeCount: 1"; then pass "update lists the merged pull request by its title"; else fail "update pull request" "$result"; fi
-current_version=$("$TEST_APP/Contents/MacOS/Bugbear" --version)
+current_version=$("$TEST_APP/Contents/MacOS/$APP_NAME" --version)
 printf 'WhatsNewRelease(id: 1, version: "%s", title: "Same", items: [])\n' "$current_version" > "$FEED_DIR/catalog.swift"
 result=$(run update-check 30)
 if echo "$result" | grep -q "upToDate"; then pass "same version $current_version is not an update"; else fail "same version is not an update" "$result"; fi
@@ -305,8 +312,8 @@ if echo "$result" | grep -q "toast=true" && echo "$result" | grep -q "copied=.*[
 # 11c. The buffer comes back by itself after the displays go away (issue #17). It used to try
 # once after 2 s, find no display and stay on "Buffer error" with the displays back.
 NO_DISPLAY_ERROR="startBuffer failed: No display available for capture"
-no_display_errors() { grep -c "$NO_DISPLAY_ERROR" "$LOG" || true; }
-back_lines() { grep -c "buffer is back after" "$LOG" || true; }
+no_display_errors() { run_log | grep -c "$NO_DISPLAY_ERROR" || true; }
+back_lines() { run_log | grep -c "buffer is back after" || true; }
 # Waits up to about $2 seconds for at least $1 "no display" failures in the log.
 wait_for_no_display_errors() {
     local waited=0
@@ -347,8 +354,8 @@ if [ "$(back_lines)" = "$((back_before + 2))" ]; then pass "the log says the buf
 if [ "$(no_display_errors)" = "$((errors_before + 3))" ]; then pass "three tries found no display"; else fail "three tries found no display" "$(no_display_errors)"; fi
 
 # 12. Errors in the log (the tries in 11c that found no display are expected).
-errors=$(grep "ERROR" "$LOG" | grep -vc "$NO_DISPLAY_ERROR" || true)
-if [ "$errors" = "0" ]; then pass "no errors in the log"; else fail "no errors in the log" "$errors errors"; grep "ERROR" "$LOG" | tail -5; fi
+errors=$(run_log | grep "ERROR" | grep -vc "$NO_DISPLAY_ERROR" || true)
+if [ "$errors" = "0" ]; then pass "no errors in the log"; else fail "no errors in the log" "$errors errors"; run_log | grep "ERROR" | tail -5; fi
 
 defaults write "$BUNDLE_ID" automationEnabled -bool false
 echo

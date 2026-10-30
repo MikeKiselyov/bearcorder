@@ -1,5 +1,5 @@
 #!/bin/bash
-# Builds "Bugbear.app" into ./build and signs it.
+# Builds the app ("<name>.app", the name from AppInfo.name) into ./build and signs it.
 #
 #   scripts/build-app.sh            release build
 #   scripts/build-app.sh --run      build, then (re)launch the app
@@ -7,11 +7,11 @@
 #   scripts/build-app.sh --install-only
 #                                   the same install of the app already built in ./build: no swift build,
 #                                   no signing (stops if there is no build). The test runs use it
-#                                   after all.sh built the app once (BUGBEAR_APP_BUILT=1).
+#                                   after all.sh built the app once (APP_BUILT=1).
 #
 # Personal settings live in .env (git-ignored, see .env.example):
-#   BUGBEAR_BUNDLE_ID       bundle identifier (default io.github.bugbear.app)
-#   BUGBEAR_SIGN_IDENTITY   codesign identity, e.g. "Apple Development: you@example.com (TEAMID)".
+#   APP_BUNDLE_ID       bundle identifier (default io.github.<name>.app, scripts/lib/app-name.sh)
+#   APP_SIGN_IDENTITY   codesign identity, e.g. "Apple Development: you@example.com (TEAMID)".
 #                            Unset: the first "Apple Development" identity in the keychain, or without
 #                            one a certificate made for this Mac (scripts/dev/local-signing.sh).
 #                            "local": always that certificate. "-": ad-hoc signing (macOS asks for
@@ -19,23 +19,25 @@
 #
 # --install replaces an installed copy with another bundle id together with its permissions, so System
 # Settings lists the app once; macOS asks for the password for that (scripts/lib/permissions.sh).
-# Only an earlier Bugbear (executable Bugbear, a plain reverse-DNS id) is handled that way.
-# BUGBEAR_KEEP_PERMISSIONS=1 skips the password and leaves the system's records alone.
+# Only an earlier copy of this app (the same executable, a plain reverse-DNS id) is handled that way,
+# and only a copy that is replaced: a copy in the other Applications folder stays and keeps its permissions.
+# Another app where this one goes is never removed: the install stops.
+# APP_KEEP_PERMISSIONS=1 skips the password and leaves the system's records alone.
 #
-# BUGBEAR_AUTOMATION=1 builds the app the tests drive: with automation, the self-test and the media
-# tools (Sources/Bugbear/DevTools). A release never has them. scripts/test/lib/test-app.sh sets it.
+# APP_AUTOMATION=1 builds the app the tests drive: with automation, the self-test and the media
+# tools (Sources/App/DevTools). A release never has them. scripts/test/lib/test-app.sh sets it.
 set -euo pipefail
 
-# Bugbear stops its screen capture before it quits (up to 2 s), so wait for it to be gone.
-wait_for_bugbear_to_quit() {
+# The app stops its screen capture before it quits (up to 2 s), so wait for it to be gone.
+wait_for_app_to_quit() {
     local tries=0
-    while pgrep -x Bugbear >/dev/null 2>&1 && [ "$tries" -lt 50 ]; do
+    while pgrep -x "$APP_NAME" >/dev/null 2>&1 && [ "$tries" -lt 50 ]; do
         sleep 0.1
         tries=$((tries + 1))
     done
     # Still there (stuck in a modal alert): it must not keep running from a replaced app.
-    if pgrep -x Bugbear >/dev/null 2>&1; then
-        pkill -9 -x Bugbear 2>/dev/null || true
+    if pgrep -x "$APP_NAME" >/dev/null 2>&1; then
+        pkill -9 -x "$APP_NAME" 2>/dev/null || true
         sleep 0.5
     fi
 }
@@ -66,9 +68,9 @@ fi
 source "$ROOT/scripts/lib/app-name.sh"
 # shellcheck source=lib/permissions.sh
 source "$ROOT/scripts/lib/permissions.sh"
-BUNDLE_ID="${BUGBEAR_BUNDLE_ID:-io.github.bugbear.app}"
-# BUGBEAR_BUILD_DIR: a folder other than ./build (the script tests use one of their own).
-BUILD_DIR="${BUGBEAR_BUILD_DIR:-$ROOT/build}"
+BUNDLE_ID="${APP_BUNDLE_ID:-$DEFAULT_BUNDLE_ID}"
+# APP_BUILD_DIR: a folder other than ./build (the script tests use one of their own).
+BUILD_DIR="${APP_BUILD_DIR:-$ROOT/build}"
 APP_DIR="$BUILD_DIR/$APP_NAME.app"
 
 # Where the app came from, so it can tell when the GitHub repository has newer changes
@@ -83,15 +85,15 @@ build_app() {
     # Marks a build with automation (what the tests drive); gone while a build runs or when it has none.
     rm -f "$BUILD_DIR/.automation-build"
     SWIFT_FLAGS=()
-    if [ "${BUGBEAR_AUTOMATION:-}" = "1" ]; then
+    if [ "${APP_AUTOMATION:-}" = "1" ]; then
         SWIFT_FLAGS=(-Xswiftc -DAUTOMATION)
         echo "==> swift build (release, with automation for the tests)"
     else
         echo "==> swift build (release)"
     fi
-    swift build -c release --product Bugbear "${SWIFT_FLAGS[@]+"${SWIFT_FLAGS[@]}"}"
+    swift build -c release --product App "${SWIFT_FLAGS[@]+"${SWIFT_FLAGS[@]}"}"
     BIN_DIR="$(swift build -c release --show-bin-path)"
-    BINARY="$BIN_DIR/Bugbear"
+    BINARY="$BIN_DIR/App"
     # The version is the newest release in WhatsNewCatalog.swift; the build number counts commits.
     VERSION="$("$BINARY" --version)"
     BUILD_NUMBER="$(git -C "$ROOT" rev-list --count HEAD 2>/dev/null || echo 1)"
@@ -100,11 +102,12 @@ build_app() {
     echo "==> assembling $APP_DIR"
     rm -rf "$APP_DIR"
     mkdir -p "$APP_DIR/Contents/MacOS" "$APP_DIR/Contents/Resources"
-    cp "$BINARY" "$APP_DIR/Contents/MacOS/Bugbear"
-    # The resources SwiftPM bundled (Sources/Bugbear/Resources): read through AppResources.
-    cp -R "$BIN_DIR/Bugbear_Bugbear.bundle" "$APP_DIR/Contents/Resources/"
+    # The App product is the executable; in the bundle it takes the app's name, so the process has it.
+    cp "$BINARY" "$APP_DIR/Contents/MacOS/$APP_NAME"
+    # The resources SwiftPM bundled (Sources/App/Resources): read through AppResources.
+    cp -R "$BIN_DIR/App_App.bundle" "$APP_DIR/Contents/Resources/"
     # Debug symbols are not needed to run the app; without them it is a few MB lighter.
-    strip -x "$APP_DIR/Contents/MacOS/Bugbear" 2>/dev/null || true
+    strip -x "$APP_DIR/Contents/MacOS/$APP_NAME" 2>/dev/null || true
 
     echo "==> rendering icon"
     ICONSET="$BUILD_DIR/AppIcon.iconset"
@@ -120,6 +123,7 @@ build_app() {
         plutil -replace "$1" -string "$2" "$PLIST"
     }
     set_plist CFBundleIdentifier "$BUNDLE_ID"
+    set_plist CFBundleExecutable "$APP_NAME"
     set_plist CFBundleName "$APP_NAME"
     set_plist CFBundleDisplayName "$APP_NAME"
     set_plist CFBundleShortVersionString "$VERSION"
@@ -127,16 +131,16 @@ build_app() {
     set_plist NSCameraUsageDescription "$APP_NAME shows your webcam in a bubble on screen so it can be part of your recordings."
     set_plist NSMicrophoneUsageDescription "$APP_NAME records your voice with screen recordings when the microphone is turned on."
     set_plist NSAppleEventsUsageDescription "$APP_NAME reads the current browser tab URL to add it to the bug environment."
-    set_plist BugbearCommit "$COMMIT"
-    set_plist BugbearBranch "$BRANCH"
-    set_plist BugbearRepository "$REPOSITORY"
-    set_plist BugbearSourcePath "$ROOT"
+    set_plist SourceCommit "$COMMIT"
+    set_plist SourceBranch "$BRANCH"
+    set_plist SourceRepository "$REPOSITORY"
+    set_plist SourcePath "$ROOT"
     plutil -lint "$PLIST" >/dev/null
 
-    # Signing order: BUGBEAR_SIGN_IDENTITY, then an Apple Development certificate, then a certificate
+    # Signing order: APP_SIGN_IDENTITY, then an Apple Development certificate, then a certificate
     # made for this Mac (scripts/dev/local-signing.sh). All three stay the same between builds, so macOS
     # keeps the permissions after an update. Ad-hoc ("-") is the last resort.
-    IDENTITY="${BUGBEAR_SIGN_IDENTITY:-}"
+    IDENTITY="${APP_SIGN_IDENTITY:-}"
     if [ -z "$IDENTITY" ]; then
         IDENTITY="$(security find-identity -v -p codesigning | grep "Apple Development" | head -1 | sed -E 's/.*"(.*)"/\1/' || true)"
     fi
@@ -161,7 +165,7 @@ build_app() {
     touch "$APP_DIR" "$PLIST"
     /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "$APP_DIR" 2>/dev/null || true
 
-    if [ "${BUGBEAR_AUTOMATION:-}" = "1" ]; then
+    if [ "${APP_AUTOMATION:-}" = "1" ]; then
         touch "$BUILD_DIR/.automation-build"
     fi
     echo "==> done: $APP_DIR"
@@ -186,19 +190,21 @@ for argument in "$@"; do
     case "$argument" in
         --install|--install-only)
             # /Applications needs an admin account; everyone else gets ~/Applications.
-            TARGET_DIR="/Applications"
+            # APP_APPLICATIONS_DIR stands in for /Applications in the script tests.
+            system_apps="${APP_APPLICATIONS_DIR:-/Applications}"
+            TARGET_DIR="$system_apps"
             if [ ! -w "$TARGET_DIR" ]; then
                 TARGET_DIR="$HOME/Applications"
                 mkdir -p "$TARGET_DIR"
             fi
-            installed_copies=("/Applications/$APP_NAME.app" "$HOME/Applications/$APP_NAME.app")
+            installed_copies=("$system_apps/$APP_NAME.app" "$HOME/Applications/$APP_NAME.app")
             # e2e tests install into a folder of their own.
-            if [ -n "${BUGBEAR_INSTALL_DIR:-}" ]; then
-                TARGET_DIR="$BUGBEAR_INSTALL_DIR"
+            if [ -n "${APP_INSTALL_DIR:-}" ]; then
+                TARGET_DIR="$APP_INSTALL_DIR"
                 mkdir -p "$TARGET_DIR"
                 installed_copies=("$TARGET_DIR/$APP_NAME.app")
             fi
-            # A copy under an earlier name (the app was renamed): same bundle id, other file name.
+            # A copy under another file name (renamed in Finder): the same bundle id and executable.
             # It counts as installed (an update keeps the settings) and is replaced, not left beside.
             renamed_copies=()
             for copy in "$TARGET_DIR"/*.app; do
@@ -206,23 +212,31 @@ for argument in "$@"; do
                     continue
                 fi
                 copy_id=$(/usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$copy/Contents/Info.plist" 2>/dev/null || true)
-                if [ "$copy_id" = "$BUNDLE_ID" ]; then
+                if [ "$copy_id" = "$BUNDLE_ID" ] && is_our_app "$copy" "$BUNDLE_ID"; then
                     renamed_copies+=("$copy")
                     installed_copies+=("$copy")
                 fi
             done
+            target_app="$TARGET_DIR/$APP_NAME.app"
+            if { [ -e "$target_app" ] || [ -L "$target_app" ]; } && ! is_our_app "$target_app" "$BUNDLE_ID"; then
+                die "$target_app is not a $APP_NAME build (its executable, bundle id or build keys differ), so it was not replaced. Move it away, then install again."
+            fi
             already_installed=false
-            # Copies with another bundle id: kept aside until their permissions are gone.
+            for copy in "${installed_copies[@]}"; do
+                if [ -d "$copy" ]; then
+                    already_installed=true
+                fi
+            done
+            # Replaced copies with another bundle id: kept aside until their permissions are gone.
             other_ids=()
             other_copies=()
-            for copy in "${installed_copies[@]}"; do
+            for copy in "$target_app" "${renamed_copies[@]+"${renamed_copies[@]}"}"; do
                 if [ ! -d "$copy" ]; then
                     continue
                 fi
-                already_installed=true
-                if copy_id=$(is_earlier_bugbear "$copy" "$BUNDLE_ID"); then
+                if copy_id=$(is_our_earlier_app "$copy" "$BUNDLE_ID"); then
                     # Without a copy the old id's permissions stay; the install goes on.
-                    if [ -z "$kept_dir" ] && ! kept_dir="$(mktemp -d -t bugbear-replaced)"; then
+                    if [ -z "$kept_dir" ] && ! kept_dir="$(mktemp -d -t "$APP_SLUG-replaced")"; then
                         kept_dir=""
                         echo "==> could not keep a copy of $copy: the permissions of $copy_id stay"
                         continue
@@ -236,9 +250,9 @@ for argument in "$@"; do
                     other_copies+=("$kept")
                 fi
             done
-            pkill -x Bugbear 2>/dev/null || true
-            wait_for_bugbear_to_quit
-            # No Bugbear yet: a new person, or one who deleted the app. Settings outlive the app
+            pkill -x "$APP_NAME" 2>/dev/null || true
+            wait_for_app_to_quit
+            # No copy yet: a new person, or one who deleted the app. Settings outlive the app
             # in ~/Library/Preferences, so the welcome guide is shown again. An update keeps them.
             # After the quit, so a running copy cannot write them back.
             if [ "$already_installed" = false ]; then
@@ -249,9 +263,9 @@ for argument in "$@"; do
                 defaults delete "$BUNDLE_ID" askedPermission.Privacy_Accessibility 2>/dev/null || true
                 echo "==> new install: the welcome guide opens on launch"
             fi
-            rm -rf "$TARGET_DIR/$APP_NAME.app"
+            rm -rf "$target_app"
             for copy in "${renamed_copies[@]+"${renamed_copies[@]}"}"; do
-                echo "==> replacing $(basename "$copy"), the same app under its earlier name"
+                echo "==> replacing $(basename "$copy"), the same app under another name"
                 rm -rf "$copy"
             done
             cp -R "$APP_DIR" "$TARGET_DIR/"
@@ -263,13 +277,13 @@ for argument in "$@"; do
                 rm -rf "$kept_dir"
                 kept_dir=""
             fi
-            if [ -z "${BUGBEAR_NO_OPEN:-}" ]; then
+            if [ -z "${APP_NO_OPEN:-}" ]; then
                 open "$TARGET_DIR/$APP_NAME.app"
             fi
             ;;
         --run)
-            pkill -x Bugbear 2>/dev/null || true
-            wait_for_bugbear_to_quit
+            pkill -x "$APP_NAME" 2>/dev/null || true
+            wait_for_app_to_quit
             open "$APP_DIR"
             ;;
     esac

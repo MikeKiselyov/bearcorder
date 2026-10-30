@@ -13,10 +13,13 @@
 # "finish" locks it and takes it off the list. It also locks itself after 5 minutes and on sleep.
 set -euo pipefail
 
-FOLDER="$HOME/Library/Application Support/Bugbear/Signing"
-KEYCHAIN="$FOLDER/bugbear-signing.keychain-db"
+# shellcheck disable=SC1091
+source "$(dirname "${BASH_SOURCE[0]}")/../lib/app-name.sh"
+FOLDER="$HOME/Library/Application Support/$APP_NAME/Signing"
+# scripts/uninstall.sh removes this keychain by the same path.
+KEYCHAIN="$FOLDER/local-signing.keychain-db"
 PASSWORD_FILE="$FOLDER/password"
-NAME="Bugbear Local Signing"
+NAME="$APP_NAME Local Signing"
 
 # The user keychain search list, one path per line, without the quotes security prints.
 search_list() {
