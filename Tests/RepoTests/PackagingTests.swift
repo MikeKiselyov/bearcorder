@@ -21,11 +21,14 @@ final class PackagingTests: XCTestCase {
 
     func testTheKeysTheAppNeedsAreThere() throws {
         let plist = try infoPlist()
-        let needed = ["CFBundleIdentifier", "CFBundleExecutable", "CFBundleShortVersionString", "CFBundleVersion", "LSUIElement", "LSMinimumSystemVersion", "NSCameraUsageDescription", "NSMicrophoneUsageDescription", "NSAppleEventsUsageDescription", "BugbearCommit", "BugbearSourcePath", "BugbearRepository", "BugbearBranch"]
+        let needed = ["CFBundleIdentifier", "CFBundleExecutable", "CFBundleShortVersionString", "CFBundleVersion", "LSUIElement", "LSMinimumSystemVersion", "NSCameraUsageDescription", "NSMicrophoneUsageDescription", "NSAppleEventsUsageDescription", "SourceCommit", "SourcePath", "SourceRepository", "SourceBranch"]
         for key in needed {
             XCTAssertNotNil(plist[key], "Packaging/Info.plist has no \(key)")
         }
-        XCTAssertEqual(plist["CFBundleExecutable"] as? String, "Bugbear")
+        // The executable takes the app's name, so the process and its crash reports have it.
+        let script = try String(contentsOf: root.appendingPathComponent("scripts/build-app.sh"), encoding: .utf8)
+        XCTAssertTrue(script.contains("set_plist CFBundleExecutable \"$APP_NAME\""), "build-app.sh names the executable")
+        XCTAssertTrue(script.contains("cp \"$BINARY\" \"$APP_DIR/Contents/MacOS/$APP_NAME\""), "and copies it under that name")
         XCTAssertEqual(plist["LSUIElement"] as? Bool, true, "a menu bar app without a Dock icon")
     }
 

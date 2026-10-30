@@ -1,17 +1,17 @@
 name: Suggest a feature
-description: An idea that would make Bugbear better.
+description: An idea that would make Bearcorder better.
 labels: ["enhancement"]
 body:
   - type: textarea
     id: idea
     attributes:
       label: Your idea
-      description: What you would like Bugbear to do, and what it would help you with.
+      description: What you would like Bearcorder to do, and what it would help you with.
     validations:
       required: true
   - type: textarea
     id: environment
     attributes:
       label: Environment
-      description: Bugbear version and macOS version, if it matters.
+      description: Bearcorder version and macOS version, if it matters.
       render: text

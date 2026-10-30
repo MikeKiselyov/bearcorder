@@ -1,9 +1,11 @@
 #!/bin/bash
-# Renames the app where people see the name: AppInfo.name, the installer's and uninstaller's copies, README.md
-# and docs/*.md. Markdown cannot read a variable, so the text there is rewritten.
-# What keeps the old name on purpose: folders with people's captures and logs
-# (".../Application Support/Bugbear", ".../Logs/Bugbear", AppInfo.storageName), source paths
-# (Sources/Bugbear, BugbearCore) and the executable.
+# Renames the app. The code and the scripts take the name from AppInfo.name (scripts through
+# scripts/lib/app-name.sh), so the executable, the folders on disk, the installer's bundle id and
+# the GitHub repository follow it. This script writes the new name into AppInfo.swift and rewrites
+# the places that cannot read it: the installer's and uninstaller's own copies, the bundle id of
+# debug runs (Packaging/Debug-Info.plist) and the text for people (README.md, CONTRIBUTING.md, docs/*.md, the issue forms, .env.example).
+# Pictures that show the name are made again with scripts/dev/readme-media.sh; the GitHub
+# repository itself is renamed on GitHub.
 #
 #   scripts/dev/rename-app.sh "New Name" [repository root]
 set -euo pipefail
@@ -23,7 +25,7 @@ import sys
 root = pathlib.Path(sys.argv[1])
 new_name = sys.argv[2]
 
-app_info = root / "Sources/BugbearCore/Support/AppInfo.swift"
+app_info = root / "Sources/AppCore/Support/AppInfo.swift"
 app_info_text = app_info.read_text()
 found = re.search(r'static let name = "(.*)"', app_info_text)
 if found is None:
@@ -33,43 +35,57 @@ if old_name == new_name:
     print(f"the app is already called {new_name}")
     sys.exit(0)
 
+
+# The same as AppInfo.slug: the repository, the bundle id and the source folder use it.
+def slug(name):
+    return name.lower().replace(" ", "-")
+
+
+old_slug = slug(old_name)
+new_slug = slug(new_name)
+
 app_info.write_text(app_info_text.replace(f'static let name = "{old_name}"', f'static let name = "{new_name}"'))
 
+# One pass, so a new name that contains the old one ("<old name> Pro") is not renamed twice.
+# The name as a word, in text and in paths (/Applications/Name.app, Logs/Name/Name.log), and the
+# slug outside a longer word (github.com/owner/slug, ~/.slug, io.github.slug.app, #where-slug-keeps-things).
+name_pattern = re.compile(
+    r"(?<![A-Za-z0-9])" + re.escape(old_name) + r"(?![A-Za-z0-9])"
+    + r"|(?<![A-Za-z0-9])" + re.escape(old_slug) + r"(?![A-Za-z0-9])"
+)
+
+
+def rename(found):
+    if found.group(0) == old_name:
+        return new_name
+    return new_slug
+
+
+# The installer and uninstaller run without the source: their copies of the name, repository,
+# bundle id and source folder.
 for script_name in ["install.sh", "uninstall.sh"]:
     script = root / "scripts" / script_name
     if not script.exists():
         continue
     script_text = script.read_text()
-    script.write_text(script_text.replace(f'\nAPP_NAME="{old_name}"\n', f'\nAPP_NAME="{new_name}"\n'))
+    script_text = script_text.replace(f'\nAPP_NAME="{old_name}"\n', f'\nAPP_NAME="{new_name}"\n')
+    script_text = re.sub(r"(?<=[/.])" + re.escape(old_slug) + r"(?![A-Za-z0-9])", new_slug, script_text)
+    script.write_text(script_text)
 
-escaped = re.escape(old_name)
-# One pass, so a new name that contains the old one ("Bugbear Pro") is not renamed twice:
-# "Bugbear.app" anywhere, also inside a path like /Applications/Bugbear.app, or the name as a word
-# in text, not inside a path (Support/Bugbear, Sources/Bugbear) or a longer word (BugbearCore).
-name_pattern = re.compile(r"(?<!\w)" + escaped + r"(?=\.app\b)|(?<![/\w])" + escaped + r"(?![\w/])")
+# The bundle id of debug runs from the source.
+debug_info = root / "Packaging/Debug-Info.plist"
+if debug_info.exists():
+    debug_text = debug_info.read_text()
+    debug_info.write_text(debug_text.replace(f"io.github.{old_slug}.debug", f"io.github.{new_slug}.debug"))
 
-
-def slug(name):
-    return name.lower().replace(" ", "-")
-
-
-# Links to headings with the name in them: #where-bugbear-keeps-things.
-anchor_pattern = re.compile(r"#[\w-]*\b" + re.escape(slug(old_name)) + r"\b[\w-]*")
-
-
-def rename_anchor(found):
-    return found.group(0).replace(slug(old_name), slug(new_name))
-
-
-documents = [root / "README.md"]
+documents = [root / "README.md", root / "CONTRIBUTING.md", root / ".env.example"]
 documents.extend(sorted((root / "docs").glob("*.md")))
+documents.extend(sorted((root / ".github/ISSUE_TEMPLATE").glob("*.yml")))
 for document in documents:
     if not document.exists():
         continue
     text = document.read_text()
-    text = name_pattern.sub(new_name, text)
-    text = anchor_pattern.sub(rename_anchor, text)
-    document.write_text(text)
+    document.write_text(name_pattern.sub(rename, text))
 
-print(f"renamed {old_name} to {new_name}: AppInfo.swift, scripts/install.sh, scripts/uninstall.sh, README.md, docs")
+print(f"renamed {old_name} to {new_name}: AppInfo.swift, scripts/install.sh, scripts/uninstall.sh, Packaging/Debug-Info.plist, README.md, CONTRIBUTING.md, .env.example, docs, issue forms")
 PYTHON

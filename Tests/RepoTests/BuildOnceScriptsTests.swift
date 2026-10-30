@@ -1,3 +1,4 @@
+import AppCore
 import Foundation
 import XCTest
 
@@ -25,12 +26,12 @@ final class BuildOnceScriptsTests: XCTestCase {
     }
 
     /// Commands that must not run: the stub in front of the real one records its name and succeeds
-    /// (pgrep fails: no Bugbear is running).
+    /// (pgrep fails: no copy of the app is running).
     private func makeStubs(in folder: URL) throws -> URL {
         let stubs = folder.appendingPathComponent("stubs")
         try FileManager.default.createDirectory(at: stubs, withIntermediateDirectories: true)
         let calls = folder.appendingPathComponent("calls.txt").path
-        for name in ["pkill", "pgrep", "swift", "codesign", "security", "open"] {
+        for name in ["pkill", "pgrep", "swift", "codesign", "security", "open", "tccutil", "osascript", "defaults", "lsregister"] {
             let exitCode = name == "pgrep" ? "1" : "0"
             let script = "#!/bin/bash\necho \"\(name) $*\" >> \"\(calls)\"\nexit \(exitCode)\n"
             let file = stubs.appendingPathComponent(name)
@@ -46,7 +47,7 @@ final class BuildOnceScriptsTests: XCTestCase {
         process.arguments = ["-c", script]
         var environment = ProcessInfo.processInfo.environment
         environment["ROOT"] = root.path
-        environment.removeValue(forKey: "BUGBEAR_APP_BUILT")
+        environment.removeValue(forKey: "APP_BUILT")
         if let stubs {
             environment["PATH"] = stubs.path + ":" + (environment["PATH"] ?? "")
         }
@@ -73,33 +74,131 @@ final class BuildOnceScriptsTests: XCTestCase {
         }
     }
 
+    /// The log is the person's own log file: a run reads only the lines written after it started
+    /// and never deletes the file.
+    func testTestScriptsKeepThePersonsLog() throws {
+        for name in ["e2e", "perf"] {
+            let text = try read("scripts/test/\(name).sh")
+            // Only the lines that define the log, count its lines and read this run's part touch it.
+            let allowed = ["LOG=\"$HOME/Library/Logs/$APP_NAME/$APP_NAME.log\"", "{ wc -l < \"$LOG\"; }", "cat \"$LOG\"",
+                           "tail -n +\"$((log_lines_before + 1))\" \"$LOG\"", "Log: $LOG"]
+            for line in text.split(separator: "\n") where line.contains("$LOG") {
+                let known = allowed.contains { line.contains($0) }
+                XCTAssertTrue(known, "\(name).sh touches the whole log: \(line)")
+            }
+            XCTAssertFalse(text.contains("rm -f \"$LOG\""), "\(name).sh deletes the log")
+            XCTAssertTrue(text.contains("log_lines_before=$(log_line_count)"), "\(name).sh notes where the log was when it started")
+        }
+    }
+
+    /// The test scripts start with the bundle id: from .env, else the installer's. Run up to that
+    /// line in a copy of the repository without .env and without APP_BUNDLE_ID, under `set -u`.
+    func testTestScriptsFindTheBundleIdWithoutEnvFile() throws {
+        let folder = try makeFolder()
+        for path in ["scripts/lib/common.sh", "scripts/lib/app-name.sh", "Sources/AppCore/Support/AppInfo.swift"] {
+            let target = folder.appendingPathComponent(path)
+            try FileManager.default.createDirectory(at: target.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try FileManager.default.copyItem(at: root.appendingPathComponent(path), to: target)
+        }
+        let bundleLine = "BUNDLE_ID=\"${APP_BUNDLE_ID:-$DEFAULT_BUNDLE_ID}\"\n"
+        for name in ["e2e", "e2e-features", "e2e-section", "perf"] {
+            let text = try read("scripts/test/\(name).sh")
+            let line = try XCTUnwrap(text.range(of: bundleLine), "\(name).sh sets BUNDLE_ID")
+            let head = String(text[..<line.upperBound]) + "echo \"bundle=$BUNDLE_ID\"\n"
+            let script = folder.appendingPathComponent("scripts/test/\(name).sh")
+            try FileManager.default.createDirectory(at: script.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try head.write(to: script, atomically: true, encoding: .utf8)
+
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: "/bin/bash")
+            process.arguments = [script.path]
+            var environment = ProcessInfo.processInfo.environment
+            environment.removeValue(forKey: "APP_BUNDLE_ID")
+            process.environment = environment
+            let output = Pipe()
+            process.standardOutput = output
+            process.standardError = output
+            try process.run()
+            let data = output.fileHandleForReading.readDataToEndOfFile()
+            process.waitUntilExit()
+            let printed = String(decoding: data, as: UTF8.self)
+            XCTAssertEqual(process.terminationStatus, 0, "\(name).sh: \(printed)")
+            XCTAssertTrue(printed.contains("bundle=\(AppInfo.defaultBundleId)\n"), "\(name).sh: \(printed)")
+        }
+    }
+
+    /// Runs `steps` in bash with run-log.sh sourced and LOG pointing at `log`; returns what it printed
+    /// on stdout and stderr.
+    private func runLogScript(_ steps: String, log: URL) throws -> (output: String, errors: String) {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/bin/bash")
+        let library = root.appendingPathComponent("scripts/test/lib/run-log.sh").path
+        process.arguments = ["-c", "set -uo pipefail\nLOG=\"$1\"\nsource \"$2\"\n" + steps, "run-log-test", log.path, library]
+        let output = Pipe()
+        let errors = Pipe()
+        process.standardOutput = output
+        process.standardError = errors
+        try process.run()
+        let printed = output.fileHandleForReading.readDataToEndOfFile()
+        let complained = errors.fileHandleForReading.readDataToEndOfFile()
+        process.waitUntilExit()
+        return (output: String(decoding: printed, as: UTF8.self), errors: String(decoding: complained, as: UTF8.self))
+    }
+
+    /// run_log gives only this run's lines. If the app started the log over during the run (past
+    /// 2 MB), the lines before that are gone: run_log says so loudly, with an ERROR line the "no
+    /// errors in the log" check counts, instead of letting a negative check pass on half a log.
+    func testRunLogSaysWhenTheLogStartedOver() throws {
+        let folder = try makeFolder()
+        let log = folder.appendingPathComponent("app.log")
+        try "old 1\nold 2\nold 3\n".write(to: log, atomically: false, encoding: .utf8)
+        let start = "log_lines_before=$(log_line_count)\nlog_first_before=$(log_first_line)\n"
+
+        let plain = try runLogScript(start + "printf 'new 1\\nnew 2\\n' >> \"$LOG\"\nrun_log", log: log)
+        XCTAssertEqual(plain.output, "new 1\nnew 2\n")
+        XCTAssertEqual(plain.errors, "")
+
+        // Started over and grew past the old length again: counting lines alone cannot tell.
+        try "old 1\nold 2\nold 3\n".write(to: log, atomically: false, encoding: .utf8)
+        let regrown = try runLogScript(start + ": > \"$LOG\"\nprintf 'a\\nb\\nc\\nd\\nlast\\n' >> \"$LOG\"\nrun_log", log: log)
+        XCTAssertTrue(regrown.output.contains("ERROR"), regrown.output)
+        XCTAssertTrue(regrown.output.contains("last"), regrown.output)
+        XCTAssertTrue(regrown.errors.contains("started its log over"), regrown.errors)
+
+        // Started over and still shorter.
+        try "old 1\nold 2\nold 3\n".write(to: log, atomically: false, encoding: .utf8)
+        let shorter = try runLogScript(start + ": > \"$LOG\"\nprintf 'x\\n' >> \"$LOG\"\nrun_log", log: log)
+        XCTAssertTrue(shorter.output.contains("ERROR"), shorter.output)
+        XCTAssertTrue(shorter.output.contains("x\n"), shorter.output)
+    }
+
     func testPerfUsesTheSameAutomationBuildAsTheOthers() throws {
-        // perf.sh sources test-app.sh, which exports BUGBEAR_AUTOMATION=1 for the build.
+        // perf.sh sources test-app.sh, which exports APP_AUTOMATION=1 for the build.
         XCTAssertTrue(try read("scripts/test/perf.sh").contains("scripts/test/lib/test-app.sh"))
-        XCTAssertTrue(try read("scripts/test/lib/test-app.sh").contains("export BUGBEAR_AUTOMATION=1"))
+        XCTAssertTrue(try read("scripts/test/lib/test-app.sh").contains("export APP_AUTOMATION=1"))
     }
 
     func testAllBuildsOnceBeforeTheE2eSuites() throws {
         let text = try read("scripts/test/all.sh")
         let build = try XCTUnwrap(text.range(of: "run_suite app-build build_test_app_once"))
         let check = try XCTUnwrap(text.range(of: "case \"${RESULTS[${#RESULTS[@]} - 1]}\" in"))
-        let flag = try XCTUnwrap(text.range(of: "export BUGBEAR_APP_BUILT=1"))
+        let flag = try XCTUnwrap(text.range(of: "export APP_BUILT=1"))
         let first = try XCTUnwrap(text.range(of: "run_suite e2e scripts/test/e2e.sh"))
         let skipped = try XCTUnwrap(text.range(of: "not run: app-build failed"))
         XCTAssertTrue(build.lowerBound < check.lowerBound && check.lowerBound < flag.lowerBound && flag.lowerBound < first.lowerBound)
         XCTAssertTrue(first.lowerBound < skipped.lowerBound, "the e2e suites run only in the ok branch, a failed build is reported")
-        XCTAssertTrue(text.contains("BUGBEAR_AUTOMATION=1 scripts/build-app.sh"))
+        XCTAssertTrue(text.contains("APP_AUTOMATION=1 scripts/build-app.sh"))
     }
 
     func testBuiltAppIsReusedWithoutBuilding() throws {
         let folder = try makeFolder()
         let fakeRoot = folder.appendingPathComponent("repo")
         try FileManager.default.createDirectory(at: fakeRoot.appendingPathComponent("scripts/lib"), withIntermediateDirectories: true)
-        try FileManager.default.createDirectory(at: fakeRoot.appendingPathComponent("Sources/BugbearCore/Support"), withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: fakeRoot.appendingPathComponent("Sources/AppCore/Support"), withIntermediateDirectories: true)
         try FileManager.default.copyItem(at: root.appendingPathComponent("scripts/lib/app-name.sh"), to: fakeRoot.appendingPathComponent("scripts/lib/app-name.sh"))
         try FileManager.default.copyItem(
-            at: root.appendingPathComponent("Sources/BugbearCore/Support/AppInfo.swift"),
-            to: fakeRoot.appendingPathComponent("Sources/BugbearCore/Support/AppInfo.swift"))
+            at: root.appendingPathComponent("Sources/AppCore/Support/AppInfo.swift"),
+            to: fakeRoot.appendingPathComponent("Sources/AppCore/Support/AppInfo.swift"))
         let marker = folder.appendingPathComponent("built.txt").path
         let build = "#!/bin/bash\necho built >> \"\(marker)\"\n"
         let buildScript = fakeRoot.appendingPathComponent("scripts/build-app.sh")
@@ -108,7 +207,7 @@ final class BuildOnceScriptsTests: XCTestCase {
         let source = "ROOT=\"\(fakeRoot.path)\"; source \"\(root.path)/scripts/test/lib/test-app.sh\"; "
 
         // Built by all.sh but missing: stop with a clear message, build nothing.
-        var result = try bash(source + "build_test_app", environment: ["BUGBEAR_APP_BUILT": "1"])
+        var result = try bash(source + "build_test_app", environment: ["APP_BUILT": "1"])
         XCTAssertNotEqual(result.status, 0, result.output)
         XCTAssertTrue(result.output.contains("build/\(try XCTUnwrap(bashAppName(source))).app missing: run scripts/build-app.sh first"), result.output)
         XCTAssertFalse(FileManager.default.fileExists(atPath: marker))
@@ -117,19 +216,19 @@ final class BuildOnceScriptsTests: XCTestCase {
         let appName = try XCTUnwrap(bashAppName(source))
         try FileManager.default.createDirectory(at: fakeRoot.appendingPathComponent("build/\(appName).app"), withIntermediateDirectories: true)
         // An app without the automation marker (old or release build) is not reused.
-        result = try bash(source + "build_test_app", environment: ["BUGBEAR_APP_BUILT": "1"])
+        result = try bash(source + "build_test_app", environment: ["APP_BUILT": "1"])
         XCTAssertNotEqual(result.status, 0, result.output)
         XCTAssertTrue(result.output.contains("not a build with automation"), result.output)
         XCTAssertFalse(FileManager.default.fileExists(atPath: marker))
         FileManager.default.createFile(atPath: fakeRoot.appendingPathComponent("build/.automation-build").path, contents: Data())
-        result = try bash(source + "build_test_app", environment: ["BUGBEAR_APP_BUILT": "1"])
+        result = try bash(source + "build_test_app", environment: ["APP_BUILT": "1"])
         XCTAssertEqual(result.status, 0, result.output)
-        XCTAssertFalse(FileManager.default.fileExists(atPath: marker), "no build when BUGBEAR_APP_BUILT=1")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: marker), "no build when APP_BUILT=1")
 
         // Without the variable the script builds, as before.
         result = try bash(source + "build_test_app", environment: [:])
         XCTAssertEqual(result.status, 0, result.output)
-        XCTAssertTrue(FileManager.default.fileExists(atPath: marker), "builds without BUGBEAR_APP_BUILT")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: marker), "builds without APP_BUILT")
     }
 
     private func bashAppName(_ source: String) throws -> String? {
@@ -140,12 +239,43 @@ final class BuildOnceScriptsTests: XCTestCase {
 
     // MARK: build-app.sh --install-only
 
-    private func makeApp(at url: URL, bundleId: String) throws {
+    /// `built`: has the keys every build-app.sh build writes (SourcePath, SourceCommit).
+    private func makeApp(at url: URL, bundleId: String, executable: String = AppInfo.name, built: Bool = true) throws {
         let contents = url.appendingPathComponent("Contents")
         try FileManager.default.createDirectory(at: contents, withIntermediateDirectories: true)
-        let info: [String: String] = ["CFBundleExecutable": "Other", "CFBundleIdentifier": bundleId]
+        var info: [String: String] = ["CFBundleExecutable": executable, "CFBundleIdentifier": bundleId]
+        if built {
+            info["SourcePath"] = "/somewhere/source"
+            info["SourceCommit"] = "0123abc"
+        }
         let data = try PropertyListSerialization.data(fromPropertyList: info, format: .xml, options: 0)
         try data.write(to: contents.appendingPathComponent("Info.plist"))
+    }
+
+    private func appName() throws -> String {
+        try XCTUnwrap(bashAppName("ROOT=\"\(root.path)\"; source \"\(root.path)/scripts/test/lib/test-app.sh\"; "))
+    }
+
+    /// build-app.sh --install-only with every folder it touches inside `folder`: a fake home, a fake
+    /// /Applications, its own temporary folder, and lsregister, tccutil and osascript as stubs.
+    private func install(in folder: URL, stubs: URL, extra: [String: String] = [:]) throws -> (status: Int32, output: String) {
+        let home = folder.appendingPathComponent("home")
+        let temporary = folder.appendingPathComponent("tmp")
+        try FileManager.default.createDirectory(at: temporary, withIntermediateDirectories: true)
+        var environment: [String: String] = [
+            "HOME": home.path,
+            "TMPDIR": temporary.path,
+            "APP_BUILD_DIR": folder.appendingPathComponent("build").path,
+            "APP_APPLICATIONS_DIR": folder.appendingPathComponent("system-apps").path,
+            "APP_INSTALL_DIR": "",
+            "LSREGISTER": stubs.appendingPathComponent("lsregister").path,
+            "APP_KEEP_PERMISSIONS": "1",
+            "APP_NO_OPEN": "1",
+        ]
+        for (key, value) in extra {
+            environment[key] = value
+        }
+        return try bash("\"\(root.path)/scripts/build-app.sh\" --install-only", environment: environment, path: stubs)
     }
 
     func testInstallOnlyCopiesTheBuiltAppWithoutBuildingOrSigning() throws {
@@ -157,15 +287,7 @@ final class BuildOnceScriptsTests: XCTestCase {
         try makeApp(at: buildDir.appendingPathComponent("\(appName).app"), bundleId: "test.built.\(UUID().uuidString)")
         // An installed copy exists, so this counts as an update: no setting of the real app is touched.
         try makeApp(at: installDir.appendingPathComponent("\(appName).app"), bundleId: "test.old")
-        let result = try bash(
-            "\"\(root.path)/scripts/build-app.sh\" --install-only",
-            environment: [
-                "BUGBEAR_BUILD_DIR": buildDir.path,
-                "BUGBEAR_INSTALL_DIR": installDir.path,
-                "BUGBEAR_KEEP_PERMISSIONS": "1",
-                "BUGBEAR_NO_OPEN": "1",
-            ],
-            path: stubs)
+        let result = try install(in: folder, stubs: stubs, extra: ["APP_INSTALL_DIR": installDir.path])
         XCTAssertEqual(result.status, 0, result.output)
         let installedPlist = installDir.appendingPathComponent("\(appName).app/Contents/Info.plist")
         let info = try XCTUnwrap(NSDictionary(contentsOf: installedPlist))
@@ -174,22 +296,16 @@ final class BuildOnceScriptsTests: XCTestCase {
         XCTAssertFalse(calls.contains("swift "), "no swift build: \(calls)")
         XCTAssertFalse(calls.contains("codesign"), "no signing: \(calls)")
         XCTAssertFalse(calls.contains("security"), "no keychain query: \(calls)")
-        XCTAssertFalse(calls.contains("open"), "BUGBEAR_NO_OPEN is honored: \(calls)")
+        XCTAssertFalse(calls.contains("open"), "APP_NO_OPEN is honored: \(calls)")
     }
 
     func testInstallOnlyStopsWhenThereIsNoBuild() throws {
         let folder = try makeFolder()
         let stubs = try makeStubs(in: folder)
         let installDir = folder.appendingPathComponent("apps")
-        let result = try bash(
-            "\"\(root.path)/scripts/build-app.sh\" --install-only",
-            environment: [
-                "BUGBEAR_BUILD_DIR": folder.appendingPathComponent("empty").path,
-                "BUGBEAR_INSTALL_DIR": installDir.path,
-                "BUGBEAR_KEEP_PERMISSIONS": "1",
-                "BUGBEAR_NO_OPEN": "1",
-            ],
-            path: stubs)
+        let result = try install(
+            in: folder, stubs: stubs,
+            extra: ["APP_BUILD_DIR": folder.appendingPathComponent("empty").path, "APP_INSTALL_DIR": installDir.path])
         XCTAssertNotEqual(result.status, 0, result.output)
         XCTAssertTrue(result.output.contains("is missing: run scripts/build-app.sh first"), result.output)
         let calls = (try? String(contentsOf: folder.appendingPathComponent("calls.txt"), encoding: .utf8)) ?? ""
@@ -197,12 +313,73 @@ final class BuildOnceScriptsTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: installDir.path), "nothing installed")
     }
 
+    /// Another app that sits where this one goes is never deleted: the install stops and says why.
+    func testInstallStopsAtAnAppThatIsNotOurs() throws {
+        let name = try appName()
+        let cases: [(id: String, executable: String, built: Bool)] = [
+            ("com.example.other", "Other", false),
+            // An executable with the app's name alone is not enough: no build keys, an id the app never had.
+            ("com.example.other", name, false),
+        ]
+        for item in cases {
+            let folder = try makeFolder()
+            let stubs = try makeStubs(in: folder)
+            try makeApp(at: folder.appendingPathComponent("build/\(name).app"), bundleId: "test.built")
+            let installDir = folder.appendingPathComponent("apps")
+            let other = installDir.appendingPathComponent("\(name).app")
+            try makeApp(at: other, bundleId: item.id, executable: item.executable, built: item.built)
+            let result = try install(in: folder, stubs: stubs, extra: ["APP_INSTALL_DIR": installDir.path])
+            XCTAssertNotEqual(result.status, 0, "\(item): \(result.output)")
+            XCTAssertTrue(result.output.contains("is not a \(AppInfo.name) build"), "\(item): \(result.output)")
+            let info = try XCTUnwrap(NSDictionary(contentsOf: other.appendingPathComponent("Contents/Info.plist")))
+            XCTAssertEqual(info["CFBundleIdentifier"] as? String, item.id, "\(item): the other app stays")
+            let calls = (try? String(contentsOf: folder.appendingPathComponent("calls.txt"), encoding: .utf8)) ?? ""
+            XCTAssertFalse(calls.contains("pkill"), "\(item): stops before quitting anything: \(calls)")
+        }
+    }
+
+    /// A copy without the build keys still counts when its id is one of the app's.
+    func testInstallReplacesAnOlderCopyWithTheAppsId() throws {
+        let name = try appName()
+        let folder = try makeFolder()
+        let stubs = try makeStubs(in: folder)
+        try makeApp(at: folder.appendingPathComponent("build/\(name).app"), bundleId: "test.built")
+        let installDir = folder.appendingPathComponent("apps")
+        try makeApp(at: installDir.appendingPathComponent("\(name).app"), bundleId: AppInfo.defaultBundleId, built: false)
+        let result = try install(in: folder, stubs: stubs, extra: ["APP_INSTALL_DIR": installDir.path])
+        XCTAssertEqual(result.status, 0, result.output)
+        let info = try XCTUnwrap(NSDictionary(contentsOf: installDir.appendingPathComponent("\(name).app/Contents/Info.plist")))
+        XCTAssertEqual(info["CFBundleIdentifier"] as? String, "test.built", result.output)
+    }
+
+    /// Permissions go only for a copy the install replaces; the copy in the other Applications folder stays
+    /// and keeps them.
+    func testOnlyAReplacedCopyLosesItsPermissions() throws {
+        let name = try appName()
+        let folder = try makeFolder()
+        let stubs = try makeStubs(in: folder)
+        try makeApp(at: folder.appendingPathComponent("build/\(name).app"), bundleId: "test.built")
+        let systemApps = folder.appendingPathComponent("system-apps")
+        try makeApp(at: systemApps.appendingPathComponent("\(name).app"), bundleId: "test.replaced")
+        let staying = folder.appendingPathComponent("home/Applications/\(name).app")
+        try makeApp(at: staying, bundleId: "test.stays")
+        let result = try install(in: folder, stubs: stubs)
+        XCTAssertEqual(result.status, 0, result.output)
+        let installed = try XCTUnwrap(NSDictionary(contentsOf: systemApps.appendingPathComponent("\(name).app/Contents/Info.plist")))
+        XCTAssertEqual(installed["CFBundleIdentifier"] as? String, "test.built", result.output)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: staying.path), "the other copy stays")
+        let calls = (try? String(contentsOf: folder.appendingPathComponent("calls.txt"), encoding: .utf8)) ?? ""
+        XCTAssertTrue(calls.contains("tccutil reset All test.replaced"), "the replaced copy's permissions go: \(calls)")
+        XCTAssertFalse(calls.contains("test.stays"), "the staying copy keeps its permissions: \(calls)")
+        XCTAssertFalse(calls.contains("osascript"), "APP_KEEP_PERMISSIONS: no password dialog: \(calls)")
+    }
+
     func testBuildScriptWritesTheAutomationMarkerOnlyForAutomationBuilds() throws {
         let text = try read("scripts/build-app.sh")
         XCTAssertTrue(text.contains("rm -f \"$BUILD_DIR/.automation-build\""), "removed at the start of every build")
         XCTAssertTrue(text.contains("touch \"$BUILD_DIR/.automation-build\""))
         let touch = try XCTUnwrap(text.range(of: "touch \"$BUILD_DIR/.automation-build\""))
-        let guardLine = try XCTUnwrap(text.range(of: "if [ \"${BUGBEAR_AUTOMATION:-}\" = \"1\" ]; then\n        touch"))
+        let guardLine = try XCTUnwrap(text.range(of: "if [ \"${APP_AUTOMATION:-}\" = \"1\" ]; then\n        touch"))
         XCTAssertTrue(guardLine.upperBound <= touch.upperBound)
     }
 

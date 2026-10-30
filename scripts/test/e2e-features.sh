@@ -7,7 +7,7 @@
 #   E2E_BROWSER=Safari scripts/test/e2e-features.sh  # or another browser
 #
 # Opens a local test page in a new browser window and moves the mouse; don't touch the Mac while it runs (~2 min).
-# Needs Screen Recording and Accessibility for Bugbear. Restores the settings it changes.
+# Needs Screen Recording and Accessibility for the app. Restores the settings it changes.
 set -uo pipefail
 
 # shellcheck source=../lib/common.sh
@@ -18,10 +18,13 @@ if [ -f "$ROOT/.env" ]; then
     source "$ROOT/.env"
     set +a
 fi
-BUNDLE_ID="${BUGBEAR_BUNDLE_ID:-io.github.bugbear.app}"
+# DEFAULT_BUNDLE_ID for a .env without APP_BUNDLE_ID.
+# shellcheck disable=SC1091
+source "$ROOT/scripts/lib/app-name.sh"
+BUNDLE_ID="${APP_BUNDLE_ID:-$DEFAULT_BUNDLE_ID}"
 # shellcheck disable=SC1091
 source "$ROOT/scripts/test/lib/test-app.sh"
-R=scripts/dev/bugbear-run.sh
+R=scripts/dev/app-run.sh
 BROWSER="${E2E_BROWSER:-Google Chrome}"
 WORK="$ROOT/build/e2e-features"
 FAILURES=0
@@ -35,14 +38,14 @@ source "$ROOT/scripts/test/lib/e2e-helpers.sh"
 
 section "build and launch"
 build_test_app || exit 1
-# Quit the person's Bugbear and keep a copy of their settings before any test setting is written.
-quit_running_bugbear
+# Quit the person's copy of the app and keep a copy of their settings before any test setting is written.
+quit_running_app
 rm -rf "$WORK"
 mkdir -p "$WORK"
 defaults write "$BUNDLE_ID" automationEnabled -bool true
 # What the tests leave behind is cleaned up at the end: the captures they made (folders that were
 # not there before) and the text on the clipboard.
-CAPTURES_DIR="$HOME/Library/Application Support/Bugbear/Captures"
+CAPTURES_DIR="$HOME/Library/Application Support/$APP_NAME/Captures"
 ls "$CAPTURES_DIR" 2>/dev/null | sort > "$WORK/captures-before.txt"
 # Editor choices made by the tests go to a store of their own (EditorMemory); start it empty.
 defaults delete "$BUNDLE_ID.tests" 2>/dev/null
@@ -51,7 +54,7 @@ pbpaste > "$WORK/clipboard-before.txt" 2>/dev/null
 defaults read "$BUNDLE_ID" recentAnnotationColors > "$WORK/palette-before.txt" 2>/dev/null
 
 section "a new install shows the welcome guide"
-# Settings outlive a deleted app, so installing where no Bugbear is starts the guide again;
+# Settings outlive a deleted app, so installing where no copy is starts the guide again;
 # installing over a copy (an update) keeps them.
 # The test copy shares the installed app's settings: keep what these steps touch and put it back.
 saved_onboarding=$(defaults read "$BUNDLE_ID" onboardingCompleted 2>/dev/null || echo "")
@@ -59,10 +62,10 @@ saved_onboarding_page=$(defaults read "$BUNDLE_ID" onboardingPage 2>/dev/null ||
 saved_whats_new=$(defaults read "$BUNDLE_ID" whatsNewLastSeenID 2>/dev/null || echo "")
 install_dir="$WORK/apps"
 defaults write "$BUNDLE_ID" onboardingCompleted -bool true
-BUGBEAR_INSTALL_DIR="$install_dir" BUGBEAR_NO_OPEN=1 scripts/build-app.sh --install-only >/dev/null 2>&1
-if ! defaults read "$BUNDLE_ID" onboardingCompleted >/dev/null 2>&1; then pass "installing where no Bugbear is forgets the finished guide"; else fail "a new install forgets the finished guide"; fi
+APP_INSTALL_DIR="$install_dir" APP_NO_OPEN=1 scripts/build-app.sh --install-only >/dev/null 2>&1
+if ! defaults read "$BUNDLE_ID" onboardingCompleted >/dev/null 2>&1; then pass "installing where no copy is forgets the finished guide"; else fail "a new install forgets the finished guide"; fi
 defaults write "$BUNDLE_ID" onboardingCompleted -bool true
-BUGBEAR_INSTALL_DIR="$install_dir" BUGBEAR_NO_OPEN=1 scripts/build-app.sh --install-only >/dev/null 2>&1
+APP_INSTALL_DIR="$install_dir" APP_NO_OPEN=1 scripts/build-app.sh --install-only >/dev/null 2>&1
 if [ "$(defaults read "$BUNDLE_ID" onboardingCompleted 2>/dev/null)" = "1" ]; then pass "installing over a copy (an update) keeps the finished guide"; else fail "an update keeps the finished guide"; fi
 rm -rf "$install_dir"
 defaults delete "$BUNDLE_ID" onboardingCompleted 2>/dev/null
@@ -71,8 +74,8 @@ open "$TEST_APP"
 wait_for_value 15 "visible=true" $R window-visible:onboarding 10
 result=$($R window-visible:onboarding 10)
 if [ "$result" = "visible=true" ]; then pass "the first launch opens the welcome guide"; else fail "the first launch opens the welcome guide" "$result"; fi
-pkill -x Bugbear 2>/dev/null
-wait_for_bugbear_to_quit
+pkill -x "$APP_NAME" 2>/dev/null
+wait_for_app_to_quit
 defaults delete "$BUNDLE_ID" automationFirstLaunch 2>/dev/null
 if [ "$saved_onboarding" = "1" ]; then
     defaults write "$BUNDLE_ID" onboardingCompleted -bool true
@@ -117,7 +120,7 @@ style = ("body{margin:0;font:18px -apple-system,sans-serif;background:#fff;color
          ".row{padding:10px 20px;border-bottom:1px solid #ddd;height:22px}"
          ".r0{background:#fafafa}.r1{background:#f2f7ff}.r2{background:#fff8f0}.r3{background:#f4fff4}.r4{background:#fff}")
 html = (f'<!doctype html><html><head><meta charset="utf-8"><title>Scroll test</title><style>{style}</style></head><body>'
-        f'<header>Bugbear scroll test · sticky header</header>{"".join(rows)}<footer>Sticky footer · end of page</footer></body></html>')
+        f'<header>Scroll test · sticky header</header>{"".join(rows)}<footer>Sticky footer · end of page</footer></body></html>')
 open(sys.argv[1], "w").write(html)
 EOF
 # A new window, so the browser windows you have open are not moved or resized.
@@ -699,7 +702,7 @@ if [ "$(field "$result" windows)" = "0" ] && [ "$(field "$result" menu)" = "true
 $R close-panel 10 >/dev/null
 
 section "shortcuts"
-LOG="$HOME/Library/Logs/Bugbear/bugbear.log"
+LOG="$HOME/Library/Logs/$APP_NAME/$APP_NAME.log"
 before=$(grep -c "marker added" "$LOG")
 $R post-key:46:option,shift 10 >/dev/null
 wait_for 10 marker_count_above "$before"
@@ -1017,7 +1020,26 @@ result=$(press_menu Recent "$newest")
 wait_for 10 capture_editor_open
 if [ -n "$newest" ] && [ "$result" = "pressed" ] && [[ "$(windows_now)" == *"screenshot:"* || "$(windows_now)" == *"video:"* ]]; then pass "a recent capture opens in its editor ($newest)"; else fail "a recent capture opens" "$newest $result $(windows_now)"; fi
 $R close-windows 10 >/dev/null
-for row in "Open|history" "All categories|space" "What takes space…|space"; do
+# "Open" on the Captures row opens the history. The menu shows only the four biggest categories,
+# so Captures is there only when this Mac's captures are big: then it is pressed in the menu,
+# otherwise on the same row in the Disk Space window, which lists every category.
+$R close-panel 10 >/dev/null
+$R press-status-item 10 >/dev/null
+$R press:menubar:Space 10 >/dev/null
+if $R controls:menubar 30 | sed 's/ ;; /\n/g' | cut -d'|' -f2- | grep -qxF "Open"; then
+    where="menu"
+    result=$(press_menu Space "Open")
+else
+    where="Disk Space window"
+    $R close-panel 10 >/dev/null
+    $R open-space:Clean\ up 10 >/dev/null
+    wait_for 10 space_control_shown "Open"
+    result=$(press_in space "Open")
+fi
+wait_for_text 10 history windows_now
+if [ "$result" = "pressed" ] && window_open history; then pass "Space \"Open\" on Captures opens the history ($where)"; else fail "Space \"Open\" on Captures ($where)" "$result $(windows_now)"; fi
+$R close-windows 10 >/dev/null
+for row in "All categories|space" "What takes space…|space"; do
     label="${row%%|*}"
     window="${row##*|}"
     result=$(press_menu Space "$label")
@@ -1253,15 +1275,15 @@ if [[ "$($R system-actions:read 10)" == *"reveal $fake_home/Library"* ]]; then p
 
 # Largest files: Show, Move to Trash asks, Keep, Move.
 press_in space "Largest files" >/dev/null
-wait_for_text 10 "Show bugbear-test-big.bin in Finder" space_controls
-press_in space "Show bugbear-test-big.bin in Finder" >/dev/null
-if [[ "$($R system-actions:read 10)" == *"reveal $fake_home/Downloads/bugbear-test-big.bin"* ]]; then pass "Space \"Show\" shows the file in Finder"; else fail "Space Show file" "$($R system-actions:read 10)"; fi
-press_in space "Move bugbear-test-big.bin to Trash" >/dev/null
-press_in space "Keep bugbear-test-big.bin" >/dev/null
-if space_controls | grep -q "^Move bugbear-test-big.bin to Trash$" && [[ "$($R system-actions:read 10)" != *"trash "* ]]; then pass "Space \"Move to Trash\" asks first and \"Cancel\" keeps the file"; else fail "Space Move to Trash, Cancel"; fi
-press_in space "Move bugbear-test-big.bin to Trash" >/dev/null
-press_in space "Move bugbear-test-big.bin to the Trash now" >/dev/null
-if [[ "$($R system-actions:read 10)" == *"trash $fake_home/Downloads/bugbear-test-big.bin"* ]] && ! space_controls | grep -q "bugbear-test-big.bin"; then pass "Space \"Move\" moves the file to the Trash and drops its row"; else fail "Space Move" "$($R system-actions:read 10)"; fi
+wait_for_text 10 "Show test-big.bin in Finder" space_controls
+press_in space "Show test-big.bin in Finder" >/dev/null
+if [[ "$($R system-actions:read 10)" == *"reveal $fake_home/Downloads/test-big.bin"* ]]; then pass "Space \"Show\" shows the file in Finder"; else fail "Space Show file" "$($R system-actions:read 10)"; fi
+press_in space "Move test-big.bin to Trash" >/dev/null
+press_in space "Keep test-big.bin" >/dev/null
+if space_controls | grep -q "^Move test-big.bin to Trash$" && [[ "$($R system-actions:read 10)" != *"trash "* ]]; then pass "Space \"Move to Trash\" asks first and \"Cancel\" keeps the file"; else fail "Space Move to Trash, Cancel"; fi
+press_in space "Move test-big.bin to Trash" >/dev/null
+press_in space "Move test-big.bin to the Trash now" >/dev/null
+if [[ "$($R system-actions:read 10)" == *"trash $fake_home/Downloads/test-big.bin"* ]] && ! space_controls | grep -q "test-big.bin"; then pass "Space \"Move\" moves the file to the Trash and drops its row"; else fail "Space Move" "$($R system-actions:read 10)"; fi
 
 # Scan again from the folder list starts a fresh scan.
 press_in space Folders >/dev/null
@@ -1288,7 +1310,7 @@ settings_before="$(setting_value projectRoots)/$(setting_value oldProjectDays)/$
 # then does what the runner's own exit trap does.
 space_review_exit() {
     $R space-fake-home:off 60 >/dev/null
-    if declare -F restore_running_bugbear >/dev/null; then restore_running_bugbear; fi
+    if declare -F restore_running_app >/dev/null; then restore_running_app; fi
 }
 trap space_review_exit EXIT
 trap 'exit 130' INT TERM
@@ -1487,7 +1509,7 @@ fi
 $R close-windows 10 >/dev/null
 $R space-fake-home:off 60 >/dev/null
 trap - INT TERM
-if declare -F restore_running_bugbear >/dev/null; then trap restore_running_bugbear EXIT; else trap - EXIT; fi
+if declare -F restore_running_app >/dev/null; then trap restore_running_app EXIT; else trap - EXIT; fi
 settings_after="$(setting_value projectRoots)/$(setting_value oldProjectDays)/$(setting_value projectFoldersToTrash)/$(setting_value dependencyKinds)/$(setting_value hiddenCacheRows)"
 # Without the made-up home the automation does not press a button that removes.
 refused_press=$($R "press:space:Move 1 folder, 5 MB to the Trash" 10)
@@ -1504,17 +1526,17 @@ tb_value() { local shown; shown=$($R "control-value:toolbox:$1" 10); echo "${sho
 tb_press() { press_in toolbox "$1" >/dev/null; }
 tb_controls() { $R controls:toolbox 30 | sed 's/ ;; /\n/g'; }
 # Something other than the sentinel is on the clipboard (empty is the moment between clearing and writing).
-clipboard_has_copy() { local text; text=$(pbpaste); [ -n "$text" ] && [ "$text" != "bugbear-sentinel" ]; }
+clipboard_has_copy() { local text; text=$(pbpaste); [ -n "$text" ] && [ "$text" != "clipboard-sentinel" ]; }
 # tb_copies <label>: presses a copy button and prints what it put on the clipboard (nothing when it put
 # nothing). The press answers at once and the clipboard is waited for; a button that copies nothing
 # leaves the sentinel, and the wait ends at its timeout.
 tb_copies() {
-    printf 'bugbear-sentinel' | pbcopy
+    printf 'clipboard-sentinel' | pbcopy
     press_now toolbox "$1" >/dev/null
     wait_for 2 clipboard_has_copy
     local text
     text=$(pbpaste)
-    if [ "$text" != "bugbear-sentinel" ]; then printf '%s' "$text"; fi
+    if [ "$text" != "clipboard-sentinel" ]; then printf '%s' "$text"; fi
 }
 toolbox_listing="$WORK/toolbox-controls.txt"
 : > "$toolbox_listing"
@@ -1581,7 +1603,7 @@ if [[ "$unescaped" == *'"n"'* && "$unescaped" != *'\"n'* && "$(tb_value Output)"
 tb_set Input '{"b":1}'
 copied_as=""
 for item in "Copy as YAML|b: 1" "Copy as XML|<b>1</b>" "Copy as CSV|b"; do
-    printf 'bugbear-sentinel' | pbcopy
+    printf 'clipboard-sentinel' | pbcopy
     $R "choose:toolbox:Copy as… => ${item%%|*}" 10 >/dev/null
     if ! pbpaste | grep -qF "${item##*|}"; then copied_as="$copied_as ${item%%|*}: $(pbpaste | head -1)"; fi
 done
@@ -1645,7 +1667,7 @@ tb_press "Encode as a query component (also / ? & =)"
 tb_every_copy "URL encode"
 tb_press Decode
 tb_set Input 'https://x.test/?q=1&r=two'
-printf 'bugbear-sentinel' | pbcopy
+printf 'clipboard-sentinel' | pbcopy
 $R "choose:toolbox:Query parameters (2) => r = two" 10 >/dev/null
 if [ "$component" = "a%20b%26c" ] && [[ "$whole" == *"&"* ]] && [ "$(pbpaste)" = "two" ]; then pass "toolbox URL \"Encode\", query component switch and \"Query parameters\" copy a value"; else fail "toolbox URL" "$component / $whole / $(pbpaste)"; fi
 tb_open "HTML entities"
@@ -1800,12 +1822,12 @@ pass "toolbox Regex \"m\" and \"s\" switch without errors"
 
 # QR: Copy image, read it back, Save PNG…, Read from screen… (cancelled).
 tb_open "QR code"
-tb_set Input "https://bugbear.test/qr"
+tb_set Input "https://example.test/qr"
 tb_press "Copy image"
 image_types=$($R pasteboard-types 10)
 tb_set Input "x"
 tb_press "Read from clipboard image"
-wait_for_value 10 "https://bugbear.test/qr" tb_value Input
+wait_for_value 10 "https://example.test/qr" tb_value Input
 read_back=$(tb_value Input)
 $R system-actions:start 10 >/dev/null
 rm -f "$WORK/qr.png"
@@ -1813,7 +1835,7 @@ $R "system-actions:files:$WORK/qr.png" 10 >/dev/null
 tb_press "Save PNG…"
 wait_for 10 test -s "$WORK/qr.png"
 $R system-actions:stop 10 >/dev/null
-if [[ "$image_types" == *png* || "$image_types" == *tiff* ]] && [ "$read_back" = "https://bugbear.test/qr" ]; then pass "toolbox QR \"Copy image\" and \"Read from clipboard image\" round trip"; else fail "toolbox QR copy and read" "$image_types / $read_back"; fi
+if [[ "$image_types" == *png* || "$image_types" == *tiff* ]] && [ "$read_back" = "https://example.test/qr" ]; then pass "toolbox QR \"Copy image\" and \"Read from clipboard image\" round trip"; else fail "toolbox QR copy and read" "$image_types / $read_back"; fi
 if file "$WORK/qr.png" 2>/dev/null | grep -q PNG; then pass "toolbox QR \"Save PNG…\" writes the code"; else fail "toolbox QR save"; fi
 tb_press "Read from screen…"
 wait_for 10 pgrep -x screencapture
@@ -1983,7 +2005,7 @@ press_in onboarding Continue >/dev/null
 onboarding_controls="$onboarding_controls"$'\n'"$($R controls:onboarding 30 | sed 's/ ;; /\n/g' | sed "s#^#onboarding|#")"
 press_in onboarding "Start using $APP_NAME" >/dev/null
 wait_for_no_text 10 onboarding windows_now
-if [[ "$(windows_now)" != *"onboarding"* ]] && [ "$(setting_value onboardingCompleted)" = 1 ]; then pass "guide \"Start using $APP_NAME\" finishes the guide"; else fail "guide Start using Bugbear" "$(windows_now)"; fi
+if [[ "$(windows_now)" != *"onboarding"* ]] && [ "$(setting_value onboardingCompleted)" = 1 ]; then pass "guide \"Start using $APP_NAME\" finishes the guide"; else fail "guide Start using $APP_NAME" "$(windows_now)"; fi
 $R open-onboarding 10 >/dev/null
 press_in onboarding Skip >/dev/null
 wait_for_no_text 10 onboarding windows_now
@@ -2318,7 +2340,7 @@ $R space-scan 60 >/dev/null
 $R "press:space:$($R controls:space 30 | sed 's/ ;; /\n/g' | cut -d'|' -f2- | grep -E "^Folder Home, " | head -1)" 10 >/dev/null
 list_space
 $R "press:space:Largest files" 10 >/dev/null
-$R "press:space:Move bugbear-test-big.bin to Trash" 10 >/dev/null
+$R "press:space:Move test-big.bin to Trash" 10 >/dev/null
 list_space
 fi
 $R close-windows 10 >/dev/null
@@ -2521,7 +2543,7 @@ for row in "General|Open at login" "Buffer and recording|Keep the last" "Bug rep
     if [ "$page" = "General" ]; then other="Clean up now"; else other="Open at login"; fi
     if [[ "$shown" == *"|$own"* && "$shown" != *"|$other"* ]]; then pass "settings sidebar \"$page\" shows that page"; else fail "settings sidebar \"$page\"" "$shown"; fi
 done
-# Fields Bugbear fills in: every one is listed, can be turned off and renamed, and a new
+# Fields the app fills in: every one is listed, can be turned off and renamed, and a new
 # capture's report follows. The person's own choices are put back after.
 # Kept in a file as JSON: values may hold ":", "," or nothing.
 saved_hidden=$(setting_value hiddenEnvironmentFields)
@@ -2588,7 +2610,7 @@ if [ "$(setting_value hiddenEnvironmentFields)" = "$saved_hidden" ] && [ "$(sett
 $R close-windows 10 >/dev/null
 
 section "screenshot editor buttons"
-# Saves go to a test folder, not the person's Desktop/Bugbear.
+# Saves go to a test folder, not the person's Desktop/$APP_NAME.
 saved_output=$(setting_value outputFolderPath)
 out_dir="$WORK/editor-out"
 rm -rf "$out_dir"
@@ -2633,7 +2655,7 @@ if [[ "$(windows_now)" == *"NSColorPanel"* ]]; then pass "editor \"Pick any colo
 $R close-color-panel 10 >/dev/null
 
 # Insert a picture from a file, undo and redo it, combine with another screenshot.
-shot=$(ls -t "$HOME/Library/Application Support/Bugbear/Captures"/*/original.png | head -1)
+shot=$(ls -t "$HOME/Library/Application Support/$APP_NAME/Captures"/*/original.png | head -1)
 $R "system-actions:files:$shot" 10 >/dev/null
 marks_before=$(state_field "$(editor_state)" marks)
 press_in screenshot: "Insert an image on top of this one: pick a file, paste one with ⌘V (Command + V) or drop it here" >/dev/null
@@ -3078,7 +3100,7 @@ elif [[ "$result" == "notch=true hiddenBefore=true hiddenAfter=false"* || "$resu
 $R close-panel 10 >/dev/null
 $R post-key:11:option,shift 10 >/dev/null
 wait_for 10 menu_panel_open
-if $R windows-debug 10 | tr '|' '\n' | grep "MenuBarExtraWindow" | grep -q "visible=true"; then pass "⌥⇧B opens the Bugbear menu"; else fail "⌥⇧B opens the Bugbear menu"; fi
+if $R windows-debug 10 | tr '|' '\n' | grep "MenuBarExtraWindow" | grep -q "visible=true"; then pass "⌥⇧B opens the $APP_NAME menu"; else fail "⌥⇧B opens the $APP_NAME menu"; fi
 $R close-panel 10 >/dev/null
 
 section "tooltips"
@@ -3118,7 +3140,7 @@ $R close-windows 10 >/dev/null
 
 section "welcome guide fits the screen"
 # Opened fresh, the guide keeps its own size and stays inside the screen, so Continue is reachable.
-frame_key="NSWindow Frame Bugbear.onboarding"
+frame_key="NSWindow Frame Window.onboarding"
 defaults delete "$BUNDLE_ID" "$frame_key" 2>/dev/null
 result=$($R open-onboarding 10)
 if python3 scripts/test/lib/window-fits.py "$result"; then pass "welcome guide fits the screen ($result)"; else fail "welcome guide fits the screen" "$result"; fi
@@ -3137,7 +3159,7 @@ if [[ "$result" == "template=bug_report.yml version=true "*" planted=true "*" ho
 result=$($R feedback-url:idea 15)
 if [[ "$result" == "template=feature_request.yml version=true logs=0 "*" home=false user=false" ]]; then pass "an idea link uses the idea form without logs ($result)"; else fail "an idea link uses the idea form" "$result"; fi
 result=$($R feedback-zip 20)
-if [[ "$result" == *"bugbear.log"* && "$result" == *"environment.txt"* && "$result" == *"planted=true home=false user=false" ]]; then pass "the log zip has the log and the environment, hides the home folder and user name ($result)"; else fail "the log zip" "$result"; fi
+if [[ "$result" == *"$APP_NAME.log"* && "$result" == *"environment.txt"* && "$result" == *"planted=true home=false user=false" ]]; then pass "the log zip has the log and the environment, hides the home folder and user name ($result)"; else fail "the log zip" "$result"; fi
 result=$($R feedback-crash:on 15)
 if [[ "$result" == "offered=true open=true crash=true canSend=true moved=true title=$APP_NAME quit unexpectedly" ]]; then pass "a crash since the last launch opens a report with the crash filled in ($result)"; else fail "a crash opens a report" "$result"; fi
 result=$($R feedback-crash:off 15)
@@ -3182,26 +3204,26 @@ $R setting:readBrowserURL:true 10 >/dev/null
 $R browser-accessibility-off 10 >/dev/null
 
 section "quitting stops the screen capture"
-# pkill (updates, reinstalls) used to end Bugbear mid-capture, and macOS kept showing
-# "Bugbear - Currently Sharing" after it was gone.
+# pkill (updates, reinstalls) used to end the app mid-capture, and macOS kept showing
+# "<name> - Currently Sharing" after it was gone.
 $R buffer-start 30 >/dev/null
 log_lines_before=$(wc -l < "$LOG")
-pkill -x Bugbear 2>/dev/null
-# It has to quit by itself: wait_for_bugbear_to_quit would end it with kill -9 and hide a hang.
+pkill -x "$APP_NAME" 2>/dev/null
+# It has to quit by itself: wait_for_app_to_quit would end it with kill -9 and hide a hang.
 waited=0
-while pgrep -x Bugbear >/dev/null && [ "$waited" -lt 30 ]; do
+while pgrep -x "$APP_NAME" >/dev/null && [ "$waited" -lt 30 ]; do
     # Poll step.
     sleep 0.2
     waited=$((waited + 1))
 done
-if pgrep -x Bugbear >/dev/null; then quit_by_itself=false; else quit_by_itself=true; fi
-wait_for_bugbear_to_quit
+if pgrep -x "$APP_NAME" >/dev/null; then quit_by_itself=false; else quit_by_itself=true; fi
+wait_for_app_to_quit
 quit_log=$(tail -n +"$((log_lines_before + 1))" "$LOG")
-if [ "$quit_by_itself" = true ]; then pass "Bugbear quits on SIGTERM"; else fail "Bugbear quits on SIGTERM" "still running after 6 s"; fi
+if [ "$quit_by_itself" = true ]; then pass "$APP_NAME quits on SIGTERM"; else fail "$APP_NAME quits on SIGTERM" "still running after 6 s"; fi
 if echo "$quit_log" | grep -q "quit requested by SIGTERM" && echo "$quit_log" | grep -q "capture stopped for quit" && ! echo "$quit_log" | grep -q "quit timed out" && ! echo "$quit_log" | grep -q "quit did not finish"; then pass "SIGTERM stops the screen capture before quitting"; else fail "SIGTERM stops the screen capture" "$quit_log"; fi
 
 defaults write "$BUNDLE_ID" automationEnabled -bool false
-# Bugbear has quit above, so its captures can go from disk; it reads the folder on the next launch.
+# The app has quit above, so its captures can go from disk; it reads the folder on the next launch.
 removed=0
 while IFS= read -r folder_name; do
     if [ -z "$folder_name" ] || grep -qxF "$folder_name" "$WORK/captures-before.txt"; then continue; fi

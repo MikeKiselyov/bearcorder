@@ -15,16 +15,19 @@ if [ -f "$ROOT/.env" ]; then
     source "$ROOT/.env"
     set +a
 fi
-BUNDLE_ID="${BUGBEAR_BUNDLE_ID:-io.github.bugbear.app}"
+# DEFAULT_BUNDLE_ID for a .env without APP_BUNDLE_ID.
+# shellcheck disable=SC1091
+source "$ROOT/scripts/lib/app-name.sh"
+BUNDLE_ID="${APP_BUNDLE_ID:-$DEFAULT_BUNDLE_ID}"
 # shellcheck disable=SC1091
 source "$ROOT/scripts/test/lib/test-app.sh"
-R=scripts/dev/bugbear-run.sh
+R=scripts/dev/app-run.sh
 # BROWSER and LOG are for the section file sourced below.
 # shellcheck disable=SC2034
 BROWSER="${E2E_BROWSER:-Google Chrome}"
 WORK="$ROOT/build/e2e-features"
 # shellcheck disable=SC2034
-LOG="$HOME/Library/Logs/Bugbear/bugbear.log"
+LOG="$HOME/Library/Logs/$APP_NAME/$APP_NAME.log"
 FAILURES=0
 PASSES=0
 pass() { echo "PASS  $1"; PASSES=$((PASSES + 1)); }
@@ -46,8 +49,8 @@ if [ ! -s "$section" ]; then
 fi
 
 build_test_app || exit 1
-# Quit the person's Bugbear and keep a copy of their settings before any test setting is written.
-quit_running_bugbear
+# Quit the person's copy of the app and keep a copy of their settings before any test setting is written.
+quit_running_app
 mkdir -p "$WORK"
 defaults write "$BUNDLE_ID" automationEnabled -bool true
 # Editor choices made by the tests go to a store of their own (EditorMemory); start it empty.

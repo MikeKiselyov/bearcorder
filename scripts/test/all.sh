@@ -6,7 +6,7 @@
 #   scripts/test/all.sh --quick   # unit tests, self-test, lint and the release check (~2 min), no permissions
 #
 # Suites:
-#   unit       swift test --parallel: parsers, converters, reports, timelines, disk tree (BugbearCore)
+#   unit       swift test --parallel: parsers, converters, reports, timelines, disk tree (AppCore)
 #   self-test  media pipeline: export, edits, GIF, size limits, annotations, OCR, QR, stitching
 #   controls   every control in scripts/check/controls.txt has a check in the tests
 #   lint       shellcheck on every script (when shellcheck is installed)
@@ -72,13 +72,13 @@ self_test() {
     rm -rf "$folder"
     mkdir -p "$folder"
     swift build -c debug >/dev/null || return 1
-    .build/debug/Bugbear --self-test "$folder"
+    .build/debug/App --self-test "$folder"
 }
 
 # Run by name through run_suite: the build and signing the e2e, features and perf suites share.
 # shellcheck disable=SC2329
 build_test_app_once() {
-    BUGBEAR_AUTOMATION=1 scripts/build-app.sh || return 1
+    APP_AUTOMATION=1 scripts/build-app.sh || return 1
     echo "test app built"
 }
 
@@ -131,12 +131,12 @@ if command -v actionlint >/dev/null; then
     run_suite workflows lint_workflows
 fi
 if [ "$QUICK" = "0" ]; then
-    # One automation build for the three suites below: they use it as it is (BUGBEAR_APP_BUILT).
+    # One automation build for the three suites below: they use it as it is (APP_BUILT).
     run_suite app-build build_test_app_once
     # Without a fresh build the three suites would test an old app: they are not run.
     case "${RESULTS[${#RESULTS[@]} - 1]}" in
         ok*)
-            export BUGBEAR_APP_BUILT=1
+            export APP_BUILT=1
             run_suite e2e scripts/test/e2e.sh
             run_suite features scripts/test/e2e-features.sh
             run_suite perf scripts/test/perf.sh

@@ -4,7 +4,7 @@ Changes go to `main` only through pull requests, and every pull request that cha
 new release:
 
 1. Work in a branch.
-2. Add a release on top of `Sources/BugbearCore/Support/WhatsNewCatalog.swift` with the next id and a
+2. Add a release on top of `Sources/AppCore/Support/WhatsNewCatalog.swift` with the next id and a
    higher version: a patch (`0.5.1`) for fixes, a minor (`0.6.0`) for new features. Write the items
    for people, the way they appear in "What's new". The app's version comes from this entry.
 3. Open a pull request. [CI](.github/workflows/ci.yml) checks that the release is there

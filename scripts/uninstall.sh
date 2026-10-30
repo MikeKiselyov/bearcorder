@@ -1,43 +1,41 @@
 #!/bin/bash
-# One-command uninstall: removes Bugbear from this Mac - the app, captures, the screen buffer, logs,
-# settings, permissions, the signing certificate and the source kept for updates. Files you saved
-# or exported stay where you put them.
+# One-command uninstall: removes the app from this Mac - the app, captures, the screen buffer, logs,
+# settings, permissions, the signing certificate and the source kept for updates (unless it has
+# changes or commits of yours). Files you saved or exported stay where you put them.
 #
-#   curl -fsSL https://raw.githubusercontent.com/MikeKiselyov/bugbear-app/main/scripts/uninstall.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/MikeKiselyov/bearcorder/main/scripts/uninstall.sh | bash
 #   scripts/uninstall.sh --yes    # from a clone, without asking first
 #
 # Options (environment variables):
-#   BUGBEAR_SOURCE_DIR       where the installer kept the source (default: ~/.bugbear)
-#   BUGBEAR_APPS_DIRS        folders to look for the app in, ":" between them
+#   APP_SOURCE_DIR       where the installer kept the source (default: ~/.bearcorder)
+#   APP_APPS_DIRS        folders to look for the app in, ":" between them
 #                            (default: /Applications and ~/Applications)
-#   BUGBEAR_DRY_SYSTEM       1: print the steps that touch the running app, settings, permissions
+#   APP_DRY_SYSTEM       1: print the steps that touch the running app, settings, permissions
 #                            and keychains instead of doing them (for tests)
-#   BUGBEAR_LSREGISTER_DUMP  a file with the text of `lsregister -dump`, read instead of running it
+#   APP_LSREGISTER_DUMP  a file with the text of `lsregister -dump`, read instead of running it
 #                            (the real dump takes 5-7 s; for tests)
-#   BUGBEAR_TTY              where the answers come from (default: /dev/tty; a file in tests)
+#   APP_TTY              where the answers come from (default: /dev/tty; a file in tests)
+#   APP_NO_DEVELOPER_TOOLS  1: act as if Command Line Tools and Xcode were missing (for tests)
 #   NO_COLOR                 plain text
 set -euo pipefail
 
-# The name people see and the folders' name. This file can run without the source, so it keeps its
-# own copies; a unit test checks they match AppInfo.name and AppInfo.storageName.
-APP_NAME="Bugbear"
-STORAGE_NAME="Bugbear"
-# The executable keeps this name whatever the app is called.
-EXECUTABLE="Bugbear"
+# The name people see, also the executable and the folders' name. This file can run without the
+# source, so it keeps its own copies; a unit test checks they match AppInfo.
+APP_NAME="Bearcorder"
 # The bundle id of copies built by the installer.
-DEFAULT_BUNDLE_ID="io.github.bugbear.app"
-# Where people say why they left (.github/ISSUE_TEMPLATE/uninstall_feedback.yml); a unit test
-# checks the repository matches the app's.
-FEEDBACK_URL="https://github.com/MikeKiselyov/bugbear-app/issues/new?template=uninstall_feedback.yml"
+DEFAULT_BUNDLE_ID="io.github.bearcorder.app"
+# Where people say why they left (.github/ISSUE_TEMPLATE/uninstall_feedback.yml).
+FEEDBACK_URL="https://github.com/MikeKiselyov/bearcorder/issues/new?template=uninstall_feedback.yml"
 
-SOURCE_DIR="${BUGBEAR_SOURCE_DIR:-$HOME/.bugbear}"
-APPS_DIRS="${BUGBEAR_APPS_DIRS:-/Applications:$HOME/Applications}"
-DRY_SYSTEM="${BUGBEAR_DRY_SYSTEM:-}"
-TTY="${BUGBEAR_TTY:-/dev/tty}"
-LSREGISTER_DUMP="${BUGBEAR_LSREGISTER_DUMP:-}"
-SUPPORT_DIR="$HOME/Library/Application Support/$STORAGE_NAME"
-LOGS_DIR="$HOME/Library/Logs/$STORAGE_NAME"
-KEYCHAIN="$SUPPORT_DIR/Signing/bugbear-signing.keychain-db"
+SOURCE_DIR="${APP_SOURCE_DIR:-$HOME/.bearcorder}"
+APPS_DIRS="${APP_APPS_DIRS:-/Applications:$HOME/Applications}"
+DRY_SYSTEM="${APP_DRY_SYSTEM:-}"
+TTY="${APP_TTY:-/dev/tty}"
+LSREGISTER_DUMP="${APP_LSREGISTER_DUMP:-}"
+SUPPORT_DIR="$HOME/Library/Application Support/$APP_NAME"
+LOGS_DIR="$HOME/Library/Logs/$APP_NAME"
+# Made by scripts/dev/local-signing.sh.
+KEYCHAIN="$SUPPORT_DIR/Signing/local-signing.keychain-db"
 
 ASK=1
 for argument in "$@"; do
@@ -105,7 +103,43 @@ system() {
     "$@"
 }
 
-# Every installed copy, whatever it is called: its executable is Bugbear.
+# Bundle ids come from files (Info.plist, .env): only a plain reverse-DNS id is used in a path or a
+# command, the same rule as scripts/lib/permissions.sh.
+valid_id() {
+    [[ "$1" =~ ^[A-Za-z0-9][A-Za-z0-9.-]*$ ]]
+}
+
+# A clone's own bundle id (.env).
+clone_id=""
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" 2>/dev/null && pwd || true)"
+if [ -n "$script_dir" ] && [ -f "$script_dir/../.env" ]; then
+    clone_id=$(sed -n 's/^APP_BUNDLE_ID=//p' "$script_dir/../.env" | tr -d '"' | head -1)
+fi
+
+# A copy of the app, as build-app.sh tells: its executable is APP_NAME, and it has the keys every
+# build writes or one of the app's bundle ids (the installer's, the clone's).
+is_our_app() {
+    local plist="$1/Contents/Info.plist"
+    local app_id
+    local executable
+    app_id=$(/usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$plist" 2>/dev/null || true)
+    executable=$(/usr/libexec/PlistBuddy -c "Print :CFBundleExecutable" "$plist" 2>/dev/null || true)
+    if [ "$executable" != "$APP_NAME" ]; then
+        return 1
+    fi
+    if [ -n "$app_id" ] && { [ "$app_id" = "$DEFAULT_BUNDLE_ID" ] || [ "$app_id" = "$clone_id" ]; }; then
+        return 0
+    fi
+    if /usr/libexec/PlistBuddy -c "Print :SourcePath" "$plist" >/dev/null 2>&1; then
+        return 0
+    fi
+    if /usr/libexec/PlistBuddy -c "Print :SourceCommit" "$plist" >/dev/null 2>&1; then
+        return 0
+    fi
+    return 1
+}
+
+# Every installed copy, whatever it is called.
 apps=()
 IFS=':' read -r -a app_folders <<< "$APPS_DIRS"
 for folder in "${app_folders[@]}"; do
@@ -113,8 +147,7 @@ for folder in "${app_folders[@]}"; do
         if [ ! -f "$app/Contents/Info.plist" ]; then
             continue
         fi
-        executable=$(/usr/libexec/PlistBuddy -c "Print :CFBundleExecutable" "$app/Contents/Info.plist" 2>/dev/null || true)
-        if [ "$executable" = "$EXECUTABLE" ]; then
+        if is_our_app "$app"; then
             apps+=("$app")
         fi
     done
@@ -124,20 +157,54 @@ done
 bundle_ids=("$DEFAULT_BUNDLE_ID")
 for app in "${apps[@]+"${apps[@]}"}"; do
     app_id=$(/usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$app/Contents/Info.plist" 2>/dev/null || true)
+    if [ -n "$app_id" ] && ! valid_id "$app_id"; then
+        echo "Skipped the settings of $app: its bundle id is not a plain reverse-DNS id."
+        continue
+    fi
     if [ -n "$app_id" ] && [[ " ${bundle_ids[*]} " != *" $app_id "* ]]; then
         bundle_ids+=("$app_id")
     fi
 done
-script_dir="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" 2>/dev/null && pwd || true)"
-if [ -n "$script_dir" ] && [ -f "$script_dir/../.env" ]; then
-    clone_id=$(sed -n 's/^BUGBEAR_BUNDLE_ID=//p' "$script_dir/../.env" | tr -d '"' | head -1)
-    if [ -n "$clone_id" ] && [[ " ${bundle_ids[*]} " != *" $clone_id "* ]]; then
-        bundle_ids+=("$clone_id")
+if [ -n "$clone_id" ] && valid_id "$clone_id" && [[ " ${bundle_ids[*]} " != *" $clone_id "* ]]; then
+    bundle_ids+=("$clone_id")
+fi
+
+# The source kept for updates goes only when nothing in it would be lost: a git clone of its own with
+# no changes and no commits that are not on its upstream. Otherwise it stays, and this says why.
+# /usr/bin/git without Command Line Tools or Xcode shows macOS's dialog to install them, so git is
+# run only when they are there. A file test and xcode-select, which never shows that dialog.
+developer_tools_present() {
+    if [ "${APP_NO_DEVELOPER_TOOLS:-}" = "1" ]; then
+        return 1
+    fi
+    if [ -x /Library/Developer/CommandLineTools/usr/bin/git ]; then
+        return 0
+    fi
+    local selected
+    selected=$(xcode-select -p 2>/dev/null) || return 1
+    [ -n "$selected" ] && [ -x "$selected/usr/bin/git" ]
+}
+
+source_kept_reason=""
+if [ -e "$SOURCE_DIR" ] && ! developer_tools_present; then
+    source_kept_reason="git is not installed (Command Line Tools or Xcode), so it could not be checked"
+elif [ -e "$SOURCE_DIR" ]; then
+    source_top=$(git -C "$SOURCE_DIR" rev-parse --show-toplevel 2>/dev/null || true)
+    if [ -z "$source_top" ] || ! [ "$source_top" -ef "$SOURCE_DIR" ]; then
+        source_kept_reason="it is not a git clone"
+    elif ! source_changes=$(git -C "$SOURCE_DIR" status --porcelain 2>/dev/null) || [ -n "$source_changes" ]; then
+        source_kept_reason="it has changes that are not committed"
+    elif ! source_commits=$(git -C "$SOURCE_DIR" rev-list HEAD --not '@{upstream}' 2>/dev/null); then
+        source_kept_reason="its branch has no upstream to compare with"
+    elif [ -n "$source_commits" ] || [ -n "$(git -C "$SOURCE_DIR" rev-list --branches --not --remotes 2>/dev/null)" ]; then
+        source_kept_reason="it has commits that are not pushed"
+    elif [ -n "$(git -C "$SOURCE_DIR" stash list 2>/dev/null)" ]; then
+        source_kept_reason="it has stashed changes"
     fi
 fi
 
 # Where exports went, to say they stay.
-exports_dir="$HOME/Desktop/$STORAGE_NAME"
+exports_dir="$HOME/Desktop/$APP_NAME"
 for bundle_id in "${bundle_ids[@]}"; do
     chosen=$(defaults read "$bundle_id" outputFolderPath 2>/dev/null || true)
     if [ -n "$chosen" ]; then
@@ -157,6 +224,9 @@ for app in "${apps[@]+"${apps[@]}"}"; do
     echo "  - $app"
 done
 for folder in "$SUPPORT_DIR" "$LOGS_DIR" "$SOURCE_DIR"; do
+    if [ "$folder" = "$SOURCE_DIR" ] && [ -n "$source_kept_reason" ]; then
+        continue
+    fi
     if [ -e "$folder" ]; then
         size=$(du -sh "$folder" 2>/dev/null | cut -f1 | tr -d ' ')
         echo "  - $folder ${DIM}($size)${N}"
@@ -166,6 +236,9 @@ echo "  - permissions: Screen Recording, Accessibility, Microphone, Camera"
 echo "  - settings, caches, the login item and temporary files"
 echo
 echo "Your saved files stay in $exports_dir."
+if [ -n "$source_kept_reason" ]; then
+    echo "$SOURCE_DIR stays: $source_kept_reason."
+fi
 echo
 
 if [ "$ASK" = "1" ]; then
@@ -186,15 +259,15 @@ fi
 
 # Quit first: it stops its screen capture before quitting (up to 2 s), and a running copy would
 # write its settings back.
-if pgrep -x "$EXECUTABLE" >/dev/null 2>&1 || [ "$DRY_SYSTEM" = "1" ]; then
-    system pkill -x "$EXECUTABLE" || true
+if pgrep -x "$APP_NAME" >/dev/null 2>&1 || [ "$DRY_SYSTEM" = "1" ]; then
+    system pkill -x "$APP_NAME" || true
     tries=0
-    while [ "$DRY_SYSTEM" != "1" ] && pgrep -x "$EXECUTABLE" >/dev/null 2>&1 && [ "$tries" -lt 50 ]; do
+    while [ "$DRY_SYSTEM" != "1" ] && pgrep -x "$APP_NAME" >/dev/null 2>&1 && [ "$tries" -lt 50 ]; do
         sleep 0.1
         tries=$((tries + 1))
     done
-    if [ "$DRY_SYSTEM" != "1" ] && pgrep -x "$EXECUTABLE" >/dev/null 2>&1; then
-        pkill -9 -x "$EXECUTABLE" 2>/dev/null || true
+    if [ "$DRY_SYSTEM" != "1" ] && pgrep -x "$APP_NAME" >/dev/null 2>&1; then
+        pkill -9 -x "$APP_NAME" 2>/dev/null || true
         sleep 0.5
     fi
     done_step "Quit $APP_NAME"
@@ -209,7 +282,7 @@ fi
 
 # Only the app itself can take itself off the login items, so it is asked to before it goes.
 for app in "${apps[@]+"${apps[@]}"}"; do
-    system "$app/Contents/MacOS/$EXECUTABLE" --forget-login-item >/dev/null 2>&1 || true
+    system "$app/Contents/MacOS/$APP_NAME" --forget-login-item >/dev/null 2>&1 || true
 done
 if [ ${#apps[@]} -gt 0 ]; then
     done_step "Removed the login item"
@@ -217,7 +290,7 @@ fi
 
 # Permissions macOS gave the app; a new install asks again. Before the app goes: tccutil only
 # resets a bundle id macOS still knows an app for, and refuses one whose app is gone. A record
-# left like that ties the next install to the old id, and Bugbear never shows up in the Screen
+# left like that ties the next install to the old id, and the app never shows up in the Screen
 # Recording list.
 for bundle_id in "${bundle_ids[@]}"; do
     system tccutil reset All "$bundle_id" >/dev/null 2>&1 || true
@@ -238,7 +311,9 @@ forget_paths=()
 for app in "${apps[@]+"${apps[@]}"}"; do
     forget_paths+=("$app")
 done
-forget_paths+=("$SOURCE_DIR/build/$APP_NAME.app")
+if [ -z "$source_kept_reason" ]; then
+    forget_paths+=("$SOURCE_DIR/build/$APP_NAME.app")
+fi
 # The dump takes 5-7 s; tests give a small file instead.
 remembered_dump() {
     if [ -n "$LSREGISTER_DUMP" ]; then
@@ -265,7 +340,9 @@ for folder in "$SUPPORT_DIR" "$LOGS_DIR"; do
         done_step "Removed $folder"
     fi
 done
-if [ -e "$SOURCE_DIR" ]; then
+if [ -n "$source_kept_reason" ]; then
+    echo "   Kept $SOURCE_DIR: $source_kept_reason. Remove it yourself when you no longer need it."
+elif [ -e "$SOURCE_DIR" ]; then
     rm -rf "$SOURCE_DIR"
     done_step "Removed the source kept for updates ($SOURCE_DIR)"
 fi
@@ -281,11 +358,11 @@ for bundle_id in "${bundle_ids[@]}"; do
     rm -rf "$HOME/Library/Saved Application State/$bundle_id.savedState"
     rm -rf "$HOME/Library/WebKit/$bundle_id"
 done
-# Settings files of builds run from the source and of its checks: "Bugbear.plist" from a build
-# without a bundle id, and scratch settings of the self-test and the automation checks.
-rm -f "$HOME/Library/Preferences/$EXECUTABLE.plist"
-rm -f "$HOME/Library/Preferences/bugbear-crash-check.plist" "$HOME/Library/Preferences/bugbear-feedback-check.plist"
-for leftover in "$HOME/Library/Preferences"/bugbear.selftest.*.plist; do
+# Settings of debug runs from the source (.build/debug/App, Packaging/Debug-Info.plist), and scratch
+# settings of the self-test and the automation checks (DevTools).
+rm -f "$HOME/Library/Preferences/io.github.bearcorder.debug.plist"
+rm -f "$HOME/Library/Preferences/$APP_NAME-crash-check.plist" "$HOME/Library/Preferences/$APP_NAME-feedback-check.plist"
+for leftover in "$HOME/Library/Preferences/$APP_NAME".selftest.*.plist; do
     if [ -e "$leftover" ]; then
         rm -f "$leftover"
     fi
@@ -294,7 +371,7 @@ done_step "Removed settings and caches"
 
 # Temporary files: exports in progress and test leftovers.
 temp_dir="${TMPDIR:-/tmp}"
-rm -rf "${temp_dir%/}/${STORAGE_NAME:?}" "${temp_dir%/}/bugbear-feedback-check" "${temp_dir%/}/bugbear-crash-check"
+rm -rf "${temp_dir%/}/${APP_NAME:?}" "${temp_dir%/}/$APP_NAME-feedback-check" "${temp_dir%/}/$APP_NAME-crash-check"
 done_step "Removed temporary files"
 
 echo

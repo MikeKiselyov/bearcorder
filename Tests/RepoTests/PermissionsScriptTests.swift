@@ -1,8 +1,9 @@
+import AppCore
 import Foundation
 import XCTest
 
 /// scripts/lib/permissions.sh: replacing a copy with another bundle id removes that id's permission
-/// records, the user's and the system's, so System Settings lists one Bugbear. tccutil and osascript
+/// records, the user's and the system's, so System Settings lists the app once. tccutil and osascript
 /// are stand-ins here that only write down how they were called.
 final class PermissionsScriptTests: XCTestCase {
     private var root: URL {
@@ -13,7 +14,7 @@ final class PermissionsScriptTests: XCTestCase {
         return folder
     }
 
-    private func run(_ environment: String, oldId: String = "io.github.bugbear.app") throws -> (calls: String, output: String, folder: String) {
+    private func run(_ environment: String, oldId: String = AppInfo.defaultBundleId) throws -> (calls: String, output: String, folder: String) {
         let folder = FileManager.default.temporaryDirectory.appendingPathComponent("permissions-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: folder) }
@@ -29,8 +30,9 @@ final class PermissionsScriptTests: XCTestCase {
         export PATH='\(folder.path)':"$PATH"
         export LSREGISTER='\(folder.path)/lsregister'
         \(environment)
+        source '\(root.appendingPathComponent("scripts/lib/app-name.sh").path)'
         source '\(root.appendingPathComponent("scripts/lib/permissions.sh").path)'
-        forget_permissions '\(oldId)' "/tmp/it's \\"kept\\"/Bug bear.app"
+        forget_permissions '\(oldId)' "/tmp/it's \\"kept\\"/My app.app"
         """
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/bin/bash")
@@ -48,19 +50,22 @@ final class PermissionsScriptTests: XCTestCase {
     func testTheOldIdLosesItsRecordsEverywhere() throws {
         let result = try run("")
         // The old app is gone by now: its copy is registered around the reset, or tccutil does not know the id.
-        let user = "lsregister\n  -f\n  /tmp/it's \"kept\"/Bug bear.app\ntccutil\n  reset\n  All\n  io.github.bugbear.app\nlsregister\n  -u\n  /tmp/it's \"kept\"/Bug bear.app\n"
+        let user = "lsregister\n  -f\n  /tmp/it's \"kept\"/My app.app\ntccutil\n  reset\n  All\n  \(AppInfo.defaultBundleId)\nlsregister\n  -u\n  /tmp/it's \"kept\"/My app.app\n"
         XCTAssertTrue(result.calls.hasPrefix(user), "the user's records first: \(result.calls)")
         // A path with a quote, double quotes and a space reaches osascript as one argument, untouched.
-        XCTAssertTrue(result.calls.contains("osascript\n  -\n  \(result.folder)/lsregister\n  /tmp/it's \"kept\"/Bug bear.app\n  io.github.bugbear.app\n"), result.calls)
+        // Root runs the system's lsregister, never the one LSREGISTER points to.
+        let systemLsregister = "/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister"
+        XCTAssertTrue(result.calls.contains("osascript\n  -\n  \(systemLsregister)\n  /tmp/it's \"kept\"/My app.app\n  \(AppInfo.defaultBundleId)\n"), result.calls)
+        XCTAssertFalse(result.calls.contains("osascript\n  -\n  \(result.folder)/lsregister\n"), "LSREGISTER never reaches root: \(result.calls)")
         XCTAssertTrue(result.calls.contains("quoted form of item 2 of arguments"), "AppleScript quotes the path for the shell")
         XCTAssertTrue(result.calls.contains("& \" -f \" & kept & \"; tccutil reset All \" & oldId & \"; \" & lsregister & \" -u \" & kept with administrator privileges"), "register, reset, unregister as root: \(result.calls)")
         XCTAssertTrue(result.output.contains("password"), "says a password dialog is coming: \(result.output)")
     }
 
     func testKeepingPermissionsSkipsThePasswordDialog() throws {
-        let result = try run("export BUGBEAR_KEEP_PERMISSIONS=1")
+        let result = try run("export APP_KEEP_PERMISSIONS=1")
         XCTAssertFalse(result.calls.contains("osascript"), result.calls)
-        XCTAssertTrue(result.calls.contains("tccutil\n  reset\n  All\n  io.github.bugbear.app\n"), result.calls)
+        XCTAssertTrue(result.calls.contains("tccutil\n  reset\n  All\n  \(AppInfo.defaultBundleId)\n"), result.calls)
     }
 
     /// The id is read from the old copy's Info.plist: anything but a plain reverse-DNS id never
@@ -73,25 +78,26 @@ final class PermissionsScriptTests: XCTestCase {
         }
     }
 
-    /// Only an earlier Bugbear with another id is replaced together with its permissions; another app
-    /// that happens to sit at /Applications/Bugbear.app keeps them.
-    func testOnlyAnEarlierBugbearLosesItsPermissions() throws {
+    /// Only an earlier copy with another id is replaced together with its permissions; another app
+    /// that happens to sit at /Applications/<name>.app keeps them.
+    func testOnlyAnEarlierCopyLosesItsPermissions() throws {
         let folder = FileManager.default.temporaryDirectory.appendingPathComponent("earlier-\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(at: folder) }
         let cases: [(id: String, executable: String, expected: String)] = [
-            ("io.github.bugbear.app", "Bugbear", "io.github.bugbear.app"),
+            (AppInfo.defaultBundleId, AppInfo.name, AppInfo.defaultBundleId),
             ("com.example.other", "Other", ""),
-            ("com.mikekiselyov.qahelper", "Bugbear", ""),
+            ("com.mikekiselyov.qahelper", AppInfo.name, ""),
         ]
         for (index, item) in cases.enumerated() {
-            let contents = folder.appendingPathComponent("\(index)/Bugbear.app/Contents")
+            let contents = folder.appendingPathComponent("\(index)/\(AppInfo.name).app/Contents")
             try FileManager.default.createDirectory(at: contents, withIntermediateDirectories: true)
             let plist: [String: String] = ["CFBundleIdentifier": item.id, "CFBundleExecutable": item.executable]
             try PropertyListSerialization.data(fromPropertyList: plist, format: .xml, options: 0)
                 .write(to: contents.appendingPathComponent("Info.plist"))
             let script = """
+            source '\(root.appendingPathComponent("scripts/lib/app-name.sh").path)'
             source '\(root.appendingPathComponent("scripts/lib/permissions.sh").path)'
-            is_earlier_bugbear '\(contents.deletingLastPathComponent().path)' com.mikekiselyov.qahelper || echo no
+            is_our_earlier_app '\(contents.deletingLastPathComponent().path)' com.mikekiselyov.qahelper || echo no
             """
             let process = Process()
             process.executableURL = URL(fileURLWithPath: "/bin/bash")

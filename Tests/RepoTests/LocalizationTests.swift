@@ -1,8 +1,8 @@
-import BugbearCore
+import AppCore
 import Foundation
 import XCTest
 
-/// Every text people see comes from Sources/Bugbear/Resources/Localization/<language>.lproj, so a new
+/// Every text people see comes from Sources/App/Resources/Localization/<language>.lproj, so a new
 /// language is a new folder. These checks keep that true: every key the code uses is in the English
 /// tables and every key there is used, every language has the same keys taking the same values, and
 /// no window, button, tooltip or alert text is written straight into the code.
@@ -16,12 +16,12 @@ final class LocalizationTests: XCTestCase {
     }
 
     private var localizationFolder: URL {
-        return root.appendingPathComponent("Sources/Bugbear/Resources/Localization")
+        return root.appendingPathComponent("Sources/App/Resources/Localization")
     }
 
     /// The app's code that people see: everything but the developer tools (DevTools/, not in a release).
     private func appSources() -> [(path: String, text: String)] {
-        let folder = root.appendingPathComponent("Sources/Bugbear")
+        let folder = root.appendingPathComponent("Sources/App")
         var files: [(path: String, text: String)] = []
         let enumerator = FileManager.default.enumerator(at: folder, includingPropertiesForKeys: nil)
         while let url = enumerator?.nextObject() as? URL {

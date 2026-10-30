@@ -1,7 +1,8 @@
+import AppCore
 import Foundation
 import XCTest
 
-/// The scripts that send commands to the running app (scripts/dev/bugbear-run.sh, bugbear-command.sh)
+/// The scripts that send commands to the running app (scripts/dev/app-run.sh, app-command.sh)
 /// and the helpers the e2e scripts use. They need the real app to run, so these tests read the script
 /// text for the parts that made the round-trip fast; the e2e run exercises the rest.
 final class AutomationScriptsTests: XCTestCase {
@@ -37,19 +38,22 @@ final class AutomationScriptsTests: XCTestCase {
     }
 
     func testRunScriptUsesResultFiles() throws {
-        let script = try text(of: "scripts/dev/bugbear-run.sh")
+        let script = try text(of: "scripts/dev/app-run.sh")
         XCTAssertTrue(script.contains("#id="), "the command goes out with a token")
-        XCTAssertTrue(script.contains("Application Support/Bugbear/automation/results"), "the result is read from the results folder")
+        XCTAssertTrue(script.contains("Application Support/$APP_NAME/automation/results"), "the result is read from the results folder")
         XCTAssertFalse(script.contains("grep -cF \"AUTOMATION"), "the log is no longer searched for the result")
     }
 
     func testCommandScriptCompilesSender() throws {
-        let script = try text(of: "scripts/dev/bugbear-command.sh")
-        XCTAssertTrue(script.contains("bugbear-send.swift"), "the sender is built from its source")
+        let script = try text(of: "scripts/dev/app-command.sh")
+        XCTAssertTrue(script.contains("app-send.swift"), "the sender is built from its source")
         XCTAssertTrue(script.contains("swiftc"))
         XCTAssertTrue(script.contains("osascript"), "osascript stays as the fallback")
-        let source = try text(of: "scripts/dev/bugbear-send.swift")
-        XCTAssertTrue(source.contains("Bugbear.automation"))
+        XCTAssertTrue(script.contains("notification=\"$APP_NAME.automation\""), "the same name Automation.notificationName listens for")
+        let automation = try text(of: "Sources/App/DevTools/Automation.swift")
+        XCTAssertTrue(automation.contains("Notification.Name(\"\\(AppInfo.name).automation\")"), "the app listens for <name>.automation")
+        let source = try text(of: "scripts/dev/app-send.swift")
+        XCTAssertTrue(source.contains("Notification.Name(arguments[1])"), "the sender posts the name it is given")
         XCTAssertTrue(source.contains("deliverImmediately: true"))
     }
 
@@ -59,7 +63,7 @@ final class AutomationScriptsTests: XCTestCase {
         let script = try text(of: "scripts/test/e2e.sh")
         let run = body(ofFunction: "run", in: script)
         XCTAssertFalse(run.isEmpty, "run is there")
-        XCTAssertTrue(run.contains("scripts/dev/bugbear-run.sh"), "run goes through the result file: \(run)")
+        XCTAssertTrue(run.contains("scripts/dev/app-run.sh"), "run goes through the result file: \(run)")
         XCTAssertFalse(run.contains("$LOG"), "run does not read the log: \(run)")
     }
 
@@ -119,13 +123,13 @@ final class AutomationScriptsTests: XCTestCase {
     }
 
     func testWaitHelpersWaitForTheRightThing() throws {
-        let marker = NSTemporaryDirectory() + "bugbear-wait-\(UUID().uuidString)"
+        let marker = NSTemporaryDirectory() + "app-wait-\(UUID().uuidString)"
         defer { try? FileManager.default.removeItem(atPath: marker) }
         // The file appears after about 0.5 s: the wait must see it, and must not return before.
         let appears = try runWithHelpers("(sleep 0.5; touch '\(marker)') & wait_for 5 test -e '\(marker)'; echo $?; test -e '\(marker)' && echo there")
         XCTAssertEqual(appears.output, "0\nthere\n", "wait_for returns 0 once the condition holds: \(appears.output)")
         // A condition that never holds ends in 1 after the timeout, not in 0.
-        let never = try runWithHelpers("wait_for 1 test -e '/nonexistent-bugbear-path'; echo $?")
+        let never = try runWithHelpers("wait_for 1 test -e '/nonexistent-path'; echo $?")
         XCTAssertEqual(never.output, "1\n")
         let wrongValue = try runWithHelpers("wait_for_value 1 expected echo other; echo $?")
         XCTAssertEqual(wrongValue.output, "1\n", "a different value is not a match")
@@ -140,7 +144,7 @@ final class AutomationScriptsTests: XCTestCase {
     /// The Space waits match a whole window id or control label: "space-confirm" is not the Space
     /// window and "Find projects…" (the row) is not the "Find projects" button of the open list.
     func testExactMatchHelpersIgnoreLongerNames() throws {
-        let fakeRun = NSTemporaryDirectory() + "bugbear-fake-run-\(UUID().uuidString).sh"
+        let fakeRun = NSTemporaryDirectory() + "app-fake-run-\(UUID().uuidString).sh"
         defer { try? FileManager.default.removeItem(atPath: fakeRun) }
         try "#!/bin/bash\necho \"$FAKE_ANSWER\"\n".write(toFile: fakeRun, atomically: true, encoding: .utf8)
         try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: fakeRun)
@@ -174,7 +178,7 @@ final class AutomationScriptsTests: XCTestCase {
     /// buffer_holds <seconds> holds once the app's buffer-seconds reaches that many; a TIMEOUT or an
     /// empty answer is not enough.
     func testBufferHoldsReadsBufferSeconds() throws {
-        let fakeRun = NSTemporaryDirectory() + "bugbear-fake-run-\(UUID().uuidString).sh"
+        let fakeRun = NSTemporaryDirectory() + "app-fake-run-\(UUID().uuidString).sh"
         defer { try? FileManager.default.removeItem(atPath: fakeRun) }
         try "#!/bin/bash\n[ \"$1\" = buffer-seconds ] && echo \"$FAKE_ANSWER\"\n".write(toFile: fakeRun, atomically: true, encoding: .utf8)
         try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: fakeRun)
@@ -246,7 +250,7 @@ final class AutomationScriptsTests: XCTestCase {
 
     /// "none" is what the app prints while no area is picked; it must not count as a selection.
     func testPickerSelectedIgnoresNone() throws {
-        let fakeRun = NSTemporaryDirectory() + "bugbear-fake-run-\(UUID().uuidString).sh"
+        let fakeRun = NSTemporaryDirectory() + "app-fake-run-\(UUID().uuidString).sh"
         defer { try? FileManager.default.removeItem(atPath: fakeRun) }
         try "#!/bin/bash\necho \"$FAKE_ANSWER\"\n".write(toFile: fakeRun, atomically: true, encoding: .utf8)
         try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: fakeRun)
@@ -258,32 +262,36 @@ final class AutomationScriptsTests: XCTestCase {
         XCTAssertEqual(area.output, "0\n")
     }
 
-    /// Runs bugbear-run.sh from a copy of the scripts with a made-up sender that writes `result` as the
+    /// Runs app-run.sh from a copy of the scripts with a made-up sender that writes `result` as the
     /// app does, under a temporary home. Returns what the script printed.
     private func runScriptOutput(result: String) throws -> String {
-        let fake = FileManager.default.temporaryDirectory.appendingPathComponent("bugbear-run-\(UUID().uuidString)", isDirectory: true)
+        let fake = FileManager.default.temporaryDirectory.appendingPathComponent("app-run-\(UUID().uuidString)", isDirectory: true)
         defer { try? FileManager.default.removeItem(at: fake) }
         let dev = fake.appendingPathComponent("scripts/dev", isDirectory: true)
         let lib = fake.appendingPathComponent("scripts/lib", isDirectory: true)
         try FileManager.default.createDirectory(at: dev, withIntermediateDirectories: true)
         try FileManager.default.createDirectory(at: lib, withIntermediateDirectories: true)
-        try FileManager.default.copyItem(at: root.appendingPathComponent("scripts/dev/bugbear-run.sh"), to: dev.appendingPathComponent("bugbear-run.sh"))
+        try FileManager.default.copyItem(at: root.appendingPathComponent("scripts/dev/app-run.sh"), to: dev.appendingPathComponent("app-run.sh"))
         try FileManager.default.copyItem(at: root.appendingPathComponent("scripts/lib/common.sh"), to: lib.appendingPathComponent("common.sh"))
+        try FileManager.default.copyItem(at: root.appendingPathComponent("scripts/lib/app-name.sh"), to: lib.appendingPathComponent("app-name.sh"))
+        let support = fake.appendingPathComponent("Sources/AppCore/Support", isDirectory: true)
+        try FileManager.default.createDirectory(at: support, withIntermediateDirectories: true)
+        try FileManager.default.copyItem(at: root.appendingPathComponent("Sources/AppCore/Support/AppInfo.swift"), to: support.appendingPathComponent("AppInfo.swift"))
         // The sender takes "<command> #id=<token>" and the app writes the result file named by the token.
         let sender = """
         #!/bin/bash
         token="${1##*#id=}"
-        folder="$HOME/Library/Application Support/Bugbear/automation/results"
+        folder="$HOME/Library/Application Support/\(AppInfo.name)/automation/results"
         mkdir -p "$folder"
         printf '%s' "$FAKE_RESULT" > "$folder/$token"
         """
-        let senderURL = dev.appendingPathComponent("bugbear-command.sh")
+        let senderURL = dev.appendingPathComponent("app-command.sh")
         try sender.write(to: senderURL, atomically: true, encoding: .utf8)
         try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: senderURL.path)
 
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/bin/bash")
-        process.arguments = [dev.appendingPathComponent("bugbear-run.sh").path, "screens", "5"]
+        process.arguments = [dev.appendingPathComponent("app-run.sh").path, "screens", "5"]
         var environment = ProcessInfo.processInfo.environment
         environment["HOME"] = fake.appendingPathComponent("home").path
         environment["FAKE_RESULT"] = result

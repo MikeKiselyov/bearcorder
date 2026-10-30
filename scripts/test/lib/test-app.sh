@@ -1,29 +1,29 @@
 # shellcheck shell=bash
 # Sourced by the scripts that test the real app (e2e.sh, e2e-features.sh, perf.sh).
-# A test run uses the build in build/, so an installed Bugbear has to step aside: it is quit before
+# A test run uses the build in build/, so an installed copy has to step aside: it is quit before
 # the run and started again afterwards, and the test copy never stays behind in the menu bar.
 #
-#   quit_running_bugbear      # remembers which Bugbear was running, quits it, cleans up on exit
+#   quit_running_app      # remembers which copy was running, quits it, cleans up on exit
 #   open "$TEST_APP"          # then start the test copy
 
 # shellcheck disable=SC1091
 source "$ROOT/scripts/lib/app-name.sh"
 TEST_APP="$ROOT/build/$APP_NAME.app"
 # The tests drive the app through its automation hook, which only this build has (build-app.sh).
-export BUGBEAR_AUTOMATION=1
+export APP_AUTOMATION=1
 INSTALLED_APP=""
 
-# build_test_app: builds the test app, unless all.sh did it already (BUGBEAR_APP_BUILT=1): then the
+# build_test_app: builds the test app, unless all.sh did it already (APP_BUILT=1): then the
 # build in build/ is used as it is, and the run stops when there is none.
 build_test_app() {
-    if [ "${BUGBEAR_APP_BUILT:-}" = "1" ]; then
+    if [ "${APP_BUILT:-}" = "1" ]; then
         if [ ! -d "$TEST_APP" ]; then
             echo "$TEST_APP missing: run scripts/build-app.sh first"
             return 1
         fi
-        # A stale or release build (BUGBEAR_APP_BUILT left over in a shell) has no marker.
+        # A stale or release build (APP_BUILT left over in a shell) has no marker.
         if [ ! -f "$ROOT/build/.automation-build" ]; then
-            echo "$TEST_APP is not a build with automation: run BUGBEAR_AUTOMATION=1 scripts/build-app.sh first"
+            echo "$TEST_APP is not a build with automation: run APP_AUTOMATION=1 scripts/build-app.sh first"
             return 1
         fi
         return 0
@@ -31,16 +31,16 @@ build_test_app() {
     "$ROOT/scripts/build-app.sh" >/dev/null 2>&1 || { echo "build failed"; return 1; }
 }
 
-# Bugbear stops its screen capture before it quits (up to 2 s), so wait for it to be gone.
-wait_for_bugbear_to_quit() {
+# The app stops its screen capture before it quits (up to 2 s), so wait for it to be gone.
+wait_for_app_to_quit() {
     local tries=0
-    while pgrep -x Bugbear >/dev/null 2>&1 && [ "$tries" -lt 50 ]; do
+    while pgrep -x "$APP_NAME" >/dev/null 2>&1 && [ "$tries" -lt 50 ]; do
         sleep 0.1
         tries=$((tries + 1))
     done
     # Still there (stuck in a modal alert): it must not keep running from a replaced app.
-    if pgrep -x Bugbear >/dev/null 2>&1; then
-        pkill -9 -x Bugbear 2>/dev/null || true
+    if pgrep -x "$APP_NAME" >/dev/null 2>&1; then
+        pkill -9 -x "$APP_NAME" 2>/dev/null || true
         sleep 0.5
     fi
 }
@@ -52,7 +52,7 @@ SETTINGS_EXISTED=0
 
 save_settings() {
     local domain="$1"
-    SETTINGS_SNAPSHOT="$(mktemp -t bugbear-settings)"
+    SETTINGS_SNAPSHOT="$(mktemp -t "$APP_SLUG-settings")"
     if defaults export "$domain" "$SETTINGS_SNAPSHOT" 2>/dev/null; then
         SETTINGS_EXISTED=1
     else
@@ -73,9 +73,9 @@ restore_settings() {
     SETTINGS_SNAPSHOT=""
 }
 
-quit_running_bugbear() {
+quit_running_app() {
     local pid
-    for pid in $(pgrep -x Bugbear); do
+    for pid in $(pgrep -x "$APP_NAME"); do
         local executable
         executable="$(ps -o comm= -p "$pid")"
         case "$executable" in
@@ -83,20 +83,20 @@ quit_running_bugbear() {
             *) INSTALLED_APP="${executable%%/Contents/MacOS/*}" ;;
         esac
     done
-    pkill -x Bugbear 2>/dev/null
-    wait_for_bugbear_to_quit
+    pkill -x "$APP_NAME" 2>/dev/null
+    wait_for_app_to_quit
     # After the quit, so the copy is what the person last had.
     save_settings "$BUNDLE_ID"
-    trap restore_running_bugbear EXIT
+    trap restore_running_app EXIT
 }
 
-restore_running_bugbear() {
-    pkill -f "$TEST_APP/Contents/MacOS/Bugbear" 2>/dev/null
-    # Before the person's Bugbear starts, so it reads its own settings, not the test's.
-    wait_for_bugbear_to_quit
+restore_running_app() {
+    pkill -f "$TEST_APP/Contents/MacOS/$APP_NAME" 2>/dev/null
+    # Before the person's copy starts, so it reads its own settings, not the test's.
+    wait_for_app_to_quit
     restore_settings "$BUNDLE_ID"
     if [ -n "$INSTALLED_APP" ] && [ -d "$INSTALLED_APP" ]; then
-        wait_for_bugbear_to_quit
+        wait_for_app_to_quit
         open "$INSTALLED_APP"
         echo "==> started $INSTALLED_APP again"
     fi

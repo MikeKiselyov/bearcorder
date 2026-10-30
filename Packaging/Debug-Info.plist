@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Linked into debug builds of the App product (Package.swift). .build/debug/App runs without an app
+  bundle, so macOS would keep its settings under the executable's name, "App". This gives such runs
+  (self-test, snapshots, README media) a bundle id of their own. Release builds and the .app do not
+  use it. scripts/dev/rename-app.sh renames the id with the app.
+-->
+<plist version="1.0">
+<dict>
+    <key>CFBundleIdentifier</key><string>io.github.bearcorder.debug</string>
+</dict>
+</plist>

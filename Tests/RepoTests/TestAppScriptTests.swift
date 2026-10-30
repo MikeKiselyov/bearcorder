@@ -1,3 +1,4 @@
+import AppCore
 import Foundation
 import XCTest
 
@@ -35,12 +36,12 @@ final class TestAppScriptTests: XCTestCase {
     }
 
     func testSettingsChangedByATestRunComeBack() throws {
-        let domain = "bugbear.selftest.testapp.\(UUID().uuidString)"
+        let domain = "\(AppInfo.name).selftest.testapp.\(UUID().uuidString)"
         defer { forget(domain) }
         let script = """
         set -e
         source "$ROOT/scripts/test/lib/test-app.sh"
-        defaults write \(domain) outputFolderPath "/Users/someone/Desktop/Bugbear"
+        defaults write \(domain) outputFolderPath "/Users/someone/Desktop/Sample"
         defaults write \(domain) bufferMinutes -int 3
         save_settings \(domain)
         defaults write \(domain) outputFolderPath "/tmp/e2e-features/video-out"
@@ -53,13 +54,13 @@ final class TestAppScriptTests: XCTestCase {
         """
         let result = try bash(script)
         XCTAssertEqual(result.status, 0, result.output)
-        XCTAssertTrue(result.output.contains("folder=/Users/someone/Desktop/Bugbear"), "a changed setting is put back: \(result.output)")
+        XCTAssertTrue(result.output.contains("folder=/Users/someone/Desktop/Sample"), "a changed setting is put back: \(result.output)")
         XCTAssertTrue(result.output.contains("minutes=3"), "a deleted setting is put back: \(result.output)")
         XCTAssertTrue(result.output.contains("automation=none"), "a setting the run added goes: \(result.output)")
     }
 
     func testNoSettingsBeforeMeansNoneAfter() throws {
-        let domain = "bugbear.selftest.testapp.\(UUID().uuidString)"
+        let domain = "\(AppInfo.name).selftest.testapp.\(UUID().uuidString)"
         defer { forget(domain) }
         let script = """
         set -e

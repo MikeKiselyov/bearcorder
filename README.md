@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="docs/images/logo.png" width="128" alt="Bugbear logo: a bear looking at a bug through a magnifying glass">
+  <img src="docs/images/logo.png" width="128" alt="Bearcorder logo: a bear looking at a bug through a magnifying glass">
 </p>
 
-<h1 align="center">Bugbear</h1>
+<h1 align="center">Bearcorder</h1>
 
 <p align="center">
   <b>Screenshots, recordings and a dev toolbox for people who build and test software.</b><br>
@@ -32,7 +32,7 @@ Every feature, explained with pictures: **[docs/features.md](docs/features.md)**
 You need macOS 14 Sonoma or later (Apple silicon or Intel). Open **Terminal** and paste:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/MikeKiselyov/bugbear-app/main/scripts/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/MikeKiselyov/bearcorder/main/scripts/install.sh | bash
 ```
 
 <p align="center">
@@ -43,13 +43,17 @@ What happens:
 
 1. The installer checks macOS and Apple's free Command Line Tools (Xcode is not needed). If the tools
    are missing, macOS shows a dialog to install them (about 5 minutes); run the command again afterwards.
-2. The source is downloaded to `~/.bugbear`.
+2. The source is downloaded to `~/.bearcorder`.
 3. The app is built on your Mac (the first build takes a few minutes) and copied to `/Applications`
    (or `~/Applications` without an admin account).
-4. Bugbear starts. Look for the **bear icon** in the menu bar. There is no Dock icon.
+4. Bearcorder starts. Look for the **bear icon** in the menu bar. There is no Dock icon.
 
 Nothing is downloaded except the source code: every copy is built and signed on the Mac that runs it.
 Want to read the script first? It is [`scripts/install.sh`](scripts/install.sh).
+
+Installed before 0.15.0? That copy has the app's old name and does not update. Remove it first with
+`curl -fsSL https://raw.githubusercontent.com/MikeKiselyov/bearcorder/v0.14.0/scripts/uninstall.sh | bash`,
+then install as usual.
 
 ## First start
 
@@ -257,13 +261,13 @@ On the **Record** tab:
 
 ## Updates
 
-Every update is a release with its own version. Bugbear checks for a new one every 6 hours; when there
+Every update is a release with its own version. Bearcorder checks for a new one every 6 hours; when there
 is one, an **Update to 0.6.0** badge appears in the menu bar panel. **Update now** rebuilds the app on
 your Mac (1-2 minutes) and restarts it, then "What's new" shows what changed.
 
 - Check by hand or turn checks off in Settings → Updates.
 - Only the release notes are read from GitHub; nothing about you or your captures is sent.
-- All releases: [GitHub releases page](https://github.com/MikeKiselyov/bugbear-app/releases).
+- All releases: [GitHub releases page](https://github.com/MikeKiselyov/bearcorder/releases).
 
 ## Permissions
 
@@ -277,14 +281,14 @@ your Mac (1-2 minutes) and restarts it, then "What's new" shows what changed.
 
 ## More
 
-- [Uninstall](docs/uninstall.md) with one command, and where Bugbear keeps captures and logs
-- Something went wrong? Attach `~/Library/Logs/Bugbear/bugbear.log` to an
-  [issue](https://github.com/MikeKiselyov/bugbear-app/issues).
+- [Uninstall](docs/uninstall.md) with one command, and where Bearcorder keeps captures and logs
+- Something went wrong? Attach `~/Library/Logs/Bearcorder/Bearcorder.log` to an
+  [issue](https://github.com/MikeKiselyov/bearcorder/issues).
 - For developers: [build from source](docs/development.md), [tests](docs/testing.md),
   [contributing and releases](CONTRIBUTING.md)
 
 ## Support
 
-Bugbear is free and open source. If it saves you time, you can buy me a coffee:
+Bearcorder is free and open source. If it saves you time, you can buy me a coffee:
 
 <a href="https://buymeacoffee.com/mike_kiselyov"><img src="https://img.shields.io/badge/Buy%20me%20a%20coffee-FFDD00?style=for-the-badge&logo=buymeacoffee&logoColor=black" alt="Buy me a coffee"></a>

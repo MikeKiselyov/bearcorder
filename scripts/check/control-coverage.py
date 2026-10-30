@@ -14,11 +14,11 @@ TEST_FILES = [
     ROOT / "scripts" / "test" / "e2e.sh",
     ROOT / "scripts" / "test" / "e2e-features.sh",
 ]
-TEST_FILES += sorted((ROOT / "Sources" / "Bugbear" / "DevTools").glob("DevChecks*.swift"))
+TEST_FILES += sorted((ROOT / "Sources" / "App" / "DevTools").glob("DevChecks*.swift"))
 
 
 def app_name():
-    source = (ROOT / "Sources" / "BugbearCore" / "Support" / "AppInfo.swift").read_text()
+    source = (ROOT / "Sources" / "AppCore" / "Support" / "AppInfo.swift").read_text()
     match = re.search(r'static let name = "(.*)"', source)
     if match is None:
         print("no app name in AppInfo.swift")

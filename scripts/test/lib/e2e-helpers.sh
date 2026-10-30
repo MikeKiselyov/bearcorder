@@ -1,6 +1,6 @@
 # shellcheck shell=bash
 # Sourced by scripts/test/e2e.sh, e2e-features.sh and e2e-section.sh: pressing controls and reading
-# what they did. Needs R (scripts/dev/bugbear-run.sh).
+# what they did. Needs R (scripts/dev/app-run.sh).
 
 # wait_for <timeout seconds> <command...>: runs the command every 0.1 s until it succeeds or the
 # timeout passes. The timeout is a deadline on the clock, not a number of tries, so a slow command

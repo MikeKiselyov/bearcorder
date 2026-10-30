@@ -1,4 +1,4 @@
-import BugbearCore
+import AppCore
 import Foundation
 import XCTest
 
@@ -56,7 +56,7 @@ final class DocsImagesTests: XCTestCase {
     }
 
     func testEveryWhatsNewPictureIsUsed() {
-        let catalog = read("Sources/BugbearCore/Support/WhatsNewCatalog.swift")
+        let catalog = read("Sources/AppCore/Support/WhatsNewCatalog.swift")
         for name in files(in: WhatsNew.imageFolder) {
             let base = (name as NSString).deletingPathExtension
             XCTAssertTrue(catalog.contains("image: \"\(base)\""), "\(WhatsNew.imageFolder)/\(name) is not in any What's New item: delete it")
