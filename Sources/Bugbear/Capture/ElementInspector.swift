@@ -21,7 +21,7 @@ enum ElementInspector {
         var value: String?
     }
 
-    private static let queue = DispatchQueue(label: "bugbear.element-inspector", qos: .utility)
+    static let queue = DispatchQueue(label: "bugbear.element-inspector", qos: .utility)
     private static let maxNameLength = 60
 
     /// `point` is in AppKit global coordinates (origin bottom-left of the main display).

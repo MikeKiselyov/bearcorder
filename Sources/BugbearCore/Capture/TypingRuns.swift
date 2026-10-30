@@ -2,11 +2,11 @@ import Foundation
 
 /// Groups key presses that type into runs: one run per field until a pause, a click or a key that
 /// does not type. A run keeps the time it started, which is when its step happens.
-public struct TypingRuns {
+public struct TypingRuns: Sendable {
     /// Typing after a pause this long starts a new run.
     public static let pause: Double = 1.5
 
-    public struct Run: Equatable {
+    public struct Run: Equatable, Sendable {
         public var id: Int
         public var start: Double
         public var lastKey: Double

@@ -12,6 +12,8 @@
 #                            (default: /Applications and ~/Applications)
 #   BUGBEAR_DRY_SYSTEM       1: print the steps that touch the running app, settings, permissions
 #                            and keychains instead of doing them (for tests)
+#   BUGBEAR_LSREGISTER_DUMP  a file with the text of `lsregister -dump`, read instead of running it
+#                            (the real dump takes 5-7 s; for tests)
 #   BUGBEAR_TTY              where the answers come from (default: /dev/tty; a file in tests)
 #   NO_COLOR                 plain text
 set -euo pipefail
@@ -32,6 +34,7 @@ SOURCE_DIR="${BUGBEAR_SOURCE_DIR:-$HOME/.bugbear}"
 APPS_DIRS="${BUGBEAR_APPS_DIRS:-/Applications:$HOME/Applications}"
 DRY_SYSTEM="${BUGBEAR_DRY_SYSTEM:-}"
 TTY="${BUGBEAR_TTY:-/dev/tty}"
+LSREGISTER_DUMP="${BUGBEAR_LSREGISTER_DUMP:-}"
 SUPPORT_DIR="$HOME/Library/Application Support/$STORAGE_NAME"
 LOGS_DIR="$HOME/Library/Logs/$STORAGE_NAME"
 KEYCHAIN="$SUPPORT_DIR/Signing/bugbear-signing.keychain-db"
@@ -236,12 +239,20 @@ for app in "${apps[@]+"${apps[@]}"}"; do
     forget_paths+=("$app")
 done
 forget_paths+=("$SOURCE_DIR/build/$APP_NAME.app")
-if [ -x "$LSREGISTER" ]; then
+# The dump takes 5-7 s; tests give a small file instead.
+remembered_dump() {
+    if [ -n "$LSREGISTER_DUMP" ]; then
+        cat "$LSREGISTER_DUMP"
+    else
+        "$LSREGISTER" -dump 2>/dev/null
+    fi
+}
+if [ -x "$LSREGISTER" ] || [ -n "$LSREGISTER_DUMP" ]; then
     while IFS= read -r remembered; do
         if [ ! -e "$remembered" ] && [[ " ${forget_paths[*]} " != *" $remembered "* ]]; then
             forget_paths+=("$remembered")
         fi
-    done < <("$LSREGISTER" -dump 2>/dev/null | sed -n "s|^path: *\(.*/$APP_NAME\.app\) (0x[0-9a-f]*)\$|\1|p" | sort -u)
+    done < <(remembered_dump | sed -n "s|^path: *\(.*/$APP_NAME\.app\) (0x[0-9a-f]*)\$|\1|p" | sort -u)
 fi
 for remembered in "${forget_paths[@]}"; do
     system "$LSREGISTER" -u "$remembered" >/dev/null 2>&1 || true

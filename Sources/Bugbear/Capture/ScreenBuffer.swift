@@ -46,6 +46,9 @@ final class ScreenBuffer: NSObject, SCStreamOutput, SCStreamDelegate {
         var start: Double
         var end: Double
         var finished: Bool
+        /// The picture size in pixels. A segment has one size: a display that goes to native
+        /// resolution while recording starts a new one.
+        var size: CGSize
     }
 
     enum AudioSource: Int {
@@ -54,49 +57,56 @@ final class ScreenBuffer: NSObject, SCStreamOutput, SCStreamDelegate {
     }
 
     let displayID: CGDirectDisplayID
-    private let queue: DispatchQueue
-    private let segmentLength: Double = 10
+    let queue: DispatchQueue
+    let segmentLength: Double = 10
     private var stream: SCStream?
     /// The settings the stream runs with, kept to change the frame rate without a restart.
     private var streamSettings: SCStreamConfiguration?
-    /// Start a new segment with the next frame (after a frame rate change). Queue only.
-    private var startNewSegment = false
-    private var configuration = BufferConfiguration(retentionSeconds: 180, framesPerSecond: 30, maxHeight: 1080, showsCursor: true, systemAudio: false, microphone: false)
+    /// Start a new segment with the next frame (after a frame rate or size change). Queue only.
+    var startNewSegment = false
+    var configuration = BufferConfiguration(retentionSeconds: 180, framesPerSecond: 30, maxHeight: 1080, showsCursor: true, systemAudio: false, microphone: false)
 
     // Queue-confined state.
-    private var segments: [Segment] = []
-    private var writer: AVAssetWriter?
-    private var videoInput: AVAssetWriterInput?
-    private var audioInputs: [AudioSource: AVAssetWriterInput] = [:]
-    private var currentSegmentIndex: Int?
-    private var lastSampleBuffer: CMSampleBuffer?
-    private var lastFrameTime: Double = 0
-    private var outputSize = CGSize(width: 1920, height: 1080)
-    private var pinnedFrom: Double?
-    private var frameTimes: [Double] = []
+    var segments: [Segment] = []
+    var writer: AVAssetWriter?
+    var videoInput: AVAssetWriterInput?
+    var audioInputs: [AudioSource: AVAssetWriterInput] = [:]
+    var currentSegmentIndex: Int?
+    var lastSampleBuffer: CMSampleBuffer?
+    var lastFrameTime: Double = 0
+    var outputSize = CGSize(width: 1920, height: 1080)
+    var pinnedFrom: Double?
+    var frameTimes: [Double] = []
+    /// When old segments were last looked at (`pruneSegments`).
+    var lastPrune: Double = 0
     private var capturedDisplay: SCDisplay?
+    /// The display's full pixel size (even), what `upgradeToNative` goes to.
+    private var nativeSize: CGSize = .zero
+    /// Counts `stop()` calls. A start that sees it change while it waits was stopped meanwhile and
+    /// must not keep the stream it made.
+    private var stopCount = 0
     private var excludedApplications: [SCRunningApplication] = []
-    private var receivedFrames = 0
+    var receivedFrames = 0
     /// Repeats the last frame while the screen is static (ScreenCaptureKit only sends
     /// frames on change), so the buffer timeline has no holes.
-    private var heartbeat: DispatchSourceTimer?
-    private var droppedFrames = 0
+    var heartbeat: DispatchSourceTimer?
+    var droppedFrames = 0
 
     /// Called on the main thread when the stream stops unexpectedly.
     var onStop: ((Error?) -> Void)?
     /// Global AppKit frame of the captured display (origin bottom-left).
     private(set) var displayFrame: CGRect = .zero
     /// Height of the menu bar on this display, 0 when it hides itself.
-    private var menuBarHeight: CGFloat = 0
+    var menuBarHeight: CGFloat = 0
     /// While recording, frames that changed only in the menu bar or under the recording bar are
     /// encoded a few times a second (see `FramePacing`). Queue only.
-    private var pacer = FramePacer()
+    var pacer = FramePacer()
     /// The newest frame `pacer` held back. Queue only.
-    private var heldSample: CMSampleBuffer?
+    var heldSample: CMSampleBuffer?
     /// Inputs of the quiet zones, kept so the zones follow the current output size. Queue only.
-    private var busyWindows: [CGRect] = []
-    private var quietZonesEnabled = false
-    private var ownWindows: [CGRect] = []
+    var busyWindows: [CGRect] = []
+    var quietZonesEnabled = false
+    var ownWindows: [CGRect] = []
 
     init(displayID: CGDirectDisplayID) {
         self.displayID = displayID
@@ -121,6 +131,7 @@ final class ScreenBuffer: NSObject, SCStreamOutput, SCStreamDelegate {
 
     func start(_ newConfiguration: BufferConfiguration, allowedWindowNumbers: [Int]) async throws {
         await stop()
+        let startedAfterStop = stopCount
         configuration = newConfiguration
 
         // All windows, not only on-screen ones: an app without visible windows is left out of
@@ -159,6 +170,7 @@ final class ScreenBuffer: NSObject, SCStreamOutput, SCStreamDelegate {
 
         var width = Double(display.width) * Double(screenInfo.scale)
         var height = Double(display.height) * Double(screenInfo.scale)
+        nativeSize = CGSize(width: Int(width / 2) * 2, height: Int(height / 2) * 2)
         if configuration.maxHeight > 0 && height > Double(configuration.maxHeight) {
             let ratio = Double(configuration.maxHeight) / height
             width *= ratio
@@ -168,21 +180,8 @@ final class ScreenBuffer: NSObject, SCStreamOutput, SCStreamDelegate {
         let evenWidth = Int(width / 2) * 2
         let evenHeight = Int(height / 2) * 2
 
-        let streamConfiguration = SCStreamConfiguration()
-        streamConfiguration.width = evenWidth
-        streamConfiguration.height = evenHeight
-        streamConfiguration.minimumFrameInterval = CMTime(value: 1, timescale: CMTimeScale(configuration.framesPerSecond))
-        streamConfiguration.showsCursor = configuration.showsCursor
-        // The H.264 encoder's own format: frames go to it without a colour conversion per frame,
-        // which is most of the CPU a running buffer used to take.
-        streamConfiguration.pixelFormat = kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange
-        streamConfiguration.colorMatrix = CGDisplayStream.yCbCrMatrix_ITU_R_709_2
-        streamConfiguration.queueDepth = 6
-        streamConfiguration.capturesAudio = configuration.systemAudio
+        let streamConfiguration = ScreenBuffer.streamConfiguration(width: evenWidth, height: evenHeight, framesPerSecond: configuration.framesPerSecond, configuration: configuration)
         streamSettings = streamConfiguration
-        streamConfiguration.excludesCurrentProcessAudio = true
-        streamConfiguration.sampleRate = 48000
-        streamConfiguration.channelCount = 2
 
         queue.sync {
             outputSize = CGSize(width: evenWidth, height: evenHeight)
@@ -194,20 +193,50 @@ final class ScreenBuffer: NSObject, SCStreamOutput, SCStreamDelegate {
             try newStream.addStreamOutput(self, type: .audio, sampleHandlerQueue: queue)
         }
         try await newStream.startCapture()
+        // Stopped while this start waited (the buffer was replaced): the new capture belongs to no one.
+        if stopCount != startedAfterStop {
+            try? await newStream.stopCapture()
+            Log.info("buffer[\(displayID)] stopped while starting, capture ended")
+            throw CancellationError()
+        }
         stream = newStream
         startHeartbeat()
         Log.info("buffer[\(displayID)] started \(evenWidth)x\(evenHeight) @\(configuration.framesPerSecond)fps systemAudio=\(configuration.systemAudio) mic=\(configuration.microphone) allowed=\(allowed.count) excludedApps=\(excluded.count)")
     }
 
+    /// What the stream runs with. A new object every time: a change is tried on a copy, and the kept
+    /// settings change only once the stream took it.
+    static func streamConfiguration(width: Int, height: Int, framesPerSecond: Int, configuration: BufferConfiguration) -> SCStreamConfiguration {
+        let streamConfiguration = SCStreamConfiguration()
+        streamConfiguration.width = width
+        streamConfiguration.height = height
+        streamConfiguration.minimumFrameInterval = CMTime(value: 1, timescale: CMTimeScale(framesPerSecond))
+        streamConfiguration.showsCursor = configuration.showsCursor
+        // The H.264 encoder's own format: frames go to it without a colour conversion per frame,
+        // which is most of the CPU a running buffer used to take.
+        streamConfiguration.pixelFormat = kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange
+        streamConfiguration.colorMatrix = CGDisplayStream.yCbCrMatrix_ITU_R_709_2
+        streamConfiguration.queueDepth = 4
+        streamConfiguration.capturesAudio = configuration.systemAudio
+        streamConfiguration.excludesCurrentProcessAudio = true
+        streamConfiguration.sampleRate = 48000
+        streamConfiguration.channelCount = 2
+        return streamConfiguration
+    }
+
     func stop() async {
+        stopCount += 1
         if stream != nil {
             Log.info("buffer[\(displayID)] stopping")
         }
         stopHeartbeat()
-        if let current = stream {
+        // Cleared before waiting for the capture to end, so a change on its way (upgradeToNative)
+        // sees the stream is going and does not start it again.
+        let current = stream
+        stream = nil
+        if let current {
             try? await current.stopCapture()
         }
-        stream = nil
         dropHeldFrame()
         await finishCurrentSegment()
     }
@@ -221,15 +250,6 @@ final class ScreenBuffer: NSObject, SCStreamOutput, SCStreamDelegate {
             Log.info("buffer[\(displayID)] capture stopped for quit")
         }
         stream = nil
-    }
-
-    /// A frame held back for later must not open a new segment after the capture stopped.
-    /// Queued ahead of the segment's finish, so it runs first.
-    private func dropHeldFrame() {
-        queue.async {
-            self.heldSample = nil
-            self.pacer.reset()
-        }
     }
 
     var isRunning: Bool {
@@ -273,39 +293,54 @@ final class ScreenBuffer: NSObject, SCStreamOutput, SCStreamDelegate {
         Log.info("buffer[\(displayID)] now \(framesPerSecond) fps")
     }
 
-    /// While recording, changes only in the menu bar or under the recording bar (`windows`, global
-    /// AppKit frames) are encoded a few times a second instead of every frame.
-    /// `ownWindows`: our windows themselves; the pointer over them is not work on the recorded screen.
-    func setQuietZones(busyWindows windows: [CGRect], ownWindows: [CGRect], enabled: Bool) {
-        queue.async {
-            self.busyWindows = windows
-            self.ownWindows = ownWindows
-            self.quietZonesEnabled = enabled
-            self.updatePacerZones()
+    /// Native resolution and at least `framesPerSecond` on the running stream, for a recorded area that
+    /// now touches this display. What the buffer holds stays; the first frame at the new size starts a
+    /// new segment. False when the stream did not take the change: the caller restarts this display on
+    /// the buffer's start chain (a restart from here could outlive a stop and leave a capture no one owns).
+    func upgradeToNative(framesPerSecond: Int) async -> Bool {
+        guard let current = stream else { return true }
+        let state = queue.sync { (size: outputSize, framesPerSecond: configuration.framesPerSecond, configuration: configuration) }
+        let target = nativeSize
+        let rate = max(framesPerSecond, state.framesPerSecond)
+        if target.width <= 0 || (state.size == target && state.framesPerSecond == rate) { return true }
+        let settings = ScreenBuffer.streamConfiguration(width: Int(target.width), height: Int(target.height), framesPerSecond: rate, configuration: state.configuration)
+        // Native frames can arrive before the change returns: the segment they open needs the new rate.
+        queue.sync {
+            configuration.framesPerSecond = rate
         }
-    }
-
-    /// Queue only.
-    private func updatePacerZones() {
-        if quietZonesEnabled {
-            pacer.zones = FramePacing.zones(displayFrame: displayFrame, menuBarHeight: menuBarHeight, busyWindows: busyWindows, outputSize: outputSize)
-        } else {
-            pacer.zones = []
-            flushHeldFrame(force: true)
-        }
-    }
-
-    /// Encodes the frame held back by the pacer once it is due, or at once with `force`. Queue only.
-    private func flushHeldFrame(force: Bool) {
-        guard let sample = heldSample, writer != nil else { return }
-        guard let time = pacer.takeHeld(now: CACurrentMediaTime(), lastKept: lastFrameTime, force: force) else {
-            if pacer.heldTime == nil {
-                heldSample = nil
+        do {
+            try await current.updateConfiguration(settings)
+        } catch {
+            queue.sync {
+                configuration.framesPerSecond = state.framesPerSecond
             }
-            return
+            // Stopped meanwhile (the recording ended and the buffer restarts): nothing to change.
+            if stream !== current { return true }
+            Log.error("buffer[\(displayID)] native resolution change failed: \(error.localizedDescription)")
+            return false
         }
-        heldSample = nil
-        appendVideo(sample, at: time)
+        if stream === current {
+            streamSettings = settings
+        }
+        queue.sync {
+            applyNativeSize(target, framesPerSecond: rate)
+        }
+        Log.info("buffer[\(displayID)] now native \(Int(target.width))x\(Int(target.height)) @\(rate)fps")
+        return true
+    }
+
+    /// The stream now sends `size` frames at `framesPerSecond`. A size change starts its new segment by
+    /// itself with the first frame of that size (`appendVideo`); a segment break asked for here as well
+    /// would close a segment holding one frame still on its way at the old size, and that frame would be
+    /// lost. Only a frame rate change alone asks for a break. Queue only.
+    func applyNativeSize(_ size: CGSize, framesPerSecond: Int) {
+        if size == outputSize {
+            startNewSegment = true
+        }
+        outputSize = size
+        configuration.maxHeight = 0
+        configuration.framesPerSecond = framesPerSecond
+        updatePacerZones()
     }
 
     /// Leaves our own windows out of the capture again, and lets the listed ones (drawing overlay,
@@ -326,6 +361,13 @@ final class ScreenBuffer: NSObject, SCStreamOutput, SCStreamDelegate {
         try? await current.updateContentFilter(filter)
     }
 
+    #if AUTOMATION
+    /// Self-test: a buffer fed made-up frames has no display of its own.
+    func setDisplayFrameForTests(_ frame: CGRect) {
+        displayFrame = frame
+    }
+    #endif
+
     func stream(_ stream: SCStream, didStopWithError error: Error) {
         Log.error("buffer[\(displayID)] stream stopped: \(error.localizedDescription)")
         self.stream = nil
@@ -336,453 +378,6 @@ final class ScreenBuffer: NSObject, SCStreamOutput, SCStreamDelegate {
             await MainActor.run {
                 self.onStop?(error)
             }
-        }
-    }
-
-    // MARK: Samples
-
-    func stream(_ stream: SCStream, didOutputSampleBuffer sampleBuffer: CMSampleBuffer, of type: SCStreamOutputType) {
-        guard sampleBuffer.isValid else { return }
-        if type == .audio {
-            appendAudio(sampleBuffer, source: .system)
-            return
-        }
-        guard type == .screen else { return }
-        guard let attachments = CMSampleBufferGetSampleAttachmentsArray(sampleBuffer, createIfNecessary: false) as? [[SCStreamFrameInfo: Any]],
-              let statusValue = attachments.first?[.status] as? Int,
-              let status = SCFrameStatus(rawValue: statusValue),
-              status == .complete else {
-            return
-        }
-        guard CMSampleBufferGetImageBuffer(sampleBuffer) != nil else { return }
-        let time = CMSampleBufferGetPresentationTimeStamp(sampleBuffer).seconds
-        if !pacer.zones.isEmpty {
-            var dirty: [CGRect] = []
-            for item in attachments.first?[.dirtyRects] as? [NSDictionary] ?? [] {
-                if let rect = CGRect(dictionaryRepresentation: item) {
-                    dirty.append(rect)
-                }
-            }
-            let mouse = NSEvent.mouseLocation
-            var pointer = FramePacing.pixelPoint(mouse, displayFrame: displayFrame, outputSize: outputSize)
-            for window in ownWindows where window.contains(mouse) {
-                pointer = nil
-            }
-            if pacer.receive(dirty: dirty, at: time, lastKept: lastFrameTime, pointer: pointer) == .hold {
-                // Kept for later: if the screen goes still now, this is its last picture.
-                heldSample = sampleBuffer
-                queue.asyncAfter(deadline: .now() + FramePacing.quietInterval) { [weak self] in
-                    self?.flushHeldFrame(force: false)
-                }
-                return
-            }
-            heldSample = nil
-        }
-        appendVideo(sampleBuffer, at: time)
-    }
-
-    private func startHeartbeat() {
-        stopHeartbeat()
-        let timer = DispatchSource.makeTimerSource(queue: queue)
-        timer.schedule(deadline: .now() + 0.5, repeating: 0.5)
-        timer.setEventHandler { [weak self] in
-            self?.repeatLastFrameIfIdle()
-        }
-        timer.resume()
-        heartbeat = timer
-    }
-
-    private func stopHeartbeat() {
-        heartbeat?.cancel()
-        heartbeat = nil
-    }
-
-    /// Queue only.
-    private func repeatLastFrameIfIdle() {
-        flushHeldFrame(force: false)
-        let now = CACurrentMediaTime()
-        guard let last = lastSampleBuffer, now - lastFrameTime >= 0.45 else { return }
-        if let copy = ScreenBuffer.retimed(last, to: now) {
-            appendVideo(copy, at: now)
-        }
-    }
-
-    /// Microphone samples from `MicrophoneSource` (host-time stamped). Any thread.
-    func receiveMicrophone(_ sampleBuffer: CMSampleBuffer) {
-        queue.async {
-            self.appendAudio(sampleBuffer, source: .microphone)
-        }
-    }
-
-    private func appendAudio(_ sampleBuffer: CMSampleBuffer, source: AudioSource) {
-        guard let input = audioInputs[source], writer != nil, input.isReadyForMoreMediaData else { return }
-        let time = CMSampleBufferGetPresentationTimeStamp(sampleBuffer).seconds
-        if let index = currentSegmentIndex, time < segments[index].start { return }
-        input.append(sampleBuffer)
-    }
-
-    /// Appends one frame, rotating to a new segment when the current one is long enough. Queue only.
-    private func appendVideo(_ sampleBuffer: CMSampleBuffer, at time: Double) {
-        if time <= lastFrameTime { return }
-
-        if let index = currentSegmentIndex, time - segments[index].start >= segmentLength || startNewSegment {
-            startNewSegment = false
-            finishSegmentOnQueue(completion: nil)
-        }
-        if writer == nil {
-            openSegment(at: time)
-        }
-        guard let input = videoInput, let index = currentSegmentIndex else { return }
-        if !input.isReadyForMoreMediaData {
-            droppedFrames += 1
-            // A frame now and then while the Mac is busy is normal and the clip does not show it;
-            // every 30 dropped (2 s at 15 fps) is worth an error.
-            if droppedFrames == 1 {
-                Log.info("buffer[\(displayID)] writer not ready, dropped a frame")
-            } else if droppedFrames % 30 == 0 {
-                Log.error("buffer[\(displayID)] writer not ready, dropped \(droppedFrames) frames")
-            }
-        }
-        if input.isReadyForMoreMediaData {
-            if !input.append(sampleBuffer) {
-                Log.error("buffer[\(displayID)] append failed: \(writer?.error?.localizedDescription ?? "unknown") status=\(writer?.status.rawValue ?? -1)")
-            } else {
-                receivedFrames += 1
-                if receivedFrames == 1 || receivedFrames % 900 == 0 {
-                    Log.info("buffer[\(displayID)] frames written: \(receivedFrames)")
-                }
-                segments[index].end = time
-                lastFrameTime = time
-                lastSampleBuffer = sampleBuffer
-                frameTimes.append(time)
-                // Trim old timestamps in batches (every few seconds), not one by one per frame.
-                let cutoff = time - configuration.retentionSeconds
-                if let first = frameTimes.first, first < cutoff - 5 {
-                    var stale = 0
-                    for value in frameTimes {
-                        if value >= cutoff { break }
-                        stale += 1
-                    }
-                    frameTimes.removeFirst(stale)
-                }
-            }
-        }
-        pruneSegments(now: time)
-    }
-
-    private func openSegment(at time: Double) {
-        let url = AppPaths.buffer.appendingPathComponent("segment-\(displayID)-\(UUID().uuidString).mov")
-        guard let newWriter = try? AVAssetWriter(outputURL: url, fileType: .mov) else {
-            Log.error("buffer[\(displayID)] cannot create writer")
-            return
-        }
-        let fps = configuration.framesPerSecond
-        let pixels = outputSize.width * outputSize.height
-        let bitrate = min(20_000_000, max(2_000_000, pixels * Double(fps) * 0.12))
-        let settings: [String: Any] = [
-            AVVideoCodecKey: AVVideoCodecType.h264,
-            AVVideoWidthKey: Int(outputSize.width),
-            AVVideoHeightKey: Int(outputSize.height),
-            AVVideoCompressionPropertiesKey: [
-                AVVideoAverageBitRateKey: Int(bitrate),
-                AVVideoMaxKeyFrameIntervalKey: fps * 2,
-                AVVideoExpectedSourceFrameRateKey: fps,
-                AVVideoAllowFrameReorderingKey: false,
-                AVVideoProfileLevelKey: AVVideoProfileLevelH264HighAutoLevel,
-            ],
-        ]
-        let input = AVAssetWriterInput(mediaType: .video, outputSettings: settings)
-        input.expectsMediaDataInRealTime = true
-        guard newWriter.canAdd(input) else { return }
-        newWriter.add(input)
-
-        // Audio tracks keep a fixed order: system first, then microphone.
-        var newAudioInputs: [AudioSource: AVAssetWriterInput] = [:]
-        var sources: [AudioSource] = []
-        if configuration.systemAudio { sources.append(.system) }
-        if configuration.microphone { sources.append(.microphone) }
-        for source in sources {
-            let audioSettings: [String: Any] = [
-                AVFormatIDKey: kAudioFormatMPEG4AAC,
-                AVSampleRateKey: 48000,
-                AVNumberOfChannelsKey: 2,
-                AVEncoderBitRateKey: 128_000,
-            ]
-            let audioInput = AVAssetWriterInput(mediaType: .audio, outputSettings: audioSettings)
-            audioInput.expectsMediaDataInRealTime = true
-            if newWriter.canAdd(audioInput) {
-                newWriter.add(audioInput)
-                newAudioInputs[source] = audioInput
-            }
-        }
-
-        guard newWriter.startWriting() else {
-            Log.error("buffer[\(displayID)] startWriting failed: \(newWriter.error?.localizedDescription ?? "unknown")")
-            return
-        }
-        newWriter.startSession(atSourceTime: CMTime(seconds: time, preferredTimescale: 600))
-        writer = newWriter
-        videoInput = input
-        audioInputs = newAudioInputs
-        segments.append(Segment(url: url, start: time, end: time, finished: false))
-        currentSegmentIndex = segments.count - 1
-    }
-
-    /// Finishes the open segment. Queue only. Completion runs on the queue.
-    private func finishSegmentOnQueue(completion: (() -> Void)?) {
-        guard let currentWriter = writer, let input = videoInput, let index = currentSegmentIndex else {
-            completion?()
-            return
-        }
-        let inputs = audioInputs
-        writer = nil
-        videoInput = nil
-        audioInputs = [:]
-        currentSegmentIndex = nil
-        let url = segments[index].url
-
-        if segments[index].end <= segments[index].start {
-            // Single frame: nothing playable, drop the file.
-            currentWriter.cancelWriting()
-            segments.remove(at: index)
-            try? FileManager.default.removeItem(at: url)
-            completion?()
-            return
-        }
-        input.markAsFinished()
-        for audioInput in inputs.values {
-            audioInput.markAsFinished()
-        }
-        // End the session one frame after the last frame so it has a duration.
-        let frame = 1.0 / Double(configuration.framesPerSecond)
-        currentWriter.endSession(atSourceTime: CMTime(seconds: segments[index].end + frame, preferredTimescale: 600))
-        segments[index].end += frame
-        currentWriter.finishWriting { [weak self] in
-            guard let self = self else { return }
-            self.queue.async {
-                for position in 0..<self.segments.count where self.segments[position].url == url {
-                    self.segments[position].finished = currentWriter.status == .completed
-                }
-                if currentWriter.status != .completed {
-                    Log.error("buffer[\(self.displayID)] segment finish failed: \(currentWriter.error?.localizedDescription ?? "status \(currentWriter.status.rawValue)")")
-                }
-                completion?()
-            }
-        }
-    }
-
-    private func finishCurrentSegment() async {
-        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
-            queue.async {
-                self.finishSegmentOnQueue {
-                    continuation.resume()
-                }
-            }
-        }
-    }
-
-    private func pruneSegments(now: Double) {
-        var keepFrom = now - configuration.retentionSeconds - segmentLength
-        if let pinned = pinnedFrom {
-            keepFrom = min(keepFrom, pinned - segmentLength)
-        }
-        var kept: [Segment] = []
-        for segment in segments {
-            if segment.finished && segment.end < keepFrom {
-                try? FileManager.default.removeItem(at: segment.url)
-            } else {
-                kept.append(segment)
-            }
-        }
-        if kept.count == segments.count { return }
-        var openURL: URL? = nil
-        if let index = currentSegmentIndex {
-            openURL = segments[index].url
-        }
-        segments = kept
-        currentSegmentIndex = nil
-        if let url = openURL {
-            for position in 0..<segments.count where segments[position].url == url {
-                currentSegmentIndex = position
-            }
-        }
-    }
-
-    // MARK: Status for the UI
-
-    /// Seconds of screen available right now, and frame activity per bucket (oldest first).
-    func status(buckets: Int) -> (covered: Double, activity: [Double]) {
-        return queue.sync {
-            let now = CACurrentMediaTime()
-            var covered = 0.0
-            if let first = segments.first {
-                covered = min(configuration.retentionSeconds, now - first.start)
-            }
-            let window = configuration.retentionSeconds
-            var counts = [Double](repeating: 0, count: buckets)
-            for time in frameTimes {
-                let age = now - time
-                if age < 0 || age >= window { continue }
-                let bucket = buckets - 1 - Int(age / window * Double(buckets))
-                if bucket >= 0 && bucket < buckets {
-                    counts[bucket] += 1
-                }
-            }
-            let maximum = counts.max() ?? 0
-            var activity: [Double] = []
-            for count in counts {
-                activity.append(maximum > 0 ? count / maximum : 0)
-            }
-            return (covered: max(0, covered), activity: activity)
-        }
-    }
-
-    /// Keeps segments from `time` on (for "record from now"). Nil releases the pin.
-    func pin(from time: Double?) {
-        queue.async {
-            self.pinnedFrom = time
-        }
-    }
-
-    // MARK: Export
-
-    /// Closes the open segment so everything up to now is in finished files.
-    /// Repeats the last frame at "now" so a static screen still reaches the end.
-    func prepareForExport() async {
-        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
-            queue.async {
-                self.flushHeldFrame(force: true)
-                let now = CACurrentMediaTime()
-                if let last = self.lastSampleBuffer, now - self.lastFrameTime > 0.1, self.writer != nil {
-                    if let copy = ScreenBuffer.retimed(last, to: now) {
-                        self.appendVideo(copy, at: now)
-                    }
-                }
-                self.finishSegmentOnQueue {
-                    continuation.resume()
-                }
-            }
-        }
-    }
-
-    /// Segment layout relative to now, for the log.
-    func describeSegments() -> String {
-        return queue.sync {
-            let now = CACurrentMediaTime()
-            var parts: [String] = []
-            for segment in segments {
-                parts.append(String(format: "[%.2f…%.2f %@]", segment.start - now, segment.end - now, segment.finished ? "done" : "open"))
-            }
-            return parts.joined(separator: " ")
-        }
-    }
-
-    /// Host-time span covered by finished segments.
-    func availability() -> (start: Double, end: Double)? {
-        return queue.sync {
-            var start: Double? = nil
-            var end: Double? = nil
-            for segment in segments where segment.finished {
-                start = min(start ?? segment.start, segment.start)
-                end = max(end ?? segment.end, segment.end)
-            }
-            guard let from = start, let to = end else { return nil }
-            return (start: from, end: to)
-        }
-    }
-
-    /// Adds this display's video (and audio when asked) for `pieces` to `composition`.
-    /// Returns the new video track, or nil when nothing overlaps.
-    func addTracks(to composition: AVMutableComposition, pieces: [ClipPiece], includeAudio: Bool) async throws -> AVMutableCompositionTrack? {
-        guard let overallStart = pieces.map({ piece in piece.hostStart }).min(),
-              let overallEnd = pieces.map({ piece in piece.hostEnd }).max() else { return nil }
-        let usable: [Segment] = queue.sync {
-            var list: [Segment] = []
-            for segment in segments where segment.finished && segment.end > overallStart && segment.start < overallEnd {
-                list.append(segment)
-            }
-            return list
-        }
-        guard let first = usable.first else { return nil }
-
-        // 1. Lay segments on one timeline starting at the first segment.
-        let timeline = AVMutableComposition()
-        guard let timelineVideo = timeline.addMutableTrack(withMediaType: .video, preferredTrackID: kCMPersistentTrackID_Invalid) else { return nil }
-        var timelineAudio: [AVMutableCompositionTrack] = []
-        let base = first.start
-        var lastEnd = base
-        for segment in usable {
-            let asset = AVURLAsset(url: segment.url)
-            guard let sourceVideo = try await asset.loadTracks(withMediaType: .video).first else { continue }
-            let range = try await sourceVideo.load(.timeRange)
-            let at = CMTime(seconds: max(segment.start - base, 0), preferredTimescale: 600)
-            try timelineVideo.insertTimeRange(range, of: sourceVideo, at: at)
-            lastEnd = max(lastEnd, segment.start + range.duration.seconds)
-            if includeAudio {
-                let sourceAudio = try await asset.loadTracks(withMediaType: .audio)
-                for (index, audioTrack) in sourceAudio.enumerated() {
-                    while timelineAudio.count <= index {
-                        if let track = timeline.addMutableTrack(withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid) {
-                            timelineAudio.append(track)
-                        } else {
-                            break
-                        }
-                    }
-                    if index >= timelineAudio.count { continue }
-                    let audioRange = try await audioTrack.load(.timeRange)
-                    let offset = max(0, audioRange.start.seconds - range.start.seconds)
-                    let audioAt = CMTime(seconds: max(segment.start - base, 0) + offset, preferredTimescale: 48000)
-                    try? timelineAudio[index].insertTimeRange(audioRange, of: audioTrack, at: audioAt)
-                }
-            }
-        }
-
-        // 2. Copy each piece into the shared composition at its output time.
-        guard let outputVideo = composition.addMutableTrack(withMediaType: .video, preferredTrackID: kCMPersistentTrackID_Invalid) else { return nil }
-        var outputAudio: [AVMutableCompositionTrack] = []
-        for _ in timelineAudio {
-            if let track = composition.addMutableTrack(withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid) {
-                outputAudio.append(track)
-            }
-        }
-        for piece in pieces {
-            let clipStart = max(piece.hostStart, base)
-            let clipEnd = min(piece.hostEnd, lastEnd)
-            if clipEnd - clipStart < 0.02 { continue }
-            let sourceRange = CMTimeRange(
-                start: CMTime(seconds: clipStart - base, preferredTimescale: 600),
-                end: CMTime(seconds: clipEnd - base, preferredTimescale: 600)
-            )
-            let at = CMTime(seconds: piece.outputStart + (clipStart - piece.hostStart), preferredTimescale: 600)
-            try outputVideo.insertTimeRange(sourceRange, of: timelineVideo, at: at)
-            for index in 0..<min(timelineAudio.count, outputAudio.count) {
-                let audioTrack = timelineAudio[index]
-                let audioRange = CMTimeRangeGetIntersection(sourceRange, otherRange: audioTrack.timeRange)
-                if audioRange.duration.seconds <= 0 { continue }
-                let audioAt = CMTime(seconds: at.seconds + (audioRange.start.seconds - sourceRange.start.seconds), preferredTimescale: 48000)
-                try? outputAudio[index].insertTimeRange(audioRange, of: audioTrack, at: audioAt)
-            }
-        }
-        return outputVideo
-    }
-
-    static func retimed(_ sampleBuffer: CMSampleBuffer, to seconds: Double) -> CMSampleBuffer? {
-        var timing = CMSampleTimingInfo(
-            duration: .invalid,
-            presentationTimeStamp: CMTime(seconds: seconds, preferredTimescale: 1_000_000_000),
-            decodeTimeStamp: .invalid
-        )
-        var copy: CMSampleBuffer?
-        CMSampleBufferCreateCopyWithNewTiming(allocator: nil, sampleBuffer: sampleBuffer, sampleTimingEntryCount: 1, sampleTimingArray: &timing, sampleBufferOut: &copy)
-        return copy
-    }
-
-    /// Deletes all segment files, for example on launch.
-    static func clearBufferFolder() {
-        let folder = AppPaths.buffer
-        let files = (try? FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil)) ?? []
-        for file in files {
-            try? FileManager.default.removeItem(at: file)
         }
     }
 }

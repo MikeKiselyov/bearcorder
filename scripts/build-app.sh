@@ -4,6 +4,10 @@
 #   scripts/build-app.sh            release build
 #   scripts/build-app.sh --run      build, then (re)launch the app
 #   scripts/build-app.sh --install  build, then copy to /Applications (or ~/Applications) and launch
+#   scripts/build-app.sh --install-only
+#                                   the same install of the app already built in ./build: no swift build,
+#                                   no signing (stops if there is no build). The test runs use it
+#                                   after all.sh built the app once (BUGBEAR_APP_BUILT=1).
 #
 # Personal settings live in .env (git-ignored, see .env.example):
 #   BUGBEAR_BUNDLE_ID       bundle identifier (default io.github.bugbear.app)
@@ -63,7 +67,8 @@ source "$ROOT/scripts/lib/app-name.sh"
 # shellcheck source=lib/permissions.sh
 source "$ROOT/scripts/lib/permissions.sh"
 BUNDLE_ID="${BUGBEAR_BUNDLE_ID:-io.github.bugbear.app}"
-BUILD_DIR="$ROOT/build"
+# BUGBEAR_BUILD_DIR: a folder other than ./build (the script tests use one of their own).
+BUILD_DIR="${BUGBEAR_BUILD_DIR:-$ROOT/build}"
 APP_DIR="$BUILD_DIR/$APP_NAME.app"
 
 # Where the app came from, so it can tell when the GitHub repository has newer changes
@@ -73,90 +78,113 @@ BRANCH="$(git -C "$ROOT" symbolic-ref --short --quiet HEAD 2>/dev/null || true)"
 REMOTE="$(git -C "$ROOT" remote get-url origin 2>/dev/null || true)"
 REPOSITORY="$(echo "$REMOTE" | sed -nE 's#.*github\.com[:/]([^/]+/[^/]+)$#\1#p' | sed -E 's#\.git$##')"
 
-SWIFT_FLAGS=()
-if [ "${BUGBEAR_AUTOMATION:-}" = "1" ]; then
-    SWIFT_FLAGS=(-Xswiftc -DAUTOMATION)
-    echo "==> swift build (release, with automation for the tests)"
-else
-    echo "==> swift build (release)"
-fi
-swift build -c release --product Bugbear "${SWIFT_FLAGS[@]+"${SWIFT_FLAGS[@]}"}"
-BIN_DIR="$(swift build -c release --show-bin-path)"
-BINARY="$BIN_DIR/Bugbear"
-# The version is the newest release in WhatsNewCatalog.swift; the build number counts commits.
-VERSION="$("$BINARY" --version)"
-BUILD_NUMBER="$(git -C "$ROOT" rev-list --count HEAD 2>/dev/null || echo 1)"
-echo "==> version $VERSION ($BUILD_NUMBER)"
-
-echo "==> assembling $APP_DIR"
-rm -rf "$APP_DIR"
-mkdir -p "$APP_DIR/Contents/MacOS" "$APP_DIR/Contents/Resources"
-cp "$BINARY" "$APP_DIR/Contents/MacOS/Bugbear"
-# The resources SwiftPM bundled (Sources/Bugbear/Resources): read through AppResources.
-cp -R "$BIN_DIR/Bugbear_Bugbear.bundle" "$APP_DIR/Contents/Resources/"
-# Debug symbols are not needed to run the app; without them it is a few MB lighter.
-strip -x "$APP_DIR/Contents/MacOS/Bugbear" 2>/dev/null || true
-
-echo "==> rendering icon"
-ICONSET="$BUILD_DIR/AppIcon.iconset"
-rm -rf "$ICONSET"
-"$BINARY" --render-iconset "$ICONSET"
-iconutil -c icns "$ICONSET" -o "$APP_DIR/Contents/Resources/AppIcon.icns"
-rm -rf "$ICONSET"
-
-# Packaging/Info.plist holds the fixed keys; the values that depend on this build go in here.
-PLIST="$APP_DIR/Contents/Info.plist"
-cp "$ROOT/Packaging/Info.plist" "$PLIST"
-set_plist() {
-    plutil -replace "$1" -string "$2" "$PLIST"
-}
-set_plist CFBundleIdentifier "$BUNDLE_ID"
-set_plist CFBundleName "$APP_NAME"
-set_plist CFBundleDisplayName "$APP_NAME"
-set_plist CFBundleShortVersionString "$VERSION"
-set_plist CFBundleVersion "$BUILD_NUMBER"
-set_plist NSCameraUsageDescription "$APP_NAME shows your webcam in a bubble on screen so it can be part of your recordings."
-set_plist NSMicrophoneUsageDescription "$APP_NAME records your voice with screen recordings when the microphone is turned on."
-set_plist NSAppleEventsUsageDescription "$APP_NAME reads the current browser tab URL to add it to the bug environment."
-set_plist BugbearCommit "$COMMIT"
-set_plist BugbearBranch "$BRANCH"
-set_plist BugbearRepository "$REPOSITORY"
-set_plist BugbearSourcePath "$ROOT"
-plutil -lint "$PLIST" >/dev/null
-
-# Signing order: BUGBEAR_SIGN_IDENTITY, then an Apple Development certificate, then a certificate
-# made for this Mac (scripts/dev/local-signing.sh). All three stay the same between builds, so macOS
-# keeps the permissions after an update. Ad-hoc ("-") is the last resort.
-IDENTITY="${BUGBEAR_SIGN_IDENTITY:-}"
-if [ -z "$IDENTITY" ]; then
-    IDENTITY="$(security find-identity -v -p codesigning | grep "Apple Development" | head -1 | sed -E 's/.*"(.*)"/\1/' || true)"
-fi
-if [ -z "$IDENTITY" ] || [ "$IDENTITY" = "local" ]; then
-    IDENTITY="$("$ROOT/scripts/dev/local-signing.sh" identity || true)"
-    # The key is usable only while this build signs (on_exit locks it).
-    uses_local_signing=1
-    if [ -n "$IDENTITY" ]; then
-        echo "==> signing with the certificate made for this Mac (no Apple Development one)"
+# Builds, assembles and signs APP_DIR.
+build_app() {
+    # Marks a build with automation (what the tests drive); gone while a build runs or when it has none.
+    rm -f "$BUILD_DIR/.automation-build"
+    SWIFT_FLAGS=()
+    if [ "${BUGBEAR_AUTOMATION:-}" = "1" ]; then
+        SWIFT_FLAGS=(-Xswiftc -DAUTOMATION)
+        echo "==> swift build (release, with automation for the tests)"
+    else
+        echo "==> swift build (release)"
     fi
-fi
-if [ -z "$IDENTITY" ]; then
-    IDENTITY="-"
-    echo "!! No signing certificate; ad-hoc signing (macOS asks for permissions again after each update)"
-fi
-echo "==> signing with: $IDENTITY"
-codesign --force --sign "$IDENTITY" --identifier "$BUNDLE_ID" "$APP_DIR"
-codesign --verify --verbose=1 "$APP_DIR"
+    swift build -c release --product Bugbear "${SWIFT_FLAGS[@]+"${SWIFT_FLAGS[@]}"}"
+    BIN_DIR="$(swift build -c release --show-bin-path)"
+    BINARY="$BIN_DIR/Bugbear"
+    # The version is the newest release in WhatsNewCatalog.swift; the build number counts commits.
+    VERSION="$("$BINARY" --version)"
+    BUILD_NUMBER="$(git -C "$ROOT" rev-list --count HEAD 2>/dev/null || echo 1)"
+    echo "==> version $VERSION ($BUILD_NUMBER)"
 
-# macOS caches app icons: re-register the bundle so the Dock, the screen recording indicator and
-# Finder show the current icon instead of an old one.
-touch "$APP_DIR" "$PLIST"
-/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "$APP_DIR" 2>/dev/null || true
+    echo "==> assembling $APP_DIR"
+    rm -rf "$APP_DIR"
+    mkdir -p "$APP_DIR/Contents/MacOS" "$APP_DIR/Contents/Resources"
+    cp "$BINARY" "$APP_DIR/Contents/MacOS/Bugbear"
+    # The resources SwiftPM bundled (Sources/Bugbear/Resources): read through AppResources.
+    cp -R "$BIN_DIR/Bugbear_Bugbear.bundle" "$APP_DIR/Contents/Resources/"
+    # Debug symbols are not needed to run the app; without them it is a few MB lighter.
+    strip -x "$APP_DIR/Contents/MacOS/Bugbear" 2>/dev/null || true
 
-echo "==> done: $APP_DIR"
+    echo "==> rendering icon"
+    ICONSET="$BUILD_DIR/AppIcon.iconset"
+    rm -rf "$ICONSET"
+    "$BINARY" --render-iconset "$ICONSET"
+    iconutil -c icns "$ICONSET" -o "$APP_DIR/Contents/Resources/AppIcon.icns"
+    rm -rf "$ICONSET"
+
+    # Packaging/Info.plist holds the fixed keys; the values that depend on this build go in here.
+    PLIST="$APP_DIR/Contents/Info.plist"
+    cp "$ROOT/Packaging/Info.plist" "$PLIST"
+    set_plist() {
+        plutil -replace "$1" -string "$2" "$PLIST"
+    }
+    set_plist CFBundleIdentifier "$BUNDLE_ID"
+    set_plist CFBundleName "$APP_NAME"
+    set_plist CFBundleDisplayName "$APP_NAME"
+    set_plist CFBundleShortVersionString "$VERSION"
+    set_plist CFBundleVersion "$BUILD_NUMBER"
+    set_plist NSCameraUsageDescription "$APP_NAME shows your webcam in a bubble on screen so it can be part of your recordings."
+    set_plist NSMicrophoneUsageDescription "$APP_NAME records your voice with screen recordings when the microphone is turned on."
+    set_plist NSAppleEventsUsageDescription "$APP_NAME reads the current browser tab URL to add it to the bug environment."
+    set_plist BugbearCommit "$COMMIT"
+    set_plist BugbearBranch "$BRANCH"
+    set_plist BugbearRepository "$REPOSITORY"
+    set_plist BugbearSourcePath "$ROOT"
+    plutil -lint "$PLIST" >/dev/null
+
+    # Signing order: BUGBEAR_SIGN_IDENTITY, then an Apple Development certificate, then a certificate
+    # made for this Mac (scripts/dev/local-signing.sh). All three stay the same between builds, so macOS
+    # keeps the permissions after an update. Ad-hoc ("-") is the last resort.
+    IDENTITY="${BUGBEAR_SIGN_IDENTITY:-}"
+    if [ -z "$IDENTITY" ]; then
+        IDENTITY="$(security find-identity -v -p codesigning | grep "Apple Development" | head -1 | sed -E 's/.*"(.*)"/\1/' || true)"
+    fi
+    if [ -z "$IDENTITY" ] || [ "$IDENTITY" = "local" ]; then
+        IDENTITY="$("$ROOT/scripts/dev/local-signing.sh" identity || true)"
+        # The key is usable only while this build signs (on_exit locks it).
+        uses_local_signing=1
+        if [ -n "$IDENTITY" ]; then
+            echo "==> signing with the certificate made for this Mac (no Apple Development one)"
+        fi
+    fi
+    if [ -z "$IDENTITY" ]; then
+        IDENTITY="-"
+        echo "!! No signing certificate; ad-hoc signing (macOS asks for permissions again after each update)"
+    fi
+    echo "==> signing with: $IDENTITY"
+    codesign --force --sign "$IDENTITY" --identifier "$BUNDLE_ID" "$APP_DIR"
+    codesign --verify --verbose=1 "$APP_DIR"
+
+    # macOS caches app icons: re-register the bundle so the Dock, the screen recording indicator and
+    # Finder show the current icon instead of an old one.
+    touch "$APP_DIR" "$PLIST"
+    /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "$APP_DIR" 2>/dev/null || true
+
+    if [ "${BUGBEAR_AUTOMATION:-}" = "1" ]; then
+        touch "$BUILD_DIR/.automation-build"
+    fi
+    echo "==> done: $APP_DIR"
+}
+
+INSTALL_ONLY=0
+for argument in "$@"; do
+    if [ "$argument" = "--install-only" ]; then
+        INSTALL_ONLY=1
+    fi
+done
+if [ "$INSTALL_ONLY" = 1 ]; then
+    if [ ! -d "$APP_DIR" ]; then
+        die "$APP_DIR is missing: run scripts/build-app.sh first"
+    fi
+    echo "==> installing the app built earlier: $APP_DIR"
+else
+    build_app
+fi
 
 for argument in "$@"; do
     case "$argument" in
-        --install)
+        --install|--install-only)
             # /Applications needs an admin account; everyone else gets ~/Applications.
             TARGET_DIR="/Applications"
             if [ ! -w "$TARGET_DIR" ]; then

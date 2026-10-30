@@ -97,19 +97,29 @@ final class CaptureStore {
         return FileManager.default.fileExists(atPath: capture.systemLogURL.path)
     }
 
-    private init() {
+    /// Where the capture folders live; a temporary folder in self-tests.
+    private let folder: URL
+
+    init(folder: URL = AppPaths.captures) {
+        self.folder = folder
         load()
     }
 
     func load() {
         var loaded: [Capture] = []
-        let folders = (try? FileManager.default.contentsOfDirectory(at: AppPaths.captures, includingPropertiesForKeys: nil)) ?? []
+        let folders = (try? FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil)) ?? []
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
-        for folder in folders {
-            let metadata = folder.appendingPathComponent("capture.json")
-            guard let data = try? Data(contentsOf: metadata), let capture = try? decoder.decode(Capture.self, from: data) else { continue }
-            loaded.append(capture)
+        for captureFolder in folders {
+            let metadata = captureFolder.appendingPathComponent("capture.json")
+            // A folder without capture.json is not a capture (a leftover); a broken file is logged.
+            if !FileManager.default.fileExists(atPath: metadata.path) { continue }
+            do {
+                let data = try Data(contentsOf: metadata)
+                loaded.append(try decoder.decode(Capture.self, from: data))
+            } catch {
+                Log.error("captures: could not read \(metadata.path): \(error)")
+            }
         }
         loaded.sort { first, second in first.createdAt > second.createdAt }
         captures = loaded
@@ -240,15 +250,25 @@ final class CaptureStore {
         guard let stitched = ScreenshotCapture.stitchHorizontally(images) else { return }
         let temporary = AppPaths.temporary.appendingPathComponent("all-\(UUID().uuidString).png")
         ImageFiles.write(stitched, to: temporary, type: "public.png")
-        try? FileManager.default.moveItem(at: temporary, to: target)
+        do {
+            try FileManager.default.moveItem(at: temporary, to: target)
+        } catch {
+            Log.error("captures: could not save \(target.path): \(error)")
+        }
     }
 
     /// Moves `file` to `target` when it exists, replacing whatever is there.
     private func parkFile(_ file: URL, as target: URL) {
         let files = FileManager.default
         guard files.fileExists(atPath: file.path) else { return }
-        try? files.removeItem(at: target)
-        try? files.moveItem(at: file, to: target)
+        do {
+            if files.fileExists(atPath: target.path) {
+                try files.removeItem(at: target)
+            }
+            try files.moveItem(at: file, to: target)
+        } catch {
+            Log.error("captures: could not move \(file.path) to \(target.path): \(error)")
+        }
     }
 
     func save(_ capture: Capture) throws {

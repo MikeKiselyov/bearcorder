@@ -296,7 +296,7 @@ public enum TestData {
 
     // MARK: Tricky strings
 
-    public struct EdgeCase: Identifiable {
+    public struct EdgeCase: Identifiable, Sendable {
         public var id: String { name }
         public var name: String
         public var value: String

@@ -15,7 +15,7 @@ let package = Package(
         .target(
             name: "BugbearCore",
             dependencies: ["Yams"],
-            swiftSettings: [.swiftLanguageMode(.v5)]
+            swiftSettings: [.swiftLanguageMode(.v6)]
         ),
         .executableTarget(
             name: "Bugbear",

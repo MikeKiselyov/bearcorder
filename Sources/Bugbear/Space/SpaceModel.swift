@@ -45,9 +45,10 @@ final class SpaceModel {
     /// Bytes per category id; missing while measuring or when the folder does not exist.
     private(set) var sizes: [String: Int64] = [:]
     private(set) var isMeasuring = false
-    private(set) var cleaningID: String?
-    /// The category waiting for "Delete" to be confirmed.
-    var confirmingID: String?
+    /// The section the Disk Space window shows.
+    var section: SpaceView.Section = .cleanUp
+    /// The review list open in "Clean up": a category id or `SpaceModel.projectsID`; nil shows the categories.
+    var openReviewID: String?
     /// Last result line, e.g. "Freed 3.2 GB from App caches".
     var message: String?
 
@@ -76,15 +77,30 @@ final class SpaceModel {
     @ObservationIgnored var applicationsOverride: URL?
     /// Tests: a wait before scanning, so a scan of a tiny made-up home is still running for "Stop".
     @ObservationIgnored var scanStartDelay: Double = 0
+    /// Tests point this at a folder used as the Trash, so removals never reach the real Trash.
+    @ObservationIgnored var trashOverride: URL?
+    /// Pictures for the docs: the disk size and free space shown instead of this Mac's.
+    @ObservationIgnored var volumeOverride: (total: Int64, free: Int64)?
 
     var home: URL {
         return homeOverride ?? FileManager.default.homeDirectoryForCurrentUser
     }
 
-    /// Categories with something in them, biggest first. Our captures always show.
+    /// The id of the review list of dependency folders found in projects.
+    static let projectsID = "projects"
+
+    /// Categories with something in them, biggest first. Our captures always show; rows hidden in
+    /// the settings do not.
     var visibleCategories: [CleanupCategory] {
+        return SpaceModel.visible(CleanupCategory.all, sizes: sizes, hidden: AppSettings.shared.hiddenCacheRows)
+    }
+
+    static func visible(_ categories: [CleanupCategory], sizes: [String: Int64], hidden: Set<String>) -> [CleanupCategory] {
         var list: [CleanupCategory] = []
-        for category in CleanupCategory.all {
+        for category in categories {
+            if hidden.contains(category.id) {
+                continue
+            }
             let bytes = sizes[category.id] ?? 0
             if bytes > 0 || category.action == .openCaptures {
                 list.append(category)
@@ -95,8 +111,12 @@ final class SpaceModel {
     }
 
     var cleanableBytes: Int64 {
+        let hidden = AppSettings.shared.hiddenCacheRows
         var total: Int64 = 0
         for category in CleanupCategory.all where category.action == .deleteContents {
+            if hidden.contains(category.id) {
+                continue
+            }
             total += sizes[category.id] ?? 0
         }
         return total
@@ -109,6 +129,11 @@ final class SpaceModel {
     // MARK: Disk and categories
 
     func refreshVolume() {
+        if let made = volumeOverride {
+            volumeTotal = made.total
+            volumeFree = made.free
+            return
+        }
         let keys: Set<URLResourceKey> = [.volumeTotalCapacityKey, .volumeAvailableCapacityForImportantUsageKey]
         guard let values = try? URL(fileURLWithPath: "/").resourceValues(forKeys: keys) else { return }
         volumeTotal = Int64(values.volumeTotalCapacity ?? 0)
@@ -143,20 +168,6 @@ final class SpaceModel {
             measureAgain = false
             await measure(force: true)
         }
-    }
-
-    func clean(_ category: CleanupCategory) async {
-        guard category.action == .deleteContents, cleaningID == nil else { return }
-        confirmingID = nil
-        cleaningID = category.id
-        let root = home
-        let freed = await Task.detached(priority: .userInitiated) { () -> Int64 in
-            return DiskScanner.clean(category, home: root)
-        }.value
-        Log.info("space: cleaned \(category.id), freed \(freed) bytes")
-        message = L("space.message.freed", SpaceModel.format(freed), category.title)
-        cleaningID = nil
-        await measure(force: true)
     }
 
     // MARK: Scan
@@ -317,6 +328,102 @@ final class SpaceModel {
             url = url.appendingPathComponent(name)
         }
         return url
+    }
+
+    // MARK: Review lists
+
+    /// The dependency folders found by the last "Find projects".
+    private(set) var projectReview: SpaceReview?
+    private(set) var isScanningProjects = false
+    /// When the last project scan finished.
+    private(set) var projectsScannedAt: Date?
+    /// Project folders that could not be read in the last scan.
+    private(set) var unreadableProjectRoots: [URL] = []
+    /// The open review list of each cache category, by category id.
+    private(set) var cacheReviews: [String: SpaceReview] = [:]
+    @ObservationIgnored private var projectScanStop = DiskScanner.StopFlag()
+
+    /// Looks for dependency folders in the project folders from the settings (the app's, unless a
+    /// snapshot or test passes its own).
+    func scanProjects(settings given: AppSettings? = nil) async {
+        let settings = given ?? AppSettings.shared
+        if isScanningProjects {
+            return
+        }
+        isScanningProjects = true
+        let stop = DiskScanner.StopFlag()
+        projectScanStop = stop
+        var roots: [URL] = []
+        for path in settings.projectRoots {
+            roots.append(home.appendingPathComponent(path))
+        }
+        let kinds = settings.dependencyKinds
+        let searchedHome = home
+        // Tests: a made-up home is searched in no time; the wait leaves "Stop" something to stop.
+        var waited = 0.0
+        while waited < scanStartDelay && !stop.isStopped {
+            try? await Task.sleep(nanoseconds: 100_000_000)
+            waited += 0.1
+        }
+        let result = await Task.detached(priority: .userInitiated) { () -> ProjectScanResult in
+            return ProjectDependencies.scan(roots: roots, kinds: kinds, maxDepth: 6, isTrackedByGit: SpaceReview.isTrackedByGit, shouldStop: { stop.isStopped }, home: searchedHome)
+        }.value
+        isScanningProjects = false
+        if stop.isStopped {
+            return
+        }
+        projectReview = SpaceReview(projects: result, settings: settings)
+        unreadableProjectRoots = result.unreadableRoots
+        projectsScannedAt = Date()
+        Log.info("space: found \(result.found.count) dependency folders in \(roots.count) project folders")
+    }
+
+    func stopProjectScan() {
+        projectScanStop.stop()
+    }
+
+    #if AUTOMATION
+    /// Tests: drops every review list and the last project search, so a made-up home starts and
+    /// ends with nothing found.
+    func forgetReviewsForTests() {
+        projectScanStop.stop()
+        projectReview = nil
+        projectsScannedAt = nil
+        unreadableProjectRoots = []
+        cacheReviews = [:]
+        openReviewID = nil
+    }
+    #endif
+
+    /// Lists the items of a cache category for review; the list stays until the category is closed.
+    /// nil for a category that is not cleaned by deleting (our captures).
+    func openReview(for category: CleanupCategory) async -> SpaceReview? {
+        if category.action != .deleteContents {
+            return nil
+        }
+        if let open = cacheReviews[category.id] {
+            return open
+        }
+        let root = home
+        let items = await Task.detached(priority: .userInitiated) { () -> [CacheItem] in
+            return SpaceReview.cacheItems(of: category, home: root)
+        }.value
+        let review = SpaceReview(category: category, items: items, settings: AppSettings.shared)
+        cacheReviews[category.id] = review
+        return review
+    }
+
+    func closeReview(for categoryID: String) {
+        cacheReviews[categoryID] = nil
+    }
+
+    /// Opens a review list in "Clean up"; nil goes back to the categories. The list of a cache
+    /// category that is left is closed, so it is listed afresh next time; one still removing stays.
+    func showReview(_ id: String?) {
+        if let previous = openReviewID, previous != id, let review = cacheReviews[previous], !review.isRemoving {
+            closeReview(for: previous)
+        }
+        openReviewID = id
     }
 
     // MARK: Files

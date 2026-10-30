@@ -27,9 +27,18 @@ enum ReadmeMedia {
             return status
         }
         Updater.shared.state = .idle
-        for tab in MenuTab.allCases {
-            UserDefaults.standard.set(tab.rawValue, forKey: "menuTab")
-            DevChecks.render(MenuBarView().environment(AppState.shared), size: CGSize(width: 360, height: 719), to: screens.appendingPathComponent("menu-\(tab.rawValue.lowercased()).png"))
+        // The Space tab shows a made-up home and disk, never this Mac's.
+        var menuPicturesOK = true
+        await DevChecks.withMadeUpSpaceHome {
+            for tab in MenuTab.allCases {
+                UserDefaults.standard.set(tab.rawValue, forKey: "menuTab")
+                if !renderMenu(app: AppState.shared, to: screens.appendingPathComponent("menu-\(tab.rawValue.lowercased()).png")) {
+                    menuPicturesOK = false
+                }
+            }
+        }
+        if !menuPicturesOK {
+            return 1
         }
 
         if let icon = Logo.iconImage(pixels: 256) {
@@ -66,11 +75,12 @@ enum ReadmeMedia {
         render(VideoEditorView(capture: twoDisplays).environment(AppState.shared), size: CGSize(width: 980, height: 640), wait: 3, to: screens.appendingPathComponent("video-editor-narrow.png"))
         writeMarkupFrames(for: shot, to: folder.appendingPathComponent("markup-frames", isDirectory: true))
         writeInstallFrames(to: folder.appendingPathComponent("install-frames", isDirectory: true))
+        await makeDocsMedia(folder: folder, clip: clip)
         print("README media written to \(folder.path)")
         return 0
     }
 
-    private static let environment = EnvironmentSnapshot(osVersion: "15.1", osBuild: "24B83", display: "2560×1440 @2x", appName: "Chrome", appVersion: "131.0", url: "stage.myapp.com/checkout", locale: "en-PT")
+    static let environment = EnvironmentSnapshot(osVersion: "15.1", osBuild: "24B83", display: "2560×1440 @2x", appName: "Chrome", appVersion: "131.0", url: "stage.myapp.com/checkout", locale: "en-PT")
 
     // MARK: Demo captures
 
@@ -103,7 +113,7 @@ enum ReadmeMedia {
         return capture
     }
 
-    private static func writeProject(for capture: Capture, annotations: [Annotation], showBadge: Bool) {
+    static func writeProject(for capture: Capture, annotations: [Annotation], showBadge: Bool) {
         let project = ScreenshotDocument.Project(annotations: annotations, crop: nil, showBadge: showBadge, badgeCorner: .topRight, hasCombinedBase: false)
         if let data = try? JSONEncoder().encode(project) {
             try? data.write(to: capture.projectURL)
@@ -223,7 +233,7 @@ enum ReadmeMedia {
 
     /// What the player shows at 4 s: the page, the pointer on the total and the clip's marks. AVPlayer does
     /// not draw off screen, so this frame is painted into the player area of the editor picture.
-    private static func clipPreviewFrame() -> CGImage? {
+    static func clipPreviewFrame() -> CGImage? {
         guard let base = DevChecks.makeSampleScreenshot(size: CGSize(width: 1600, height: 1000)) else { return nil }
         guard let context = CGContext(data: nil, width: base.width, height: base.height, bitsPerComponent: 8, bytesPerRow: 0, space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return nil }
         context.draw(base, in: CGRect(x: 0, y: 0, width: base.width, height: base.height))
@@ -240,7 +250,7 @@ enum ReadmeMedia {
     }
 
     /// Finds the black player area in a rendered editor picture and draws `frame` into it, fitted.
-    private static func fillPlayer(in url: URL, with frame: CGImage) {
+    static func fillPlayer(in url: URL, with frame: CGImage) {
         guard let picture = ImageFiles.load(url) else { return }
         let width = picture.width
         let height = picture.height
@@ -396,7 +406,7 @@ enum ReadmeMedia {
     }
 
     /// Renders like DevChecks.render but waits longer, for views that load media first.
-    private static func render<Content: View>(_ view: Content, size: CGSize, wait: Double, to url: URL) {
+    static func render<Content: View>(_ view: Content, size: CGSize, wait: Double, to url: URL) {
         let hosting = NSHostingView(rootView: view.frame(width: size.width, height: size.height).auroraBackground().preferredColorScheme(.dark))
         hosting.frame = CGRect(origin: .zero, size: size)
         hosting.appearance = NSAppearance(named: .darkAqua)

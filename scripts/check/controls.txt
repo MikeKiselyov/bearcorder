@@ -46,7 +46,8 @@ menubar/Recent	(.+, )?(.+ ago|just now)	a recent capture opens in its editor
 menubar/Space	Open	Space tab \"$label\" opens
 menubar/Space	All categories	Space tab \"$label\" opens
 menubar/Space	What takes space…	Space tab \"$label\" opens
-menubar/Space	Clean .+|Cancel|Delete .+	Space tab \"Clean\" asks first
+menubar/Space	Review .+	Space tab \"Review…\" opens the window on the list
+menubar/Space	Find projects…	Space tab \"Find projects…\" opens the project list without searching
 
 history	All|Screenshots|Videos	history filter
 history	App: .+	history sidebar app
@@ -65,18 +66,29 @@ history-menu	Open system log|Open crash report	only for captures that have them
 history-menu	Delete…	asks, then deletes only that capture
 
 space	Clean up|Folders|Largest files	Space folder rows open
-space	Clean .+	Space \"Clean\" asks first
-space	Delete .+	Space \"Delete …\" cleans the category
-space	Cancel	Space \"Clean\" asks first and \"Cancel\" keeps the files
+space	Review .+	Space \"Review…\" lists the category, its footer asks first
+space	Delete [0-9]+ items?, .+	Space \"Delete …\" cleans the category
+space	Cancel	Space review footer asks first and \"Cancel\" keeps the folders
+space	Review Project folders	Space \"Review Project folders\" opens the last search
+space	Find projects…	Space \"Find projects…\" opens the project list without searching
+space	Find projects	Space \"Find projects\" lists old-app and fresh-app
+space	Find again	Space \"Find again\" ticks by the \"Old after\" days
+space	All categories	Space review \"All categories\" goes back
+space	/.+	Space review checkbox ticks and unticks its folder
+space	Select all|Select none	Space review \"Select all\" and \"Select none\"
+space	Move [0-9]+ folders?, .+ to the Trash|Delete [0-9]+ folders?, .+	Space review confirmation moves the ticked folder to the Trash
+space	Delete this folder for good, .+|Delete these [0-9]+ folders for good, .+	Space review \"Delete this folder for good\" asks first and deletes only what it moved
 space	Measure again	Space \"Measure again\" measures fresh sizes
 space	Open	Space \"Open\" on the captures row opens the history
 space	Include other apps' private data \(Docker, Slack, Telegram…\)\. macOS asks once\.	Space switch \"Include other apps' private data\"
 space	Scan home folder and Applications	finishes a scan
 space	Stop	Space \"Stop\" stops the scan
+space	Stop	Space project search \"Stop\" stops the search
 space	Folder .+|Back to .+|This Mac	Space folder rows open and
 space	Show in Finder	Space \"Show in Finder\" shows the open folder
 space	Scan again	Space \"Scan again\" scans again
 space	Show .+ in Finder	Space \"Show\" shows the file in Finder
+space	Show /.+ in Finder	Space review \"Show\" shows the folder in Finder
 space	Move .+ to Trash|Keep .+	Space \"Move to Trash\" asks first
 space	Move .+ to the Trash now	Space \"Move\" moves the file to the Trash
 
@@ -176,6 +188,11 @@ settings	Name|Value	report fields saved with the capture
 settings	.+: .*	restores the shortcuts, a shortcut button keeps its keys
 settings	Reset to defaults	restores the shortcuts
 settings	Clean up now	applies the rules
+settings	Remove ~/.+|Add folder…	settings \"Remove ~/…\" and \"Add folder…\" change the project folders
+settings	Old after [0-9]+ days	settings \"Old after\" steps the days up and down
+settings	Move project folders to the Trash	settings \"Move project folders to the Trash\" turns off
+settings	Node modules|Python environments|CocoaPods|Rust build output|Swift build output|Gradle build output|Gradle project cache	settings Project clean-up kind switches turn each kind off and on
+settings	uv cache|Bun cache|Go modules|Maven repository|Hugging Face models|pre-commit environments|Editor caches|Playwright browsers	settings Project clean-up cache switches hide each cache row
 settings	Keep the last|Buffer frame rate|Recording frame rate|Resolution|Copy bug report as|Delete captures older than|Delete crash clips older than|Keep captures under	settings picker \"$label\" sets $key
 
 screenshot:	(Select|Arrow|Arrow with text|Rectangle|Ellipse|Line|Highlighter|Pen|Text|Numbered step|Blur|Magnifier|Crop) \(.\): .+	editor tool button

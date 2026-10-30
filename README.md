@@ -208,8 +208,12 @@ The **Space** tab shows how full the disk is and what can be cleaned safely; **D
 full window.
 
 - **Clean up**: app caches, Xcode DerivedData and device support, simulator caches, npm / Yarn / pnpm,
-  Gradle, Homebrew, CocoaPods and pip caches, logs. Each shows its size; Clean asks once more before it
-  deletes. Apps and tools make caches again when they need them. Apple's own caches are left alone.
+  Gradle, Homebrew, CocoaPods, pip, uv, Bun, Go, Maven, Hugging Face, pre-commit, Cursor / VS Code and
+  Playwright caches, logs. Review… lists what is inside with a checkbox each; tick what goes and confirm.
+  Apps and tools make caches again when they need them. Apple's own caches are left alone.
+- **Project folders**: Find projects looks for node_modules, Python environments, Pods and build folders in
+  your projects; the ones not touched for 30 days are ticked and go to the Trash. Set the folders and the
+  days in Settings → Storage.
 - **Folders**: scan the home folder and walk down the biggest folders, with a bar for each.
 - **Largest files**: files over 50 MB, biggest first, with Show in Finder and Move to Trash (they stay in
   the Trash until you empty it).

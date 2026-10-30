@@ -64,7 +64,10 @@ enum ClipComposer {
     static func export(buffers: [ScreenBuffer], ranges: [(start: Double, end: Double)], area: CGRect?, framesPerSecond: Int, audioFrom: ScreenBuffer? = nil) async throws -> ClipExport {
         guard let primary = buffers.first else { throw BufferError.noDisplay }
         let audioSource = audioFrom ?? primary
+        // Every buffer repeats its last frame at the moment of saving, so a still screen reaches it.
+        let saveMoment = CACurrentMediaTime()
         for buffer in buffers {
+            await buffer.catchUp(now: saveMoment)
             await buffer.prepareForExport()
         }
         let now = CACurrentMediaTime()
@@ -86,22 +89,26 @@ enum ClipComposer {
         }
         Log.info("compose: available \(String(format: "%.2f", available.end - available.start))s, pieces=\(pieces.count), output \(String(format: "%.2f", cursor))s")
         if cursor < 0.2 { throw BufferError.nothingRecorded }
-        let duration = CMTime(seconds: cursor, preferredTimescale: 600)
 
         let composition = AVMutableComposition()
-        var placed: [(track: AVMutableCompositionTrack, buffer: ScreenBuffer)] = []
+        var placed: [(track: AVMutableCompositionTrack, buffer: ScreenBuffer, sizes: [SegmentSizes.Span], pixels: CGSize)] = []
         for buffer in buffers {
             // Audio is recorded on the main display's buffer only.
-            if let track = try await buffer.addTracks(to: composition, pieces: pieces, includeAudio: buffer === audioSource) {
-                placed.append((track: track, buffer: buffer))
+            if let added = try await buffer.addTracks(to: composition, pieces: pieces, includeAudio: buffer === audioSource) {
+                // A display that went to native resolution while recording has a smaller part first;
+                // the biggest picture sets its density in the clip.
+                let pixels = SegmentSizes.largest(added.sizes) ?? buffer.size
+                placed.append((track: added.track, buffer: buffer, sizes: added.sizes, pixels: pixels))
             }
         }
         guard !placed.isEmpty else { throw BufferError.nothingRecorded }
         if !buffers.contains(where: { buffer in buffer === audioSource }) {
-            // Take the sound from the main display's buffer and drop its picture.
+            // Take the sound from the main display's buffer and drop its picture. Its segment ends at
+            // its last frame, so it catches up too, or the sound would stop there.
+            await audioSource.catchUp(now: saveMoment)
             await audioSource.prepareForExport()
             if let picture = try await audioSource.addTracks(to: composition, pieces: pieces, includeAudio: true) {
-                composition.removeTrack(picture)
+                composition.removeTrack(picture.track)
             }
         }
 
@@ -115,7 +122,7 @@ enum ClipComposer {
 
         var sources: [AreaComposition.Source] = []
         for item in placed {
-            sources.append(AreaComposition.Source(frame: item.buffer.displayFrame, pixels: item.buffer.size))
+            sources.append(AreaComposition.Source(frame: item.buffer.displayFrame, pixels: item.pixels))
         }
         var plan: AreaComposition.Plan?
         if let area {
@@ -126,20 +133,40 @@ enum ClipComposer {
             for placement in plan.placements {
                 let item = placed[placement.index]
                 let layer = AVMutableVideoCompositionLayerInstruction(assetTrack: item.track)
-                layer.setTransform(placement.transform, at: .zero)
+                if item.sizes.isEmpty {
+                    layer.setTransform(placement.transform, at: .zero)
+                }
+                // Each part of the picture is scaled by its own size, from where it starts in the clip.
+                for (index, span) in item.sizes.enumerated() {
+                    let at = index == 0 ? CMTime.zero : CMTime(seconds: span.outputStart, preferredTimescale: 600)
+                    layer.setTransform(placement.transform(for: span.pixels, planned: item.pixels), at: at)
+                }
                 layers.append(layer)
-                layoutDisplays.append(ClipLayout.Display(frame: item.buffer.displayFrame, x: Double(placement.offset.x), width: Double(item.buffer.size.width * placement.scale)))
+                layoutDisplays.append(ClipLayout.Display(frame: item.buffer.displayFrame, x: Double(placement.offset.x), width: Double(item.pixels.width * placement.scale)))
             }
             renderSize = plan.renderSize
             x = Double(renderSize.width)
         } else {
             for item in sorted {
-                let size = item.buffer.size
+                let size = item.pixels
                 let scale = targetHeight / Double(size.height)
                 let width = Double(size.width) * scale
                 let layer = AVMutableVideoCompositionLayerInstruction(assetTrack: item.track)
                 let transform = CGAffineTransform(scaleX: scale, y: scale).concatenating(CGAffineTransform(translationX: x, y: 0))
-                layer.setTransform(transform, at: .zero)
+                // The first part sets the scale at the start; without a usable one the planned scale does.
+                var startCovered = false
+                if let first = item.sizes.first, first.pixels.height > 0 {
+                    startCovered = true
+                }
+                if !startCovered {
+                    layer.setTransform(transform, at: .zero)
+                }
+                for (index, span) in item.sizes.enumerated() where span.pixels.height > 0 {
+                    let partScale = targetHeight / Double(span.pixels.height)
+                    let partTransform = CGAffineTransform(scaleX: partScale, y: partScale).concatenating(CGAffineTransform(translationX: x, y: 0))
+                    let at = index == 0 ? CMTime.zero : CMTime(seconds: span.outputStart, preferredTimescale: 600)
+                    layer.setTransform(partTransform, at: at)
+                }
                 layers.append(layer)
                 layoutDisplays.append(ClipLayout.Display(frame: item.buffer.displayFrame, x: x, width: width))
                 x += width
@@ -163,7 +190,8 @@ enum ClipComposer {
         // which takes a fraction of a second however busy the screen was.
         let audioTracks = composition.tracks(withMediaType: .audio).count
         var copied = false
-        if placed.count == 1 && area == nil && audioTracks <= 1 {
+        // A picture that changes size on the way cannot be copied into one track as is.
+        if placed.count == 1 && area == nil && audioTracks <= 1 && placed[0].sizes.count <= 1 {
             copied = await copyWithoutReencoding(composition, duration: exactDuration, to: url)
         }
         if !copied {

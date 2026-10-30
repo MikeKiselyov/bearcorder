@@ -1,7 +1,7 @@
 import CoreGraphics
 
 /// Which sides of an area a drag moves: a corner moves two, an edge one, a drag inside all four.
-public struct AreaEdges: Equatable {
+public struct AreaEdges: Equatable, Sendable {
     public var minX: Bool
     public var minY: Bool
     public var maxX: Bool

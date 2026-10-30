@@ -13,6 +13,24 @@ TEST_APP="$ROOT/build/$APP_NAME.app"
 export BUGBEAR_AUTOMATION=1
 INSTALLED_APP=""
 
+# build_test_app: builds the test app, unless all.sh did it already (BUGBEAR_APP_BUILT=1): then the
+# build in build/ is used as it is, and the run stops when there is none.
+build_test_app() {
+    if [ "${BUGBEAR_APP_BUILT:-}" = "1" ]; then
+        if [ ! -d "$TEST_APP" ]; then
+            echo "$TEST_APP missing: run scripts/build-app.sh first"
+            return 1
+        fi
+        # A stale or release build (BUGBEAR_APP_BUILT left over in a shell) has no marker.
+        if [ ! -f "$ROOT/build/.automation-build" ]; then
+            echo "$TEST_APP is not a build with automation: run BUGBEAR_AUTOMATION=1 scripts/build-app.sh first"
+            return 1
+        fi
+        return 0
+    fi
+    "$ROOT/scripts/build-app.sh" >/dev/null 2>&1 || { echo "build failed"; return 1; }
+}
+
 # Bugbear stops its screen capture before it quits (up to 2 s), so wait for it to be gone.
 wait_for_bugbear_to_quit() {
     local tries=0

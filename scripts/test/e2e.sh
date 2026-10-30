@@ -20,31 +20,21 @@ BUNDLE_ID="${BUGBEAR_BUNDLE_ID:-io.github.bugbear.app}"
 # shellcheck disable=SC1091
 source "$ROOT/scripts/test/lib/test-app.sh"
 LOG="$HOME/Library/Logs/Bugbear/bugbear.log"
+R=scripts/dev/bugbear-run.sh
+# shellcheck disable=SC1091
+source "$ROOT/scripts/test/lib/e2e-helpers.sh"
 FAILURES=0
 PASSES=0
 
 pass() { echo "PASS  $1"; PASSES=$((PASSES + 1)); }
 fail() { echo "FAIL  $1 ${2:-}"; FAILURES=$((FAILURES + 1)); }
 
-# Sends a command and waits for its "AUTOMATION <command> →" line. Prints the result.
+# Sends a command and prints its result, read from the app's result file (scripts/dev/bugbear-run.sh);
+# "TIMEOUT" when no result came within the timeout.
 run() {
     local command="$1"
     local timeout="${2:-60}"
-    local before
-    before=$(grep -c "AUTOMATION $command →" "$LOG" 2>/dev/null || true)
-    scripts/dev/bugbear-command.sh "$command"
-    local waited=0
-    while [ "$waited" -lt "$timeout" ]; do
-        local now
-        now=$(grep -c "AUTOMATION $command →" "$LOG" 2>/dev/null || true)
-        if [ "$now" -gt "$before" ]; then
-            grep "AUTOMATION $command →" "$LOG" | tail -1 | sed 's/.*→ //'
-            return 0
-        fi
-        sleep 1
-        waited=$((waited + 1))
-    done
-    echo "TIMEOUT"
+    scripts/dev/bugbear-run.sh "$command" "$timeout" || true
 }
 
 field() { echo "$1" | tr ' ' '\n' | grep "^$2=" | head -1 | cut -d= -f2-; }
@@ -59,7 +49,7 @@ near() { python3 -c "import sys; sys.exit(0 if abs(float('$1') - float('$2')) <=
 at_least() { python3 -c "import sys; sys.exit(0 if float('$1') >= float('$2') else 1)" 2>/dev/null; }
 
 echo "==> build"
-scripts/build-app.sh >/dev/null 2>&1 || { echo "build failed"; exit 1; }
+build_test_app || exit 1
 # Quit the person's Bugbear and keep a copy of their settings before any test setting is written.
 quit_running_bugbear
 defaults write "$BUNDLE_ID" automationEnabled -bool true
@@ -81,6 +71,7 @@ defaults write "$BUNDLE_ID" updateCatalogURL "http://127.0.0.1:8765/catalog.swif
 rm -f "$LOG"
 open "$TEST_APP"
 echo "==> waiting 20 s with a mostly static screen"
+# Real time: the buffer fills while the screen stays almost still.
 sleep 20
 
 # 1. Buffer runs and fills even when nothing moves.
@@ -101,6 +92,7 @@ if [ -n "$file" ] && [ -f "$file" ]; then
 else
     fail "save 8 s produced a file" "$result"
 fi
+# Negative check: a restart of the buffer after the editor opens would show in the log within this time.
 sleep 3
 if grep -q "buffer\[.*\] stopping" "$LOG"; then fail "buffer keeps running after the editor opens" "it restarted"; else pass "buffer keeps running after the editor opens"; fi
 run close-windows >/dev/null
@@ -124,8 +116,10 @@ started=$(run record-start)
 outline=$(field "$started" outline)
 screens=$(field "$started" screens)
 if [ -n "$outline" ] && [ "$outline" = "$screens" ]; then pass "recording outline on every screen ($outline)"; else fail "recording outline" "$started"; fi
+# Real time: the recording runs 4 s before the pause.
 sleep 4
 run record-pause >/dev/null
+# Real time: the 3 s pause that has to be cut out of the clip.
 sleep 3
 run record-resume >/dev/null
 draw=$(run draw-toggle)
@@ -136,6 +130,7 @@ lx=$(field "$live" x); ly=$(field "$live" y); lw=$(field "$live" w); lh=$(field 
 cx=$((lx + lw / 2)); cy=$((ly + lh / 2))
 before_coral=$(field "$(run "screen-color:$((cx - 170)),$((cy - 110)),340,220")" coral)
 run "post-drag:$((cx - 150)),$((cy - 90)):$((cx + 150)),$((cy + 90))" >/dev/null
+# Real time: the drag is handled and the mark drawn before it is read.
 sleep 0.6
 live_after=$(run live-state)
 after_coral=$(field "$(run "screen-color:$((cx - 170)),$((cy - 110)),340,220")" coral)
@@ -152,10 +147,12 @@ if [ "$(field "$other" count)" -gt 1 ] 2>/dev/null; then
     moved=$(run live-state)
     mx=$(field "$moved" x); my=$(field "$moved" y); mw=$(field "$moved" w); mh=$(field "$moved" h)
     run "post-drag:$((ox - 150)),$((oy - 90)):$((ox + 150)),$((oy + 90))" >/dev/null
+    # Real time: the drag is handled and the mark drawn before it is read.
     sleep 0.6
     other_coral=$(field "$(run "screen-color:$((ox - 170)),$((oy - 110)),340,220")" coral)
     if [ "$ox" -ge "$mx" ] && [ "$ox" -le $((mx + mw)) ] && [ "$oy" -ge "$my" ] && [ "$oy" -le $((my + mh)) ] && [ "${other_coral:-0}" -gt 200 ] 2>/dev/null; then pass "drawing on the other display shows there"; else fail "drawing on the other display" "$moved coral=$other_coral at $ox,$oy"; fi
 fi
+# Real time: more recording after the drawing, so the clip has frames to compare.
 sleep 3
 run draw-toggle >/dev/null
 wall_stop=$(date +%s.%N)
@@ -184,8 +181,10 @@ if [ -n "$expected" ] && near "$exported" "$expected" 0.4; then pass "editor exp
 # 6. System audio ends up in the clip.
 run setting:recordSystemAudio:true >/dev/null
 run buffer-start >/dev/null
+# Real time: the buffer runs 3 s with the system audio on.
 sleep 3
 ( for _ in 1 2 3 4; do afplay /System/Library/Sounds/Glass.aiff; done ) &
+# Real time: the sounds play for the clip to catch.
 sleep 5
 result=$(run save:6 90)
 file=$(file_of "$result")
@@ -210,8 +209,12 @@ run close-windows >/dev/null
 
 # 8. A marker makes the next save reach back to it.
 now_seconds() { perl -MTime::HiRes=time -e 'printf "%.2f", time'; }
+# The save reaches back 5 s before the marker, so the buffer must hold that much when it is set.
+# An earlier step restarted the buffer, and the steps since can take less than that.
+wait_for 60 buffer_holds 6
 marked_at=$(now_seconds)
 run mark >/dev/null
+# Real time: the marker must be 25 s behind the buffer end.
 sleep 25
 saved_at=$(now_seconds)
 result=$(run save:5 90)
@@ -235,13 +238,17 @@ crash_folder="$ROOT/build/e2e-crash-reports"
 rm -rf "$crash_folder"
 mkdir -p "$crash_folder"
 run "crash-watch:$crash_folder" >/dev/null
+# Real time: the crash watcher starts watching the folder before the report is written.
 sleep 1
+# The crash clip is checked for at least 30 s: the buffer must hold more than that at the crash.
+wait_for 60 buffer_holds 31
 crash_time=$(date -v-1S "+%Y-%m-%d %H:%M:%S.00 %z")
 printf '{"app_name":"E2E Crasher","timestamp":"%s","bundleID":"io.github.bugbear.e2e","bug_type":"309","name":"E2E Crasher"}\n{}\n' "$crash_time" > "$crash_folder/E2E Crasher-test.ips"
 saved=""
 for _ in $(seq 1 60); do
     saved=$(grep "crash clip saved" "$LOG" | tail -1)
     if [ -n "$saved" ]; then break; fi
+    # Poll step.
     sleep 1
 done
 if [ -n "$saved" ]; then
@@ -254,6 +261,7 @@ if [ -n "$saved" ]; then
     # system log is written a few seconds after the clip; wait for it so both buttons are there.
     for _ in $(seq 1 20); do
         if [ -f "$capture_folder/system.log" ]; then break; fi
+        # Poll step.
         sleep 0.5
     done
     run system-actions:start >/dev/null
@@ -304,6 +312,7 @@ wait_for_no_display_errors() {
     local waited=0
     while [ "$waited" -lt "$2" ]; do
         if [ "$(no_display_errors)" -ge "$1" ]; then return 0; fi
+        # Poll step.
         sleep 1
         waited=$((waited + 1))
     done
@@ -314,6 +323,7 @@ wait_for_running() {
     local polls=0
     while [ "$polls" -lt "$1" ]; do
         if run status 10 | grep -q "^running"; then return 0; fi
+        # Poll step.
         sleep 1
         polls=$((polls + 1))
     done

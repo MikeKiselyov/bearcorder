@@ -8,25 +8,69 @@ import BugbearCore
 ///   defaults write <bundle id> automationEnabled -bool true
 /// Commands arrive as a distributed notification "Bugbear.automation" with userInfo["command"];
 /// results are written to the log as "AUTOMATION <command> → <result>".
+/// A command may end with " #id=<token>" (scripts/dev/bugbear-run.sh): the token is cut off before the
+/// command runs, and the result is also written to automation/results/<token> in the support folder.
 @MainActor
 enum Automation {
     static var isEnabled: Bool {
         return UserDefaults.standard.bool(forKey: "automationEnabled")
     }
 
+    /// The token of the command being run, so `report` knows which result file to write.
+    @TaskLocal private static var resultToken: String?
+
+    /// Where results of commands with a token go. Emptied when the app starts.
+    static var resultsFolder: URL {
+        return AppPaths.support
+            .appendingPathComponent("automation", isDirectory: true)
+            .appendingPathComponent("results", isDirectory: true)
+    }
+
+    /// Splits " #id=<token>" off the end of a command. Only the end counts, so a "#" inside the
+    /// command (a color like #FF8800) stays where it is.
+    static func splitToken(_ raw: String) -> (command: String, token: String?) {
+        guard let range = raw.range(of: " #id=[A-Za-z0-9-]+$", options: .regularExpression) else {
+            return (raw, nil)
+        }
+        let token = String(raw[range].dropFirst(" #id=".count))
+        return (String(raw[..<range.lowerBound]), token)
+    }
+
+    /// Writes the result next to the log line: to a temporary name first, then renamed, so a reader
+    /// never sees half of it.
+    private static func writeResult(_ result: String, token: String) {
+        let folder = resultsFolder
+        AppPaths.ensureFolder(folder)
+        let temporary = folder.appendingPathComponent(token + ".tmp")
+        let final = folder.appendingPathComponent(token)
+        do {
+            try result.write(to: temporary, atomically: false, encoding: .utf8)
+            try? FileManager.default.removeItem(at: final)
+            try FileManager.default.moveItem(at: temporary, to: final)
+        } catch {
+            Log.error("automation: could not write result \(token): \(error)")
+        }
+    }
+
     static func install() {
         guard isEnabled else { return }
         Log.info("automation enabled")
+        try? FileManager.default.removeItem(at: resultsFolder)
+        AppPaths.ensureFolder(resultsFolder)
         DistributedNotificationCenter.default().addObserver(forName: Notification.Name("Bugbear.automation"), object: nil, queue: .main) { notification in
-            let command = notification.userInfo?["command"] as? String ?? (notification.object as? String ?? "")
+            let raw = notification.userInfo?["command"] as? String ?? (notification.object as? String ?? "")
+            let (command, token) = splitToken(raw)
             MainActor.assumeIsolated {
-                Task { await run(command) }
+                Task { await $resultToken.withValue(token) { await run(command) } }
             }
         }
     }
 
     private static func report(_ command: String, _ result: String) {
         Log.info("AUTOMATION \(command) → \(result)")
+        if let token = resultToken {
+            writeResult(result, token: token)
+        }
     }
 
     static func run(_ command: String) async {

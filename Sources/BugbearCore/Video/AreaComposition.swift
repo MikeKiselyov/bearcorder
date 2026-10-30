@@ -27,6 +27,17 @@ public enum AreaComposition {
         public var transform: CGAffineTransform {
             CGAffineTransform(scaleX: scale, y: scale).concatenating(CGAffineTransform(translationX: offset.x, y: offset.y))
         }
+
+        /// The transform for a part of the display's picture that is `pixels` big, when the plan was made
+        /// for `planned` (the display's biggest picture in the clip): a smaller part is scaled up more and
+        /// lands in the same place.
+        public func transform(for pixels: CGSize, planned: CGSize) -> CGAffineTransform {
+            if pixels.width <= 0 || pixels == planned {
+                return transform
+            }
+            let partScale = scale * planned.width / pixels.width
+            return CGAffineTransform(scaleX: partScale, y: partScale).concatenating(CGAffineTransform(translationX: offset.x, y: offset.y))
+        }
     }
 
     public struct Plan: Equatable {
