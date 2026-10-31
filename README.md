@@ -5,15 +5,40 @@
 <h1 align="center">Bearcorder</h1>
 
 <p align="center">
-  <b>Screenshots, recordings and a dev toolbox for people who build and test software.</b><br>
-  A macOS menu bar app for QA engineers, developers, designers and support.<br>
-  Catch the bug that already happened, mark it up, paste it into the ticket.<br>
-  Everything runs on your Mac. Nothing is uploaded anywhere.
+  A macOS menu bar app. The last minutes of your screen are always kept,<br>
+  so whatever you just saw is already recorded.
 </p>
+
+<p align="center">
+  <a href="https://github.com/MikeKiselyov/bearcorder/releases/latest"><img src="https://img.shields.io/github/v/release/MikeKiselyov/bearcorder" alt="Latest release"></a>
+  <img src="https://img.shields.io/badge/macOS-14%2B-blue" alt="macOS 14 or later">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="MIT license"></a>
+</p>
+
+<p align="center">
+  <img src="docs/images/buffer-save.gif" width="820" alt="Saving the last minute from the menu, the clip in the editor, then the other display">
+</p>
+
+Bearcorder is a screen recorder and screenshot tool for anyone who needs to show what happened on screen: developers, designers, testers, support. It also has tools for everyday work:
+
+- Screenshots with markup, a video editor and bug reports with steps, expected and actual result.
+- Layout checks: window sizes, measure, color and contrast, design overlay.
+- A dev toolbox: JSON, JWT, time zones, test data, regex and more.
+- Space, a disk clean-up for the files that builds and tests leave behind.
 
 <p align="center">
   <img src="docs/images/screenshot-editor.gif" width="820" alt="Marking up a screenshot: numbered steps, blur, box, arrow, label">
 </p>
+
+Everything runs on your Mac. Nothing is uploaded anywhere.
+
+To install, open **Terminal** and paste:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/MikeKiselyov/bearcorder/main/scripts/install.sh | bash
+```
+
+More in [Install](#install). All features, with pictures: **[docs/features.md](docs/features.md)**.
 
 ## Contents
 
@@ -24,8 +49,6 @@
 - [Updates](#updates)
 - [Permissions](#permissions)
 - [More: uninstall, help, development](#more)
-
-Every feature, explained with pictures: **[docs/features.md](docs/features.md)**.
 
 ## Install
 
@@ -292,3 +315,7 @@ your Mac (1-2 minutes) and restarts it, then "What's new" shows what changed.
 Bearcorder is free and open source. If it saves you time, you can buy me a coffee:
 
 <a href="https://buymeacoffee.com/mike_kiselyov"><img src="https://img.shields.io/badge/Buy%20me%20a%20coffee-FFDD00?style=for-the-badge&logo=buymeacoffee&logoColor=black" alt="Buy me a coffee"></a>
+
+## License
+
+MIT, see [LICENSE](LICENSE).

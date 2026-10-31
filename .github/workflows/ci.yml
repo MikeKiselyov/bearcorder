@@ -76,11 +76,29 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: .build
-          key: spm-${{ runner.os }}-${{ steps.swift.outputs.version }}-${{ hashFiles('Package.resolved') }}
+          # The repository name is in the key: the build output holds absolute paths, and a cache
+          # saved before a rename fails to compile in the new checkout folder.
+          key: spm-${{ runner.os }}-${{ github.event.repository.name }}-${{ steps.swift.outputs.version }}-${{ hashFiles('Package.resolved') }}
           restore-keys: |
-            spm-${{ runner.os }}-${{ steps.swift.outputs.version }}-
+            spm-${{ runner.os }}-${{ github.event.repository.name }}-${{ steps.swift.outputs.version }}-
       - name: Unit tests
-        run: swift test --parallel
+        run: swift test --parallel --enable-code-coverage
+      # Information only, no threshold. A failing report does not fail the job.
+      - name: Coverage of AppCore
+        continue-on-error: true
+        run: |
+          codecov_dir="$(dirname "$(swift test --show-codecov-path)")"
+          test_binary=".build/debug/AppPackageTests.xctest/Contents/MacOS/AppPackageTests"
+          {
+            echo "### Coverage of Sources/AppCore"
+            echo '```'
+            if [ -f "$test_binary" ]; then
+              xcrun llvm-cov report "$test_binary" -instr-profile "$codecov_dir/default.profdata" -ignore-filename-regex='(/Tests/|/\.build/|/Sources/App/)' -use-color=false || true
+            else
+              echo "no coverage report: $test_binary not found"
+            fi
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
       - name: Self-test (export, edits, annotations, OCR, QR, stitching)
         run: |
           swift build

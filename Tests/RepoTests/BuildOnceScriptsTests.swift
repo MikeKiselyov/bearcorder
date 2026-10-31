@@ -26,13 +26,16 @@ final class BuildOnceScriptsTests: XCTestCase {
     }
 
     /// Commands that must not run: the stub in front of the real one records its name and succeeds
-    /// (pgrep fails: no copy of the app is running).
-    private func makeStubs(in folder: URL) throws -> URL {
+    /// (pgrep fails: no copy of the app is running; codesign fails with `codesignFails`).
+    private func makeStubs(in folder: URL, codesignFails: Bool = false) throws -> URL {
         let stubs = folder.appendingPathComponent("stubs")
         try FileManager.default.createDirectory(at: stubs, withIntermediateDirectories: true)
         let calls = folder.appendingPathComponent("calls.txt").path
         for name in ["pkill", "pgrep", "swift", "codesign", "security", "open", "tccutil", "osascript", "defaults", "lsregister"] {
-            let exitCode = name == "pgrep" ? "1" : "0"
+            var exitCode = "0"
+            if name == "pgrep" || (name == "codesign" && codesignFails) {
+                exitCode = "1"
+            }
             let script = "#!/bin/bash\necho \"\(name) $*\" >> \"\(calls)\"\nexit \(exitCode)\n"
             let file = stubs.appendingPathComponent(name)
             try script.write(to: file, atomically: true, encoding: .utf8)
@@ -239,17 +242,22 @@ final class BuildOnceScriptsTests: XCTestCase {
 
     // MARK: build-app.sh --install-only
 
-    /// `built`: has the keys every build-app.sh build writes (SourcePath, SourceCommit).
+    /// `built`: has the keys every build-app.sh build writes (SourcePath, SourceCommit), and an
+    /// executable that reports the version in the plist, as the install checks.
     private func makeApp(at url: URL, bundleId: String, executable: String = AppInfo.name, built: Bool = true) throws {
         let contents = url.appendingPathComponent("Contents")
-        try FileManager.default.createDirectory(at: contents, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: contents.appendingPathComponent("MacOS"), withIntermediateDirectories: true)
         var info: [String: String] = ["CFBundleExecutable": executable, "CFBundleIdentifier": bundleId]
         if built {
             info["SourcePath"] = "/somewhere/source"
             info["SourceCommit"] = "0123abc"
+            info["CFBundleShortVersionString"] = "9.9.9"
         }
         let data = try PropertyListSerialization.data(fromPropertyList: info, format: .xml, options: 0)
         try data.write(to: contents.appendingPathComponent("Info.plist"))
+        let binary = contents.appendingPathComponent("MacOS/\(executable)")
+        try "#!/bin/bash\necho 9.9.9\n".write(to: binary, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: binary.path)
     }
 
     private func appName() throws -> String {
@@ -294,9 +302,26 @@ final class BuildOnceScriptsTests: XCTestCase {
         XCTAssertTrue((info["CFBundleIdentifier"] as? String ?? "").hasPrefix("test.built."), "the built app replaced the old copy: \(result.output)")
         let calls = (try? String(contentsOf: folder.appendingPathComponent("calls.txt"), encoding: .utf8)) ?? ""
         XCTAssertFalse(calls.contains("swift "), "no swift build: \(calls)")
-        XCTAssertFalse(calls.contains("codesign"), "no signing: \(calls)")
+        XCTAssertFalse(calls.contains("codesign --force"), "no signing: \(calls)")
+        XCTAssertTrue(calls.contains("codesign --verify"), "the built app is checked before it goes in: \(calls)")
         XCTAssertFalse(calls.contains("security"), "no keychain query: \(calls)")
         XCTAssertFalse(calls.contains("open"), "APP_NO_OPEN is honored: \(calls)")
+    }
+
+    /// A VERSION from the environment or .env must not decide the version check of a build made earlier.
+    func testInstallOnlyIgnoresAVersionFromTheEnvironment() throws {
+        let folder = try makeFolder()
+        let stubs = try makeStubs(in: folder)
+        let buildDir = folder.appendingPathComponent("build")
+        let installDir = folder.appendingPathComponent("apps")
+        let appName = try appName()
+        try makeApp(at: buildDir.appendingPathComponent("\(appName).app"), bundleId: "test.built.\(UUID().uuidString)")
+        try makeApp(at: installDir.appendingPathComponent("\(appName).app"), bundleId: "test.old")
+        let result = try install(in: folder, stubs: stubs, extra: ["APP_INSTALL_DIR": installDir.path, "VERSION": "1.0.0"])
+        XCTAssertEqual(result.status, 0, result.output)
+        let installedPlist = installDir.appendingPathComponent("\(appName).app/Contents/Info.plist")
+        let info = try XCTUnwrap(NSDictionary(contentsOf: installedPlist))
+        XCTAssertTrue((info["CFBundleIdentifier"] as? String ?? "").hasPrefix("test.built."), result.output)
     }
 
     func testInstallOnlyStopsWhenThereIsNoBuild() throws {
@@ -387,5 +412,51 @@ final class BuildOnceScriptsTests: XCTestCase {
         let text = try read("scripts/test/e2e-features.sh")
         XCTAssertEqual(text.components(separatedBy: "scripts/build-app.sh --install-only").count - 1, 2)
         XCTAssertFalse(text.contains("scripts/build-app.sh --install >"))
+    }
+
+    /// A built app that fails its check is not installed: the installed copy and a renamed copy stay,
+    /// nothing is opened, and no temporary copy is left.
+    func testInstallKeepsTheInstalledCopyWhenTheBuildFailsItsCheck() throws {
+        let name = try appName()
+        let folder = try makeFolder()
+        let stubs = try makeStubs(in: folder, codesignFails: true)
+        try makeApp(at: folder.appendingPathComponent("build/\(name).app"), bundleId: "test.built")
+        let installDir = folder.appendingPathComponent("apps")
+        let installed = installDir.appendingPathComponent("\(name).app")
+        try makeApp(at: installed, bundleId: "test.built")
+        let renamed = installDir.appendingPathComponent("\(name) copy.app")
+        try makeApp(at: renamed, bundleId: "test.built")
+        let result = try install(in: folder, stubs: stubs, extra: ["APP_INSTALL_DIR": installDir.path, "APP_BUNDLE_ID": "test.built"])
+        XCTAssertNotEqual(result.status, 0, result.output)
+        XCTAssertTrue(result.output.contains("signature check"), result.output)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: installed.appendingPathComponent("Contents/Info.plist").path), result.output)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: renamed.path), "the renamed copy stays: \(result.output)")
+        XCTAssertFalse(result.output.contains("==> installed to"), result.output)
+        let leftovers = try FileManager.default.contentsOfDirectory(atPath: folder.appendingPathComponent("tmp").path)
+        XCTAssertEqual(leftovers, [], "no temporary copy left")
+    }
+
+    /// After a failed install the old copy, quit for the install, is started again (unless
+    /// APP_NO_OPEN); a first install that fails has nothing to start.
+    func testAFailedInstallStartsTheOldCopyAgain() throws {
+        let name = try appName()
+        for hadCopy in [true, false] {
+            let folder = try makeFolder()
+            let stubs = try makeStubs(in: folder, codesignFails: true)
+            try makeApp(at: folder.appendingPathComponent("build/\(name).app"), bundleId: "test.built")
+            let installDir = folder.appendingPathComponent("apps")
+            let installed = installDir.appendingPathComponent("\(name).app")
+            if hadCopy {
+                try makeApp(at: installed, bundleId: "test.built")
+            }
+            let result = try install(in: folder, stubs: stubs,
+                                     extra: ["APP_INSTALL_DIR": installDir.path, "APP_BUNDLE_ID": "test.built", "APP_NO_OPEN": ""])
+            XCTAssertNotEqual(result.status, 0, "\(hadCopy): \(result.output)")
+            let calls = (try? String(contentsOf: folder.appendingPathComponent("calls.txt"), encoding: .utf8)) ?? ""
+            XCTAssertEqual(calls.contains("open \(installed.path)"), hadCopy, "\(hadCopy): \(calls)")
+            if hadCopy {
+                XCTAssertTrue(FileManager.default.fileExists(atPath: installed.appendingPathComponent("Contents/Info.plist").path))
+            }
+        }
     }
 }

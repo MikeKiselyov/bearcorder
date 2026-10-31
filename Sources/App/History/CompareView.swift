@@ -46,6 +46,8 @@ enum ScreenshotComparison {
 
     @MainActor
     static func make(before: Capture, after: Capture) -> Output? {
+        // Documents are read from project.json on disk: write any edit still waiting.
+        ProjectFileWriter.flushAll()
         guard let first = ScreenshotDocument(capture: before, forEditing: false)?.render(), let second = ScreenshotDocument(capture: after, forEditing: false)?.render() else { return nil }
         // Diff at up to 1600 px wide: fast, and fine enough to box changes.
         let diffWidth = min(1600, second.width)

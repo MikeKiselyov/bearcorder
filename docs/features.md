@@ -1,6 +1,6 @@
 # Everything Bearcorder does
 
-A full list in plain words, for testers, developers, designers and support. The short version is in
+A full list in plain words, for developers, designers, testers, support and anyone else. The short version is in
 the [README](../README.md). Everything here runs on your Mac; nothing is uploaded anywhere.
 
 - [The menu](#the-menu)
@@ -68,6 +68,8 @@ it goes. The bug you could not reproduce is already recorded:
 - When an app you used in the last 10 minutes crashes, the minute before the crash is saved for you,
   with the macOS crash report next to it.
 - Each clip gets the app's system log for the same seconds.
+- A piece of the buffer that could not be written (for example on a full disk) is deleted at once and
+  never used in a clip.
 - The buffer is light: a few percent of one CPU core. You can pause it from the menu or turn it off
   in Settings.
 
@@ -168,6 +170,8 @@ Delete clears.
 - Export MP4 or GIF, pick the quality, and set a size limit (10 to 100 MB) for trackers that cap
   attachments. Copy the file, save it, or drag it out.
 - Undo and redo for everything; the editor remembers your last choices for the next clip.
+- Edits in the screenshot and video editors are saved in the background and once more when the editor
+  closes or the app quits. If a save fails, the editor says so.
 
 ## Bug reports
 
@@ -366,9 +370,12 @@ After allowing Screen Recording, Quit & Reopen in System Settings opens Bearcord
   <img src="images/feedback-problem.png" width="420" alt="Report a problem">
 </p>
 
-- Bearcorder checks for a new version every 6 hours and shows a badge in the menu. Update now rebuilds
-  it on your Mac and restarts it; What's new shows what changed, with pictures.
+- Bearcorder checks for a new version every 6 hours and shows a badge in the menu.
+- Update now rebuilds the app on your Mac and restarts it. If the new app fails its check, the old
+  one is put back.
+- What's new shows what changed, with pictures.
 - **Report a problem** or **suggest a feature** from the menu: it opens a filled-in GitHub issue,
-  and can attach a zip of the logs.
+  and can attach a zip of the logs. The log is kept as `.log.1` when it passes 2 MB, and the zip has
+  both files; if zipping takes too long, the form still opens.
 - Uninstall everything with one command: see [uninstall](uninstall.md). At the end it asks, if you
   can, to say in a short form what you did not like.

@@ -117,7 +117,8 @@ Tests/AppCoreTests/       the logic, by area (Capture, Video, Toolbox, Support, 
 Tests/RepoTests/          the repository: docs pictures, scripts, packaging, release notes
 Packaging/Info.plist      the app's Info.plist; build-app.sh fills in the build's values
 scripts/                  what people run: install.sh, update.sh, uninstall.sh, build-app.sh
-  lib/                    sourced by the others: common.sh (ROOT, die), app-name.sh, permissions.sh
+  lib/                    sourced by the others: common.sh (ROOT, die), app-name.sh, permissions.sh,
+                          replace-app.sh
   test/                   test runs: all.sh, e2e.sh, e2e-features.sh, e2e-section.sh, perf.sh
     lib/                  what the test runs share: test-app.sh, e2e-helpers.sh, window-fits.py
   check/                  CI checks: release.sh, no-automation.sh, control-coverage.py + controls.txt
@@ -138,7 +139,10 @@ source folder) and `Sources/AppCore/Support/WhatsNewCatalog.swift` (the update c
 GitHub). Moving one leaves the copies installed before it without updates. `build-app.sh` stays at the top of `scripts/` too: an older `update.sh` calls it after the pull.
 `install.sh` and `uninstall.sh` do not source `scripts/lib`: they run from a downloaded copy.
 `update.sh` sources `scripts/lib/app-name.sh` at the start, before the fetch, from the checkout as it
-is, and `scripts/lib/permissions.sh` after the pull and the build, from the updated checkout.
+is, and `scripts/lib/permissions.sh` and `scripts/lib/replace-app.sh` after the pull and the build, from
+the updated checkout. Both `update.sh` and `build-app.sh --install` put the app in place through
+`replace_app`: the build goes in only when `codesign --verify` passes and its executable reports the
+version it was built as; the old copy waits in a temporary folder and comes back if anything fails.
 
 Scripts start with `set -euo pipefail`; the test runners use `set -uo pipefail` on purpose, so one
 failed check is reported and the run goes on. `shellcheck` (`make lint`, and CI) keeps them clean.
@@ -148,7 +152,8 @@ and after the tests pass, can write tags and releases. Actions are pinned to a c
 (`.github/dependabot.yml`) proposes updates, and the shellcheck and actionlint downloads are checked
 against their sha256. `actionlint` (`make lint`, and CI) checks the workflows. The test job caches `.build`
 (`actions/cache`); the key has the Swift version and the hash of `Package.resolved`, and an older cache of
-the same Swift version is the fallback.
+the same Swift version is the fallback. The test job also runs with code coverage and writes a table for
+`Sources/AppCore` to the job summary; it is information only, with no threshold.
 
 The logo (a bear looking at a bug through a magnifying glass) is one flat shape drawn in code in `UI/Logo.swift`: the menu bar
 glyph, the in-app logo and the app icon are the same picture. The build script renders the `.icns` from it.

@@ -3,7 +3,7 @@
 # scripts/lib/app-name.sh), so the executable, the folders on disk, the installer's bundle id and
 # the GitHub repository follow it. This script writes the new name into AppInfo.swift and rewrites
 # the places that cannot read it: the installer's and uninstaller's own copies, the bundle id of
-# debug runs (Packaging/Debug-Info.plist) and the text for people (README.md, CONTRIBUTING.md, docs/*.md, the issue forms, .env.example).
+# debug runs (Packaging/Debug-Info.plist) and the text for people (README.md, CONTRIBUTING.md, docs/*.md, the site files in docs/, the issue forms, .env.example).
 # Pictures that show the name are made again with scripts/dev/readme-media.sh; the GitHub
 # repository itself is renamed on GitHub.
 #
@@ -80,6 +80,9 @@ if debug_info.exists():
 
 documents = [root / "README.md", root / "CONTRIBUTING.md", root / ".env.example"]
 documents.extend(sorted((root / "docs").glob("*.md")))
+# The GitHub Pages site: the landing page, its config, robots.txt and the sitemap.
+for site_pattern in ["*.html", "*.yml", "*.txt", "*.xml"]:
+    documents.extend(sorted((root / "docs").glob(site_pattern)))
 documents.extend(sorted((root / ".github/ISSUE_TEMPLATE").glob("*.yml")))
 for document in documents:
     if not document.exists():
@@ -87,5 +90,5 @@ for document in documents:
     text = document.read_text()
     document.write_text(name_pattern.sub(rename, text))
 
-print(f"renamed {old_name} to {new_name}: AppInfo.swift, scripts/install.sh, scripts/uninstall.sh, Packaging/Debug-Info.plist, README.md, CONTRIBUTING.md, .env.example, docs, issue forms")
+print(f"renamed {old_name} to {new_name}: AppInfo.swift, scripts/install.sh, scripts/uninstall.sh, Packaging/Debug-Info.plist, README.md, CONTRIBUTING.md, .env.example, docs, site, issue forms")
 PYTHON

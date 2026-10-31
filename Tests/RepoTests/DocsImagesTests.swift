@@ -27,12 +27,14 @@ final class DocsImagesTests: XCTestCase {
         return (try? String(contentsOf: root.appendingPathComponent(path), encoding: .utf8)) ?? ""
     }
 
-    /// README.md and every docs/*.md, where docs/images pictures are shown.
+    /// README.md, every docs/*.md and the Pages landing page docs/index.html, where docs/images
+    /// pictures are shown.
     private var docsText: String {
         var text = read("README.md")
         for name in files(in: "docs") where name.hasSuffix(".md") {
             text += read("docs/\(name)")
         }
+        text += read("docs/index.html")
         return text
     }
 

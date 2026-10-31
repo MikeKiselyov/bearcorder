@@ -21,6 +21,11 @@ final class RenameAppTests: XCTestCase {
                 files.append("\(folder)/\(name)")
             }
         }
+        // The Pages site next to the docs.
+        let docsNames = try FileManager.default.contentsOfDirectory(atPath: root.appendingPathComponent("docs").path)
+        for name in docsNames.sorted() where name.hasSuffix(".html") || name.hasSuffix(".txt") || name.hasSuffix(".xml") {
+            files.append("docs/\(name)")
+        }
         return files
     }
 
@@ -74,6 +79,9 @@ final class RenameAppTests: XCTestCase {
         let debugInfo = try read("Packaging/Debug-Info.plist", in: copy)
         XCTAssertTrue(debugInfo.contains("<string>io.github.bug-hunter.debug</string>"), debugInfo)
         XCTAssertTrue(uninstaller.contains("Preferences/io.github.bug-hunter.debug.plist"), "the uninstaller follows")
+        let landing = try read("docs/index.html", in: copy)
+        XCTAssertTrue(landing.contains("<title>Bug Hunter - "), "the landing page follows")
+        XCTAssertTrue(landing.contains("mikekiselyov.github.io/bug-hunter/"), "the site address follows")
         let example = try read(".env.example", in: copy)
         XCTAssertTrue(example.contains("APP_BUNDLE_ID=io.github.bug-hunter.app"))
 

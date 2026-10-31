@@ -237,6 +237,7 @@ enum FeatureAutomation {
         document.undo()
         document.annotations.removeAll { item in item.id == arrow.id || item.id == text.id }
         document.saveProject()
+        document.flushProject()
         return results.joined(separator: " ")
     }
 }

@@ -42,28 +42,35 @@ final class UpdateScriptTests: XCTestCase {
 
     /// Runs the repository's update.sh copied into `folder/repo` with a pretend git and build, through
     /// `folder/link` (a symlink to the repo), for `target`. Returns how it ended and the stubs' calls.
-    private func update(in folder: URL, target: URL) throws -> (status: Int32, output: String, calls: String) {
+    /// `codesignFails`: the fresh build fails the signature check.
+    private func update(in folder: URL, target: URL, codesignFails: Bool = false) throws -> (status: Int32, output: String, calls: String) {
         let repo = folder.appendingPathComponent("repo")
-        for path in ["scripts/update.sh", "scripts/lib/app-name.sh", "scripts/lib/permissions.sh", "Sources/AppCore/Support/AppInfo.swift"] {
+        let paths = ["scripts/update.sh", "scripts/lib/app-name.sh", "scripts/lib/permissions.sh", "scripts/lib/replace-app.sh",
+                     "Sources/AppCore/Support/AppInfo.swift"]
+        for path in paths {
             let target = repo.appendingPathComponent(path)
             try FileManager.default.createDirectory(at: target.deletingLastPathComponent(), withIntermediateDirectories: true)
             try FileManager.default.copyItem(at: root.appendingPathComponent(path), to: target)
         }
-        // The build writes the app with a file in it, as build-app.sh would.
+        // The build writes the app with a file in it, as build-app.sh would, and an executable that
+        // reports the version the plist has.
         let plist = "<?xml version=\\\"1.0\\\" encoding=\\\"UTF-8\\\"?><plist version=\\\"1.0\\\"><dict>"
             + "<key>CFBundleExecutable</key><string>$APP_NAME</string><key>CFBundleIdentifier</key><string>test.built</string>"
+            + "<key>CFBundleShortVersionString</key><string>9.9.9</string>"
             + "<key>SourcePath</key><string>/somewhere</string></dict></plist>"
-        let build = "#!/bin/bash\nsource scripts/lib/app-name.sh\nmkdir -p \"build/$APP_NAME.app/Contents\"\n"
+        let build = "#!/bin/bash\nsource scripts/lib/app-name.sh\nmkdir -p \"build/$APP_NAME.app/Contents/MacOS\"\n"
             + "echo fresh > \"build/$APP_NAME.app/fresh\"\necho \"\(plist)\" > \"build/$APP_NAME.app/Contents/Info.plist\"\n"
+            + "printf '#!/bin/bash\\necho 9.9.9\\n' > \"build/$APP_NAME.app/Contents/MacOS/$APP_NAME\"\n"
+            + "chmod +x \"build/$APP_NAME.app/Contents/MacOS/$APP_NAME\"\n"
         try write(build, to: repo.appendingPathComponent("scripts/build-app.sh"), executable: true)
         let stubs = folder.appendingPathComponent("stubs")
         let calls = folder.appendingPathComponent("calls.txt").path
-        for name in ["git", "pkill", "pgrep", "open"] {
+        for name in ["git", "pkill", "pgrep", "open", "codesign"] {
             var body = "#!/bin/bash\necho \"\(name) $*\" >> \"\(calls)\"\n"
             if name == "git" {
                 body += "if [ \"$1\" = rev-parse ]; then echo main; fi\n"
             }
-            if name == "pgrep" {
+            if name == "pgrep" || (name == "codesign" && codesignFails) {
                 body += "exit 1\n"
             }
             try write(body, to: stubs.appendingPathComponent(name), executable: true)
@@ -77,6 +84,9 @@ final class UpdateScriptTests: XCTestCase {
         var environment = ProcessInfo.processInfo.environment
         environment["PATH"] = stubs.path + ":" + (environment["PATH"] ?? "")
         environment["HOME"] = folder.appendingPathComponent("home").path
+        let temporary = folder.appendingPathComponent("tmp")
+        try FileManager.default.createDirectory(at: temporary, withIntermediateDirectories: true)
+        environment["TMPDIR"] = temporary.path
         process.environment = environment
         let output = Pipe()
         process.standardOutput = output
@@ -135,5 +145,37 @@ final class UpdateScriptTests: XCTestCase {
         let result = try update(in: folder, target: target)
         XCTAssertEqual(result.status, 0, result.output)
         XCTAssertTrue(FileManager.default.fileExists(atPath: target.appendingPathComponent("fresh").path), result.output)
+    }
+
+    /// A fresh build that fails its check never replaces the installed copy; the old one runs again.
+    func testUpdateKeepsTheInstalledCopyWhenTheBuildFailsItsCheck() throws {
+        let folder = try makeFolder()
+        let target = folder.appendingPathComponent("apps/\(try appName).app")
+        try makeApp(at: target, bundleId: "test.old")
+        let result = try update(in: folder, target: target, codesignFails: true)
+        XCTAssertNotEqual(result.status, 0, result.output)
+        XCTAssertTrue(result.output.contains("signature check"), result.output)
+        let info = try XCTUnwrap(NSDictionary(contentsOf: target.appendingPathComponent("Contents/Info.plist")))
+        XCTAssertEqual(info["CFBundleIdentifier"] as? String, "test.old", "the installed copy stays: \(result.output)")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: target.appendingPathComponent("fresh").path), result.output)
+        XCTAssertTrue(result.calls.contains("open \(target.path)"), "the old copy is started again: \(result.calls)")
+        XCTAssertFalse(result.output.contains("==> updated"), result.output)
+        let leftovers = try FileManager.default.contentsOfDirectory(atPath: folder.appendingPathComponent("tmp").path)
+        XCTAssertEqual(leftovers, [], "no temporary copy left")
+    }
+
+    /// The fresh build replaces the copy and the old one leaves no copy behind.
+    func testUpdateLeavesNoTemporaryCopy() throws {
+        let folder = try makeFolder()
+        let target = folder.appendingPathComponent("apps/\(try appName).app")
+        try makeApp(at: target, bundleId: "test.old")
+        let result = try update(in: folder, target: target)
+        XCTAssertEqual(result.status, 0, result.output)
+        XCTAssertTrue(result.calls.contains("codesign --verify"), "the build is checked: \(result.calls)")
+        XCTAssertTrue(result.calls.contains("open \(target.path)"), result.calls)
+        let leftovers = try FileManager.default.contentsOfDirectory(atPath: folder.appendingPathComponent("tmp").path)
+        XCTAssertEqual(leftovers, [], "no temporary copy left")
+        let apps = try FileManager.default.contentsOfDirectory(atPath: folder.appendingPathComponent("apps").path)
+        XCTAssertEqual(apps, ["\(try appName).app"], "no second copy beside it")
     }
 }

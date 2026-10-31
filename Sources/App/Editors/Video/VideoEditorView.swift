@@ -32,7 +32,7 @@ struct VideoEditorView: View {
         switchingScreen = true
         Task {
             do {
-                let updated = try await CaptureStore.shared.selectScreen(id, of: current.capture, framesPerSecond: AppState.shared.settings.framesPerSecond)
+                let updated = try await current.switchScreen(to: id)
                 current.tearDown()
                 model = VideoEditorModel(capture: updated)
             } catch {

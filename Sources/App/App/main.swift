@@ -237,6 +237,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        // The last edit of an open editor may still be waiting to be written.
+        ProjectFileWriter.flushAll()
         ScreenBuffer.clearBufferFolder()
     }
 }

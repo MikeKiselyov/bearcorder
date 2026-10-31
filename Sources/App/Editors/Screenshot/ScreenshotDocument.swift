@@ -156,11 +156,14 @@ final class ScreenshotDocument {
 
     private var undoStack: [Snapshot] = []
     private var redoStack: [Snapshot] = []
+    /// Writes the project file off the main thread, shortly after the last change.
+    @ObservationIgnored private let projectWriter: ProjectFileWriter
 
     /// `forEditing` false is for drawing the screenshot elsewhere (a step guide, a comparison):
     /// it shows what was saved with it, never the editor's remembered badge.
     init?(capture: Capture, forEditing: Bool = true) {
         self.capture = capture
+        self.projectWriter = EditorProjectFile.writer(for: capture.projectURL)
         if !forEditing {
             showBadge = false
             badgeCorner = .topRight
@@ -642,9 +645,23 @@ final class ScreenshotDocument {
             hasCombinedBase: FileManager.default.fileExists(atPath: capture.folder.appendingPathComponent("base.png").path)
         )
         if let data = try? JSONEncoder().encode(project) {
-            try? data.write(to: capture.projectURL)
+            projectWriter.schedule(data)
         }
         refreshExportSizes()
+    }
+
+    /// Writes the last change now: before the editor closes or the screenshot switches to another screen.
+    func flushProject() {
+        projectWriter.flush()
+    }
+
+    /// Shows another display, or all of them side by side. Switching parks this picture's project
+    /// file under its display's name, so the last change is written first: a write still waiting
+    /// would land on the other picture's file.
+    func switchScreen(to id: String) async throws -> Capture {
+        saveProject()
+        flushProject()
+        return try await CaptureStore.shared.selectScreen(id, of: capture, framesPerSecond: AppState.shared.settings.framesPerSecond)
     }
 
     private func loadProject() {

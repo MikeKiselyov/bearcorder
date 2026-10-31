@@ -141,4 +141,21 @@ final class GitTrackingTests: XCTestCase {
         try "".write(to: tools.appendingPathComponent("usr/bin/git"), atomically: true, encoding: .utf8)
         XCTAssertTrue(GitTracking.isGitInstalled(developerFolders: [base.appendingPathComponent("Xcode.app/Contents/Developer"), tools]))
     }
+
+    /// A git that fills stderr (more than a pipe holds) before it exits must not wait for the 10 s stopper.
+    func testLargeStderrDoesNotBlockUntilTimeout() throws {
+        let script = base.appendingPathComponent("fake-git.sh")
+        let body = "#!/bin/sh\nhead -c 200000 /dev/zero | tr '\\0' 'e' >&2\nexit 128\n"
+        try body.write(to: script, atomically: true, encoding: .utf8)
+        try fileManager.setAttributes([.posixPermissions: 0o755], ofItemAtPath: script.path)
+        let folder = base.appendingPathComponent("project/node_modules")
+        let started = Date()
+        let answer = GitTracking.runLsFiles(folder, executable: script)
+        let elapsed = Date().timeIntervalSince(started)
+        XCTAssertNotNil(answer)
+        XCTAssertLessThan(elapsed, 3)
+        XCTAssertEqual(answer?.timedOut, false)
+        XCTAssertEqual(answer?.exitStatus, 128)
+        XCTAssertFalse(answer?.errorText.isEmpty ?? true)
+    }
 }
