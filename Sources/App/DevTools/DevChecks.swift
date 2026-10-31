@@ -114,6 +114,7 @@ enum DevChecks {
         checkVideoMarkRepair()
         checkCopyReportButtonFits()
         await checkEditorMemory()
+        await checkProjectSaves()
         checkKeyLabels()
         checkAutomationToken()
         checkFirstVersionFiles()

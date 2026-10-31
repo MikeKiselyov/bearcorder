@@ -1,3 +1,4 @@
+import AppCore
 import AppKit
 import Observation
 import SwiftUI
@@ -19,6 +20,8 @@ final class StepGuideModel {
 
     init(captures: [Capture]) {
         // Oldest first: the order things happened in.
+        // Documents are read from project.json on disk: write any edit still waiting.
+        ProjectFileWriter.flushAll()
         let ordered = captures.sorted { first, second in first.createdAt < second.createdAt }
         for capture in ordered {
             guard let document = ScreenshotDocument(capture: capture, forEditing: false), let image = document.render() else { continue }

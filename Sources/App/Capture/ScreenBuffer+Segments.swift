@@ -152,7 +152,7 @@ extension ScreenBuffer {
         writer = newWriter
         videoInput = input
         audioInputs = newAudioInputs
-        segments.append(Segment(url: url, start: time, end: time, finished: false, size: size))
+        segments.append(Segment(url: url, start: time, end: time, state: .open, size: size))
         currentSegmentIndex = segments.count - 1
     }
 
@@ -195,14 +195,18 @@ extension ScreenBuffer {
         }
         currentWriter.endSession(atSourceTime: CMTime(seconds: sessionEnd, preferredTimescale: 600))
         segments[index].end = sessionEnd
+        let segmentEnd = sessionEnd
         currentWriter.finishWriting { [weak self] in
             guard let self = self else { return }
             self.queue.async {
+                let completed = currentWriter.status == .completed
                 for position in 0..<self.segments.count where self.segments[position].url == url {
-                    self.segments[position].finished = currentWriter.status == .completed
+                    self.segments[position].state = completed ? .finished : .failed
                 }
-                if currentWriter.status != .completed {
+                if !completed {
                     Log.error("buffer[\(self.displayID)] segment finish failed: \(currentWriter.error?.localizedDescription ?? "status \(currentWriter.status.rawValue)")")
+                    // A failed file is of no use: remove it now, not when it leaves the window.
+                    self.pruneSegments(now: segmentEnd)
                 }
                 completion?()
             }
@@ -226,7 +230,7 @@ extension ScreenBuffer {
         }
         var kept: [Segment] = []
         for segment in segments {
-            if segment.finished && segment.end < keepFrom {
+            if SegmentPruning.shouldRemove(state: segment.state, end: segment.end, keepFrom: keepFrom) {
                 try? FileManager.default.removeItem(at: segment.url)
             } else {
                 kept.append(segment)
@@ -303,7 +307,14 @@ extension ScreenBuffer {
             let now = CACurrentMediaTime()
             var parts: [String] = []
             for segment in segments {
-                parts.append(String(format: "[%.2f…%.2f %@]", segment.start - now, segment.end - now, segment.finished ? "done" : "open"))
+                var label = "open"
+                if segment.state == .finished {
+                    label = "done"
+                }
+                if segment.state == .failed {
+                    label = "failed"
+                }
+                parts.append(String(format: "[%.2f…%.2f %@]", segment.start - now, segment.end - now, label))
             }
             return parts.joined(separator: " ")
         }

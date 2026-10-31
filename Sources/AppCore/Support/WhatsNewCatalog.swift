@@ -3,6 +3,13 @@
 /// top entry, the update badge compares it with GitHub, and CI refuses a pull request without one.
 public enum WhatsNewCatalog {
     public static let releases: [WhatsNewRelease] = [
+        WhatsNewRelease(id: 24, version: "0.15.1", title: "Safer saves and updates", items: [
+            WhatsNewRelease.Item(symbol: "externaldrive.badge.exclamationmark", title: "Broken buffer pieces are dropped", text: "When the disk is full, a piece of the buffer that could not be written is deleted at once and never ends up in a clip.", shortcut: "Buffer"),
+            WhatsNewRelease.Item(symbol: "square.and.arrow.down", title: "Edits are saved safely", text: "The screenshot and video editors save your edits in the background, and the last change is saved when you close the editor, switch the screen or quit. If a save fails, the editor says \"Could not save the edits\" and why.", shortcut: "Editors"),
+            WhatsNewRelease.Item(symbol: "arrow.triangle.2.circlepath", title: "Update keeps the old app", text: "Update now and the install script check the new app before replacing the old one. If the check fails, the old app is put back and opened again. If the run is stopped, the old app is put back.", shortcut: "Menu, Terminal"),
+            WhatsNewRelease.Item(symbol: "doc.text", title: "Both logs in the report", text: "The log is kept as a .log.1 file once it passes 2 MB, instead of being emptied. Report a problem adds both files to the zip. If zipping takes too long, the GitHub form still opens.", shortcut: "Settings → Updates and feedback"),
+            WhatsNewRelease.Item(symbol: "clock", title: "Space does not wait on folders", text: "The check whether a folder is tracked by git no longer waits 10 seconds on some folders.", shortcut: "Menu → Space"),
+        ]),
         WhatsNewRelease(id: 23, version: "0.15.0", title: "A new name: Bearcorder", items: [
             WhatsNewRelease.Item(symbol: "character.cursor.ibeam", title: "The app is called Bearcorder now", text: "The menu, windows, folders and the GitHub repository use the new name. Captures and logs go to ~/Library/Application Support/Bearcorder and ~/Library/Logs/Bearcorder, saved files to Desktop/Bearcorder. macOS asks for the permissions again.", shortcut: "Menu"),
             WhatsNewRelease.Item(symbol: "shippingbox", title: "IDE caches stay", text: "App caches no longer lists the JetBrains IDE and Android Studio caches: they hold indexes and local history that take long to build again or do not come back. The Poetry cache is listed but starts unticked, since it holds Poetry's virtual environments.", shortcut: "Menu → Space"),

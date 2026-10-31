@@ -118,6 +118,8 @@ extension FeatureAutomation {
             // select-screen:<id> on the newest capture; prints the picture size afterwards.
             guard let clip = app.store.captures.first else { return "no capture" }
             let started = Date()
+            // An open editor's last mark may still be waiting to be written; switching parks the file.
+            ProjectFileWriter.flushAll()
             do {
                 let updated = try await app.store.selectScreen(argument, of: clip, framesPerSecond: app.settings.framesPerSecond)
                 var stagedFiles = 0

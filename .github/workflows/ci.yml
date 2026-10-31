@@ -80,7 +80,23 @@ jobs:
           restore-keys: |
             spm-${{ runner.os }}-${{ steps.swift.outputs.version }}-
       - name: Unit tests
-        run: swift test --parallel
+        run: swift test --parallel --enable-code-coverage
+      # Information only, no threshold. A failing report does not fail the job.
+      - name: Coverage of AppCore
+        continue-on-error: true
+        run: |
+          codecov_dir="$(dirname "$(swift test --show-codecov-path)")"
+          test_binary=".build/debug/AppPackageTests.xctest/Contents/MacOS/AppPackageTests"
+          {
+            echo "### Coverage of Sources/AppCore"
+            echo '```'
+            if [ -f "$test_binary" ]; then
+              xcrun llvm-cov report "$test_binary" -instr-profile "$codecov_dir/default.profdata" -ignore-filename-regex='(/Tests/|/\.build/|/Sources/App/)' -use-color=false || true
+            else
+              echo "no coverage report: $test_binary not found"
+            fi
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
       - name: Self-test (export, edits, annotations, OCR, QR, stitching)
         run: |
           swift build

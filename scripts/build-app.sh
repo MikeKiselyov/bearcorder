@@ -68,6 +68,8 @@ fi
 source "$ROOT/scripts/lib/app-name.sh"
 # shellcheck source=lib/permissions.sh
 source "$ROOT/scripts/lib/permissions.sh"
+# shellcheck source=lib/replace-app.sh
+source "$ROOT/scripts/lib/replace-app.sh"
 BUNDLE_ID="${APP_BUNDLE_ID:-$DEFAULT_BUNDLE_ID}"
 # APP_BUILD_DIR: a folder other than ./build (the script tests use one of their own).
 BUILD_DIR="${APP_BUILD_DIR:-$ROOT/build}"
@@ -182,6 +184,8 @@ if [ "$INSTALL_ONLY" = 1 ]; then
         die "$APP_DIR is missing: run scripts/build-app.sh first"
     fi
     echo "==> installing the app built earlier: $APP_DIR"
+    # Only a build sets the version; one from the environment or .env must not decide the check.
+    VERSION=""
 else
     build_app
 fi
@@ -263,12 +267,28 @@ for argument in "$@"; do
                 defaults delete "$BUNDLE_ID" askedPermission.Privacy_Accessibility 2>/dev/null || true
                 echo "==> new install: the welcome guide opens on launch"
             fi
-            rm -rf "$target_app"
+            # The build goes in only when it is signed and reports its version; otherwise the
+            # installed copy stays, and so do the renamed ones. VERSION is App --version of this
+            # build; --install-only reads what the build wrote into its Info.plist.
+            expected_version="${VERSION:-}"
+            if [ -z "$expected_version" ]; then
+                expected_version=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$APP_DIR/Contents/Info.plist" 2>/dev/null || true)
+            fi
+            had_copy=false
+            if [ -e "$target_app" ]; then
+                had_copy=true
+            fi
+            if ! replace_app "$APP_DIR" "$target_app" "$expected_version"; then
+                # The old copy is back in place: it was quit for the install, so start it again.
+                if [ "$had_copy" = true ] && [ -e "$target_app" ] && [ -z "${APP_NO_OPEN:-}" ]; then
+                    open "$target_app" || true
+                fi
+                die "the app was not installed to $target_app"
+            fi
             for copy in "${renamed_copies[@]+"${renamed_copies[@]}"}"; do
                 echo "==> replacing $(basename "$copy"), the same app under another name"
                 rm -rf "$copy"
             done
-            cp -R "$APP_DIR" "$TARGET_DIR/"
             echo "==> installed to $TARGET_DIR/$APP_NAME.app"
             for index in "${!other_ids[@]}"; do
                 forget_permissions "${other_ids[$index]}" "${other_copies[$index]}"

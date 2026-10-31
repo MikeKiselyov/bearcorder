@@ -85,6 +85,8 @@ final class VideoEditorModel {
     @ObservationIgnored private var buildGeneration = 0
     @ObservationIgnored private var undoStack: [VideoProject] = []
     @ObservationIgnored private var redoStack: [VideoProject] = []
+    /// Writes the project file off the main thread, shortly after the last change.
+    @ObservationIgnored private let projectWriter: ProjectFileWriter
 
     var duration: Double { project.timeline.sourceDuration }
 
@@ -98,6 +100,7 @@ final class VideoEditorModel {
     init(capture: Capture) {
         self.capture = capture
         self.asset = AVURLAsset(url: capture.mediaURL)
+        self.projectWriter = EditorProjectFile.writer(for: capture.projectURL)
         var loaded = EditorMemory.newVideoProject(duration: max(capture.duration, 0.1))
         if let data = try? Data(contentsOf: capture.projectURL), let saved = try? JSONDecoder().decode(VideoProject.self, from: data) {
             loaded = saved.repairingMarks()
@@ -135,6 +138,7 @@ final class VideoEditorModel {
     }
 
     func tearDown() {
+        flushProject()
         player.pause()
         if let observer = timeObserver {
             player.removeTimeObserver(observer)
@@ -242,8 +246,20 @@ final class VideoEditorModel {
         }
         lastSaved = project
         if let data = try? JSONEncoder().encode(project) {
-            try? data.write(to: capture.projectURL)
+            projectWriter.schedule(data)
         }
+    }
+
+    /// Writes the last change now: before the editor closes or the clip switches to another screen.
+    func flushProject() {
+        projectWriter.flush()
+    }
+
+    /// Shows the clip from another display. The editor for it reads the project file again, so the
+    /// last change is written first.
+    func switchScreen(to id: String) async throws -> Capture {
+        flushProject()
+        return try await CaptureStore.shared.selectScreen(id, of: capture, framesPerSecond: AppState.shared.settings.framesPerSecond)
     }
 
     // MARK: Preview

@@ -1,0 +1,5 @@
+title: Bearcorder
+description: The screen recorder and toolbox for your Mac. The last minutes of the screen are always kept; screenshots with markup, bug reports, layout checks, a dev toolbox and disk clean-up.
+theme: jekyll-theme-primer
+exclude:
+  - superpowers

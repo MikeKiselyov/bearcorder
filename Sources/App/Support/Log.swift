@@ -55,10 +55,8 @@ enum Log {
             } else {
                 try? data.write(to: url)
             }
-            // Keep the file small: start over past 2 MB.
-            if let size = try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? Int, size > 2_000_000 {
-                try? Data().write(to: url)
-            }
+            // Keep the file small: past 2 MB it moves to <name>.log.1 and a new one starts.
+            LogRotation.rotateIfNeeded(url, limit: 2_000_000)
         }
     }
 }

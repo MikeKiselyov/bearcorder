@@ -30,16 +30,18 @@ struct ScreenshotEditorView: View {
                 document = opened
             }
         }
+        .onDisappear {
+            document?.flushProject()
+        }
     }
 
     /// Shows another display, or all of them side by side. Each picture keeps its own marks.
     private func selectScreen(_ id: String) {
         guard let current = document, !switchingScreen, id != current.capture.selectedScreen else { return }
         switchingScreen = true
-        current.saveProject()
         Task {
             do {
-                let updated = try await CaptureStore.shared.selectScreen(id, of: current.capture, framesPerSecond: AppState.shared.settings.framesPerSecond)
+                let updated = try await current.switchScreen(to: id)
                 document = ScreenshotDocument(capture: updated)
             } catch {
                 AppState.shared.showError(L("editors.screen.switchFailed", error.localizedDescription))

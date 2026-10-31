@@ -48,3 +48,6 @@
 /* Messages after an action. */
 "editors.message.reportCopied" = "Bug report copied. Paste it into the ticket.";
 "editors.message.environmentCopied" = "Environment copied";
+
+/* Toast when an edit could not be saved to the project file. %@ is the reason from the system. */
+"editors.saveFailed" = "Could not save the edits: %@";

@@ -65,8 +65,10 @@ final class AppNameInOnePlaceTests: XCTestCase {
             return true
         }
         let parts = path.split(separator: "/")
-        if parts.count == 2 && parts[0] == "docs" && path.hasSuffix(".md") {
-            return true
+        if parts.count == 2 && parts[0] == "docs" {
+            for ending in [".md", ".html", ".yml", ".txt", ".xml"] where path.hasSuffix(ending) {
+                return true
+            }
         }
         if path.hasPrefix(".github/ISSUE_TEMPLATE/") && path.hasSuffix(".yml") && parts.count == 3 {
             return true
@@ -79,7 +81,7 @@ final class AppNameInOnePlaceTests: XCTestCase {
     /// .txt list) would keep the old name after a rename.
     func testEveryFileWithTheNameIsRenamedByTheScript() throws {
         let script = try String(contentsOf: root.appendingPathComponent("scripts/dev/rename-app.sh"), encoding: .utf8)
-        for named in ["\"README.md\"", "\"CONTRIBUTING.md\"", "\".env.example\"", "(root / \"docs\").glob(\"*.md\")", "(root / \".github/ISSUE_TEMPLATE\").glob(\"*.yml\")", "[\"install.sh\", \"uninstall.sh\"]", "root / \"Packaging/Debug-Info.plist\""] {
+        for named in ["\"README.md\"", "\"CONTRIBUTING.md\"", "\".env.example\"", "(root / \"docs\").glob(\"*.md\")", "(root / \".github/ISSUE_TEMPLATE\").glob(\"*.yml\")", "for site_pattern in [\"*.html\", \"*.yml\", \"*.txt\", \"*.xml\"]:", "[\"install.sh\", \"uninstall.sh\"]", "root / \"Packaging/Debug-Info.plist\""] {
             XCTAssertTrue(script.contains(named), "rename-app.sh no longer rewrites \(named)")
         }
         let pictureEndings = [".png", ".jpg", ".gif"]

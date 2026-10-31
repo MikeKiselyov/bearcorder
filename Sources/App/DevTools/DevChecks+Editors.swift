@@ -148,6 +148,8 @@ extension DevChecks {
         EditorMemory.override = scratch
         AppPaths.supportOverride = folder
         defer {
+            // Edits below are still waiting to be written; write them before the folder goes.
+            ProjectFileWriter.flushAll()
             EditorMemory.override = nil
             AppPaths.supportOverride = savedOverride
             forgetScratchDefaults(scratch, domain: domain)
@@ -190,6 +192,8 @@ extension DevChecks {
         second.badgeCorner = .bottomLeft
         second.showBadge = false
         second.saveProject()
+        // The editor closes before it opens again; closing writes the last change.
+        second.flushProject()
         first.showBadge = true
         guard let reopened = ScreenshotDocument(capture: second.capture), let third = newScreenshot() else { return }
         check(!reopened.showBadge && third.showBadge && third.badgeCorner == .bottomLeft, "opening an older screenshot keeps its badge and leaves the next one's alone", "\(reopened.showBadge) \(third.showBadge) \(third.badgeCorner)")

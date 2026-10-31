@@ -45,7 +45,9 @@ final class ScreenBuffer: NSObject, SCStreamOutput, SCStreamDelegate {
         var url: URL
         var start: Double
         var end: Double
-        var finished: Bool
+        var state: SegmentState
+        /// Playable and closed. A failed segment is not.
+        var finished: Bool { state == .finished }
         /// The picture size in pixels. A segment has one size: a display that goes to native
         /// resolution while recording starts a new one.
         var size: CGSize

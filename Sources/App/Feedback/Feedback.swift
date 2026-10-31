@@ -128,7 +128,7 @@ enum Feedback {
     }
 
     /// A zip with the redacted log, crash reports and the environment, in `folder`.
-    nonisolated static func makeLogArchive(environmentText: String, in folder: URL, crashFolder: URL = CrashWatcher.defaultFolder) -> Result<URL, ArchiveError> {
+    nonisolated static func makeLogArchive(environmentText: String, in folder: URL, crashFolder: URL = CrashWatcher.defaultFolder, logURL: URL = Log.fileURL) -> Result<URL, ArchiveError> {
         let files = FileManager.default
         let staging = files.temporaryDirectory.appendingPathComponent("report-\(UUID().uuidString)", isDirectory: true)
         let contents = staging.appendingPathComponent("\(AppInfo.name) logs", isDirectory: true)
@@ -136,8 +136,12 @@ enum Feedback {
         do {
             try files.createDirectory(at: contents, withIntermediateDirectories: true)
             try Data((redact(environmentText) + "\n").utf8).write(to: contents.appendingPathComponent("environment.txt"))
-            if let log = try? String(contentsOf: Log.fileURL, encoding: .utf8) {
+            if let log = try? String(contentsOf: logURL, encoding: .utf8) {
                 try Data(redact(log).utf8).write(to: contents.appendingPathComponent(Log.fileName))
+            }
+            let oldLogURL = URL(fileURLWithPath: logURL.path + ".1")
+            if let oldLog = try? String(contentsOf: oldLogURL, encoding: .utf8) {
+                try Data(redact(oldLog).utf8).write(to: contents.appendingPathComponent(Log.fileName + ".1"))
             }
             for crash in recentCrashReports(in: crashFolder) {
                 if let text = try? String(contentsOf: crash, encoding: .utf8) {
@@ -161,8 +165,12 @@ enum Feedback {
         // No resource forks or extended attributes: they turn into ._ files outside a Mac.
         task.arguments = ["-c", "-k", "--norsrc", "--noextattr", "--keepParent", contents.path, archive.path]
         do {
-            try task.run()
-            task.waitUntilExit()
+            let finished = try ProcessTimeout.run(task, seconds: 30)
+            if !finished {
+                Log.error("Feedback: zipping logs timed out")
+                try? files.removeItem(at: archive)
+                return .failure(.failed("zipping logs timed out"))
+            }
         } catch {
             Log.error("Feedback: could not zip logs: \(error.localizedDescription)")
             return .failure(.failed(error.localizedDescription))

@@ -536,7 +536,13 @@ extension DevChecks {
         let zipFolder = folder.appendingPathComponent("feedback-zip", isDirectory: true)
         try? FileManager.default.removeItem(at: zipFolder)
         let environment = "\(AppInfo.name): test\nHome: \(Feedback.homePath)"
-        guard case .success(let archive) = Feedback.makeLogArchive(environmentText: environment, in: zipFolder, crashFolder: crashFolder) else {
+        let logFolder = folder.appendingPathComponent("feedback-log", isDirectory: true)
+        try? FileManager.default.removeItem(at: logFolder)
+        try? FileManager.default.createDirectory(at: logFolder, withIntermediateDirectories: true)
+        let logFile = logFolder.appendingPathComponent(Log.fileName)
+        try? Data("current log \(Feedback.homePath)/Desktop\n".utf8).write(to: logFile)
+        try? Data("rotated log \(Feedback.homePath)/Movies\n".utf8).write(to: URL(fileURLWithPath: logFile.path + ".1"))
+        guard case .success(let archive) = Feedback.makeLogArchive(environmentText: environment, in: zipFolder, crashFolder: crashFolder, logURL: logFile) else {
             check(false, "the log zip is made")
             return
         }
@@ -550,6 +556,9 @@ extension DevChecks {
         let inner = unpacked.appendingPathComponent("\(AppInfo.name) logs", isDirectory: true)
         let names = (try? FileManager.default.contentsOfDirectory(atPath: inner.path)) ?? []
         check(names.contains("environment.txt") && names.contains(recent.lastPathComponent) && !names.contains(old.lastPathComponent) && !names.contains("Safari-2026-10-25-120000.ips"), "the log zip has the environment and only recent crash reports of this app", "\(names)")
+        check(names.contains(Log.fileName) && names.contains(Log.fileName + ".1"), "the log zip has the log and the rotated log", "\(names)")
+        let rotatedText = (try? String(contentsOf: inner.appendingPathComponent(Log.fileName + ".1"), encoding: .utf8)) ?? ""
+        check(rotatedText.contains("rotated log ~/Movies"), "the rotated log in the zip is redacted like the log", rotatedText)
         var leaks: [String] = []
         for name in names {
             let text = (try? String(contentsOf: inner.appendingPathComponent(name), encoding: .utf8)) ?? ""

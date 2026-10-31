@@ -1,0 +1,310 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bearcorder - screen recorder and toolbox for your Mac</title>
+<meta name="description" content="A free macOS menu bar app for developers, designers, testers and anyone who needs to show what happened on screen: the last minutes of the screen are always kept, screenshots with markup, a video editor, bug reports with steps, layout checks, a dev toolbox and disk clean-up.">
+<link rel="canonical" href="https://mikekiselyov.github.io/bearcorder/">
+<link rel="icon" type="image/png" href="images/logo.png">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Bearcorder">
+<meta property="og:title" content="Bearcorder - the screen recorder and toolbox for your Mac">
+<meta property="og:description" content="A free macOS menu bar app for developers, designers, testers and anyone who needs to show what happened on screen: the last minutes of the screen are always kept, screenshots with markup, bug reports, layout checks, a dev toolbox and disk clean-up.">
+<meta property="og:image" content="https://mikekiselyov.github.io/bearcorder/images/social-preview.png">
+<meta property="og:image:width" content="1280">
+<meta property="og:image:height" content="640">
+<meta property="og:url" content="https://mikekiselyov.github.io/bearcorder/">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Bearcorder - the screen recorder and toolbox for your Mac">
+<meta name="twitter:description" content="A free macOS menu bar app for developers, designers, testers and anyone who needs to show what happened on screen: the last minutes of the screen are always kept, screenshots with markup, bug reports, layout checks, a dev toolbox and disk clean-up.">
+<meta name="twitter:image" content="https://mikekiselyov.github.io/bearcorder/images/social-preview.png">
+<style>
+:root {
+  color-scheme: light;
+  --bg: #fbfaf8;
+  --text: #1d1b20;
+  --muted: #5b5862;
+  --accent: #e2532f;
+  --accent-text: #c4411f;
+  --line: #e3dfe6;
+  --chip: #ffffff;
+  --code-bg: #1d1b20;
+  --code-text: #f5f5f5;
+  --button: #3a3640;
+  --button-text: #f5f5f5;
+  --shadow: 0 1px 2px rgba(29, 27, 32, .06), 0 8px 24px rgba(29, 27, 32, .08);
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --bg: #16141a;
+    --text: #ecebee;
+    --muted: #a6a3ad;
+    --accent: #ff7a57;
+    --accent-text: #ff7a57;
+    --line: #34303a;
+    --chip: #1f1c24;
+    --code-bg: #0b0a0d;
+    --code-text: #f0eff2;
+    --button: #3a3640;
+    --button-text: #f5f5f5;
+    --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 8px 24px rgba(0, 0, 0, .35);
+  }
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  font-size: 17px;
+  line-height: 1.55;
+}
+a { color: inherit; }
+img { max-width: 100%; height: auto; display: block; }
+.wrap { max-width: 1080px; margin: 0 auto; padding-inline: 24px; }
+.top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-block: 18px;
+  font-weight: 600;
+}
+.top .brand { display: flex; align-items: center; gap: 10px; text-decoration: none; }
+.top .brand img { width: 30px; height: 30px; }
+.top nav { margin-left: auto; display: flex; gap: 20px; font-weight: 400; }
+.top nav a { color: var(--muted); text-decoration: none; }
+.top nav a:hover { color: var(--text); }
+.hero { padding-block: 48px 24px; max-width: 760px; }
+h1 {
+  margin: 0 0 16px;
+  font-size: clamp(34px, 6vw, 56px);
+  line-height: 1.08;
+  letter-spacing: -.02em;
+}
+.accent { color: var(--accent); }
+.hero p { color: var(--muted); margin: 0 0 24px; font-size: 19px; }
+.install { margin: 0 0 14px; }
+.install-label { font-size: 14px; color: var(--muted); margin: 0 0 8px; }
+.cmd {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--code-bg);
+  color: var(--code-text);
+  border-radius: 10px;
+  padding: 12px 12px 12px 16px;
+}
+.cmd code {
+  flex: 1;
+  min-width: 0;
+  overflow-x: auto;
+  white-space: nowrap;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 14px;
+  padding-block: 4px;
+}
+.cmd button {
+  flex: none;
+  border: 0;
+  border-radius: 7px;
+  padding: 7px 12px;
+  background: var(--button);
+  color: var(--button-text);
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+.cmd button:hover { filter: brightness(1.2); }
+.hero-links { display: flex; flex-wrap: wrap; gap: 8px 20px; font-size: 15px; color: var(--muted); }
+.hero-links a { color: var(--accent-text); font-weight: 600; text-decoration: none; }
+.hero-links a:hover { text-decoration: underline; }
+.row {
+  display: grid;
+  grid-template-columns: 1fr 1.4fr;
+  gap: 40px;
+  align-items: center;
+  padding-block: 40px;
+  border-top: 1px solid var(--line);
+}
+.row.flip { grid-template-columns: 1.4fr 1fr; }
+.row.flip .text { order: 2; }
+.row.flip .media { order: 1; }
+.row h2 { margin: 0 0 8px; font-size: 26px; letter-spacing: -.01em; line-height: 1.2; }
+.row p { margin: 0 0 10px; color: var(--muted); }
+.media img { border-radius: 10px; box-shadow: var(--shadow); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; padding: 0; list-style: none; }
+.chips li {
+  border: 1px solid var(--line);
+  border-radius: 99px;
+  padding: 3px 11px;
+  font-size: 14px;
+  background: var(--chip);
+}
+.differs { padding-block: 40px; border-top: 1px solid var(--line); }
+.differs h2 { margin: 0 0 12px; font-size: 26px; letter-spacing: -.01em; }
+.differs ul { margin: 0; padding-left: 20px; color: var(--muted); max-width: 760px; }
+.differs li { margin-bottom: 6px; }
+footer {
+  border-top: 1px solid var(--line);
+  padding-block: 24px 40px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  font-size: 15px;
+  color: var(--muted);
+}
+footer a { color: var(--muted); }
+@media (max-width: 760px) {
+  body { font-size: 16px; }
+  .wrap { padding-inline: 16px; }
+  .top nav { gap: 14px; font-size: 15px; }
+  .hero { padding-block: 28px 16px; }
+  .hero p { font-size: 17px; }
+  .row, .row.flip { grid-template-columns: 1fr; gap: 18px; padding-block: 28px; }
+  .row.flip .text, .row.flip .media { order: 0; }
+  .row h2, .differs h2 { font-size: 22px; }
+  .cmd code { font-size: 13px; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <a class="brand" href="./"><img src="images/logo.png" alt="" width="30" height="30">Bearcorder</a>
+    <nav>
+      <a href="features.html">All features</a>
+      <a href="https://github.com/MikeKiselyov/bearcorder">GitHub</a>
+    </nav>
+  </header>
+
+  <main>
+    <section class="hero">
+      <h1>The screen recorder and toolbox <span class="accent">for your Mac</span>.</h1>
+      <p>A macOS menu bar app. The last minutes of your screen are always kept, so whatever you just saw, a bug or a moment you want to show, is already on video. Next to it: screenshots with markup, a video editor, bug reports with steps, layout checks, a dev toolbox and disk clean-up.</p>
+      <div class="install">
+        <p class="install-label">To install, open Terminal and paste (macOS 14 or later):</p>
+        <div class="cmd">
+          <code id="install-command">curl -fsSL https://raw.githubusercontent.com/MikeKiselyov/bearcorder/main/scripts/install.sh | bash</code>
+          <button type="button" id="copy-button" aria-live="polite">Copy</button>
+        </div>
+      </div>
+      <div class="hero-links">
+        <a href="features.html">All features</a>
+        <span>Free and open source (MIT), no account. Source on <a href="https://github.com/MikeKiselyov/bearcorder">GitHub</a>.</span>
+      </div>
+    </section>
+
+    <section class="row">
+      <div class="text">
+        <h2>Catch what already happened</h2>
+        <p>Bearcorder keeps the last 1 to 5 minutes of the screen on disk. Press <code>⌥⇧1</code> for the last 30 seconds or <code>⌥⇧2</code> for the last minute, and the clip opens in the video editor.</p>
+        <p>Clicks and keys come with the clip and turn into steps. When an app crashes, the minute before it is saved with the crash report.</p>
+      </div>
+      <div class="media"><img src="images/buffer-save.gif" alt="Saving the last minute from the menu, the clip in the editor, then the other display" width="900" height="590" loading="lazy"></div>
+    </section>
+
+    <section class="row flip">
+      <div class="text">
+        <h2>Mark up and report</h2>
+        <p>Arrows, boxes, blur, labels and numbered steps on screenshots. Crop, trim and marks on video.</p>
+        <p>Copy bug report puts steps, expected and actual result and the environment on the clipboard, in Markdown or Jira wiki.</p>
+      </div>
+      <div class="media"><img src="images/screenshot-editor.gif" alt="Marking up a screenshot: numbered steps, blur, box, arrow, label" width="1000" height="639" loading="lazy"></div>
+    </section>
+
+    <section class="row">
+      <div class="text">
+        <h2>Tools you use daily</h2>
+        <p>The dev toolbox opens with <code>⌥⇧D</code> on what is on the clipboard and picks the right tool.</p>
+        <ul class="chips">
+          <li>JSON</li><li>JSON diff</li><li>XML and YAML</li><li>JWT</li><li>Base64 and URL</li><li>Unix time</li><li>Cron</li><li>Time zones</li><li>Test data</li><li>Regex</li><li>UUID</li><li>Hashes</li><li>QR codes</li>
+        </ul>
+      </div>
+      <div class="media"><img src="images/toolbox-json.png" alt="Dev toolbox: JSON formatter" width="1220" height="760" loading="lazy"></div>
+    </section>
+
+    <section class="row flip">
+      <div class="text">
+        <h2>Layout checks</h2>
+        <p>Resize the window you test to desktop, tablet or phone sizes. Measure on the screen in points and pixels.</p>
+        <p>Pick a color and check contrast. Float a design export over the app, with opacity and click-through.</p>
+      </div>
+      <div class="media"><img src="images/layout-measure.png" alt="Measure on screen: a box dragged over the order summary with its size in points and pixels" width="960" height="600" loading="lazy"></div>
+    </section>
+
+    <section class="row">
+      <div class="text">
+        <h2>Space</h2>
+        <p>See what builds and tests left on the disk: Xcode data and simulators, npm, Gradle, Homebrew, pip and other caches.</p>
+        <p>Tick what goes and see the size before anything is removed. Project folders go to the Trash, and folders tracked by git are left out.</p>
+      </div>
+      <div class="media"><img src="images/space-review.png" alt="The Review list of App caches: some rows ticked and the delete button at the bottom" width="900" height="560" loading="lazy"></div>
+    </section>
+
+    <section class="differs">
+      <h2>How it differs</h2>
+      <ul>
+        <li>Everything runs on your Mac. Nothing is uploaded, and there is no account.</li>
+        <li>It is free, and the app is built on your Mac from the source on GitHub.</li>
+        <li>The last minutes are always kept, so you do not have to start recording before the bug.</li>
+        <li>It is made for testing: bug reports with steps, expected and actual result, layout checks and test data in one app.</li>
+      </ul>
+    </section>
+  </main>
+
+  <footer>
+    <a href="https://github.com/MikeKiselyov/bearcorder">GitHub</a>
+    <a href="features.html">All features</a>
+    <a href="https://github.com/MikeKiselyov/bearcorder/releases">Releases</a>
+    <a href="uninstall.html">Uninstall</a>
+  </footer>
+</div>
+<script>
+(function () {
+  var button = document.getElementById("copy-button");
+  var command = document.getElementById("install-command");
+
+  function showDone(label) {
+    button.textContent = label;
+    setTimeout(function () { button.textContent = "Copy"; }, 1600);
+  }
+
+  function selectCommand() {
+    var range = document.createRange();
+    range.selectNodeContents(command);
+    var selection = window.getSelection();
+    selection.removeAllRanges();
+    selection.addRange(range);
+  }
+
+  button.addEventListener("click", function () {
+    var text = command.textContent;
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(text).then(function () {
+        showDone("Copied");
+      }, function () {
+        selectCommand();
+        showDone("Press ⌘C");
+      });
+      return;
+    }
+    selectCommand();
+    var copied = false;
+    try {
+      copied = document.execCommand("copy");
+    } catch (error) {
+      copied = false;
+    }
+    if (copied) {
+      showDone("Copied");
+    } else {
+      showDone("Press ⌘C");
+    }
+  });
+})();
+</script>
+</body>
+</html>

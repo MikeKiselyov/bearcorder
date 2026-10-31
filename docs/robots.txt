@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://mikekiselyov.github.io/bearcorder/sitemap.xml

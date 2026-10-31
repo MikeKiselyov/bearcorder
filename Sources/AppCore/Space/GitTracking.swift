@@ -92,8 +92,13 @@ public enum GitTracking {
 
     /// Runs `git ls-files` for the folder in its parent. A git that does not answer in 10 seconds is stopped.
     public static func runLsFiles(_ folder: URL) -> Answer? {
+        return runLsFiles(folder, executable: URL(fileURLWithPath: "/usr/bin/git"))
+    }
+
+    /// Same, with the program to run (a test passes a script).
+    public static func runLsFiles(_ folder: URL, executable: URL) -> Answer? {
         let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/git")
+        process.executableURL = executable
         // No fsmonitor: a repository's hook must not start a daemon or run a program for this question.
         process.arguments = ["-c", "core.fsmonitor=false", "-C", folder.deletingLastPathComponent().path, "ls-files", "-z", "--", folder.lastPathComponent]
         var environment = ProcessInfo.processInfo.environment
@@ -116,6 +121,9 @@ public enum GitTracking {
             }
         }
         DispatchQueue.global().asyncAfter(deadline: .now() + 10, execute: stopper)
+        // stderr is read at the same time: git blocks on a full pipe, and stdout would never close.
+        let errorReader = ErrorReader(handle: errors.fileHandleForReading)
+        errorReader.start()
         // The first bytes are enough: one tracked file means tracked.
         let firstBytes = output.fileHandleForReading.availableData
         if !firstBytes.isEmpty {
@@ -126,11 +134,34 @@ public enum GitTracking {
             process.waitUntilExit()
             return Answer(printedPaths: true, exitStatus: process.terminationStatus, errorText: "", timedOut: false)
         }
-        let errorData = errors.fileHandleForReading.readDataToEndOfFile()
+        let errorData = errorReader.waitForData()
         process.waitUntilExit()
         stopper.cancel()
         let errorText = String(decoding: errorData, as: UTF8.self)
         let timedOut = process.terminationReason == .uncaughtSignal
         return Answer(printedPaths: false, exitStatus: process.terminationStatus, errorText: errorText, timedOut: timedOut)
+    }
+
+    /// Reads a pipe to its end on another thread.
+    private final class ErrorReader: @unchecked Sendable {
+        private let handle: FileHandle
+        private let finished = DispatchSemaphore(value: 0)
+        private var data = Data()
+
+        init(handle: FileHandle) {
+            self.handle = handle
+        }
+
+        func start() {
+            DispatchQueue.global().async {
+                self.data = self.handle.readDataToEndOfFile()
+                self.finished.signal()
+            }
+        }
+
+        func waitForData() -> Data {
+            finished.wait()
+            return data
+        }
     }
 }

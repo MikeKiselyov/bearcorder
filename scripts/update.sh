@@ -79,10 +79,22 @@ if { [ -e "$TARGET_APP" ] || [ -L "$TARGET_APP" ]; } && ! is_our_app "$TARGET_AP
     exit 4
 fi
 
+# The fresh build goes in only when it is signed and reports the version it was built as;
+# otherwise the installed copy stays (scripts/lib/replace-app.sh).
+# shellcheck source=lib/replace-app.sh
+source scripts/lib/replace-app.sh
+built_version=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "build/$APP_NAME.app/Contents/Info.plist" 2>/dev/null || true)
+
 echo "==> replacing $TARGET_APP"
 pkill -x "$APP_NAME" 2>/dev/null || true
 wait_for_app_to_quit
-rm -rf "$TARGET_APP"
-cp -R "build/$APP_NAME.app" "$TARGET_APP"
+if ! replace_app "build/$APP_NAME.app" "$TARGET_APP" "$built_version"; then
+    # The old copy is back in place (or was never moved): it was quit for the update, so start it again.
+    if [ -e "$TARGET_APP" ]; then
+        open "$TARGET_APP" || true
+    fi
+    echo "The update was not installed. Run scripts/update.sh again, or scripts/build-app.sh to see the build." >&2
+    exit 5
+fi
 open "$TARGET_APP"
 echo "==> updated"
