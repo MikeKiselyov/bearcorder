@@ -13,6 +13,7 @@
   <a href="https://github.com/MikeKiselyov/bearcorder/releases/latest"><img src="https://img.shields.io/github/v/release/MikeKiselyov/bearcorder" alt="Latest release"></a>
   <img src="https://img.shields.io/badge/macOS-14%2B-blue" alt="macOS 14 or later">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="MIT license"></a>
+  <a href="https://buymeacoffee.com/mike_kiselyov"><img src="https://img.shields.io/badge/Buy%20me%20a%20coffee-FFDD00?logo=buymeacoffee&logoColor=black" alt="Buy me a coffee"></a>
 </p>
 
 <p align="center">
