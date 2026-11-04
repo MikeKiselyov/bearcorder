@@ -203,11 +203,17 @@ final class ScreenshotDocument {
 
     /// What a save keeps without a crop: the picture grown to the marks drawn around it.
     var uncroppedArea: CGRect {
-        var marks: [CGRect] = []
+        var marks: [PictureArea.Mark] = []
         for annotation in AnnotationRenderer.forExport(annotations) {
-            marks.append(annotation.drawnBounds)
+            // A line's end drawn to the edge passes it by about its own width; text, steps and
+            // pictures have no line, so a note just above the picture is kept whole.
+            var slack = 8 * unit
+            if annotation.tool != .text && annotation.tool != .step && annotation.tool != .image {
+                slack = max(slack, annotation.lineWidth * 2.5)
+            }
+            marks.append(PictureArea.Mark(rect: annotation.drawnBounds, slack: slack))
         }
-        return PictureArea.grown(imageSize: imageSize, marks: marks, slack: 8 * unit)
+        return PictureArea.grown(imageSize: imageSize, marks: marks)
     }
 
     /// Where an arrow with text keeps its note: inside the picture when the arrow starts on it,

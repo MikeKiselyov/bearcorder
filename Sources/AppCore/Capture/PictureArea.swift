@@ -9,32 +9,45 @@ public enum PictureArea {
         return CGRect(origin: .zero, size: imageSize).insetBy(dx: -margin, dy: -margin)
     }
 
+    /// A drawn mark and how far it may pass the picture's edge before the picture grows for it.
+    public struct Mark {
+        public var rect: CGRect
+        public var slack: CGFloat
+
+        public init(rect: CGRect, slack: CGFloat) {
+            self.rect = rect
+            self.slack = slack
+        }
+    }
+
     /// What a save without a crop keeps: the picture grown to the marks, never past the margin.
-    /// A side that would grow by less than `slack` stays: a mark that only overshoots the edge a
-    /// little is cut off there, as it always was.
-    public static func grown(imageSize: CGSize, marks: [CGRect], slack: CGFloat) -> CGRect {
+    /// A mark that passes an edge by less than its slack (an arrow drawn to the edge, a box dragged a
+    /// little past it) is cut off at that edge, as it always was.
+    public static func grown(imageSize: CGSize, marks: [Mark]) -> CGRect {
         let picture = CGRect(origin: .zero, size: imageSize)
         var area = picture
         for mark in marks {
-            area = area.union(mark.integral)
+            let rect = mark.rect.integral
+            var minX = rect.minX
+            var minY = rect.minY
+            var maxX = rect.maxX
+            var maxY = rect.maxY
+            if picture.minX - minX < mark.slack {
+                minX = max(minX, picture.minX)
+            }
+            if picture.minY - minY < mark.slack {
+                minY = max(minY, picture.minY)
+            }
+            if maxX - picture.maxX < mark.slack {
+                maxX = min(maxX, picture.maxX)
+            }
+            if maxY - picture.maxY < mark.slack {
+                maxY = min(maxY, picture.maxY)
+            }
+            if maxX > minX && maxY > minY {
+                area = area.union(CGRect(x: minX, y: minY, width: maxX - minX, height: maxY - minY))
+            }
         }
-        area = area.intersection(editing(imageSize: imageSize))
-        var minX = area.minX
-        var minY = area.minY
-        var maxX = area.maxX
-        var maxY = area.maxY
-        if picture.minX - minX < slack {
-            minX = picture.minX
-        }
-        if picture.minY - minY < slack {
-            minY = picture.minY
-        }
-        if maxX - picture.maxX < slack {
-            maxX = picture.maxX
-        }
-        if maxY - picture.maxY < slack {
-            maxY = picture.maxY
-        }
-        return CGRect(x: minX, y: minY, width: maxX - minX, height: maxY - minY)
+        return area.intersection(editing(imageSize: imageSize))
     }
 }

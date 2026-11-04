@@ -310,11 +310,13 @@ extension DevChecks {
         fromEdge.text = "Note"
         fromEdge.fontSize = document.fontSize
         fromEdge.labelArea = document.labelArea(startingAt: fromEdge.start)
-        for mark in [toEdge, pastEdge, fromEdge] {
+        // A thick arrow too: its head passes the edge by more than a few pixels (CI's 1x runner).
+        let thickToEdge = Annotation(tool: .arrow, start: CGPoint(x: 300, y: 90), end: CGPoint(x: 330, y: 1), color: .coral, lineWidth: 30)
+        for mark in [toEdge, pastEdge, fromEdge, thickToEdge] {
             document.add(mark)
         }
         check(document.savedArea == picture, "marks at the edge do not grow the saved picture", "\(document.savedArea)")
-        for mark in [toEdge, pastEdge, fromEdge] {
+        for mark in [toEdge, pastEdge, fromEdge, thickToEdge] {
             document.delete(mark.id)
         }
 
