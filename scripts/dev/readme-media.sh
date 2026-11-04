@@ -89,6 +89,7 @@ picture toolbox-jsondiff 1220
 picture feedback-problem 560
 picture compare 1000
 picture step-guide 700
+picture screenshot-margin 1000
 picture layout-measure 960
 picture layout-design 960
 palette_picture space-review-category space-review 900

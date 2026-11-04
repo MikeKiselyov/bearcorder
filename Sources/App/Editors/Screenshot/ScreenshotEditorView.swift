@@ -410,7 +410,7 @@ private struct ScreenshotEditorContent: View {
     }
 
     private var sizeLabel: String {
-        let area = document.crop ?? CGRect(origin: .zero, size: document.imageSize)
+        let area = document.savedArea
         return "\(Int(area.width))×\(Int(area.height))"
     }
 

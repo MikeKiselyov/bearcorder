@@ -3,6 +3,10 @@
 /// top entry, the update badge compares it with GitHub, and CI refuses a pull request without one.
 public enum WhatsNewCatalog {
     public static let releases: [WhatsNewRelease] = [
+        WhatsNewRelease(id: 25, version: "0.16.0", title: "Room around the screenshot", items: [
+            WhatsNewRelease.Item(symbol: "rectangle.expand.vertical", title: "Draw past the edges", text: "The dark area around the screenshot takes text, arrows and every other mark. The saved picture grows to hold them, and the added part is black. Crop can take in that area too.", shortcut: "Screenshot editor", image: "screenshot-margin"),
+            WhatsNewRelease.Item(symbol: "plus.magnifyingglass", title: "Zoom is kept", text: "The screenshot editor opens at the zoom you left the last one at, and at 100% the first time.", shortcut: "Screenshot editor"),
+        ]),
         WhatsNewRelease(id: 24, version: "0.15.1", title: "Safer saves and updates", items: [
             WhatsNewRelease.Item(symbol: "externaldrive.badge.exclamationmark", title: "Broken buffer pieces are dropped", text: "When the disk is full, a piece of the buffer that could not be written is deleted at once and never ends up in a clip.", shortcut: "Buffer"),
             WhatsNewRelease.Item(symbol: "square.and.arrow.down", title: "Edits are saved safely", text: "The screenshot and video editors save your edits in the background, and the last change is saved when you close the editor, switch the screen or quit. If a save fails, the editor says \"Could not save the edits\" and why.", shortcut: "Editors"),

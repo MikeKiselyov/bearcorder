@@ -96,12 +96,18 @@ opens in about half a second.
   line, highlighter, pen, text, numbered steps, blur, magnifier, crop.
 - `+` and `-` change the line or text size. Text can sit on a colored label or be outlined letters on
   a transparent background.
-- Five recent colors and any color from the color picker. The editor remembers the last tool, color
-  and size.
+- Five recent colors and any color from the color picker. The editor remembers the last tool, color,
+  size and zoom.
+- Marks can go past the edges into the dark area around the screenshot, for a note above it or an
+  arrow from the side. The saved picture grows to hold them, and the added part is black.
 - Paste a picture with `⌘V` or drop one in; combine several screenshots side by side.
 - Layers list, undo and redo, Delete removes the selected mark.
 - An environment badge on the picture, in the corner you choose, with every field that is on.
 - Copy with `⌘C`, save to a folder, or drag the result straight into Jira or Slack.
+
+<p align="center">
+  <img src="images/screenshot-margin.png" width="820" alt="A note written above a screenshot with an arrow into the page">
+</p>
 
 ## Recording the screen
 

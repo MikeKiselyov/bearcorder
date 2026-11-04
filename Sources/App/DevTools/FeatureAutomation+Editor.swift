@@ -286,6 +286,17 @@ extension FeatureAutomation {
             window.makeKeyAndOrderFront(nil)
             NSApp.activate(ignoringOtherApps: true)
             var results: [String] = []
+            // The editor opens on the picture, not on the margin's corner: what is shown has the
+            // picture's middle in its middle, or the whole canvas's when all of it fits.
+            let shown = canvas.visibleRect
+            let saved = document.savedArea
+            let whole = document.editingArea
+            let onPicture = abs(shown.midX - saved.midX) < 4 && abs(shown.midY - saved.midY) < 4
+            let onWhole = abs(shown.midX - whole.midX) < 4 && abs(shown.midY - whole.midY) < 4
+            let centered = onPicture || onWhole
+            results.append("pictureCentered=\(centered)")
+            results.append("centering=\(Int(shown.midX)),\(Int(shown.midY))/\(Int(saved.midX)),\(Int(saved.midY))/\(Int(shown.width))x\(Int(shown.height))")
+
             // A new editor draws at line size 7.
             results.append("defaultLine=\(document.stroke == .thick && Int(document.stroke.width) == 7)")
 
@@ -396,6 +407,46 @@ extension FeatureAutomation {
                 }
             }
             results.append("deleteInEditorWindow=\(deleted)")
+
+
+            // A real drag with the arrow from the picture into the margin above it: the arrow is kept
+            // where it was drawn and the saved picture grows to it.
+            document.tool = .arrow
+            // Through the document too, or the next redraw puts the old zoom back under the drag.
+            if let fitted = canvas.fitPicture(largest: 1 / ScreenshotDocument.backing) {
+                document.zoom = fitted
+            }
+            let zoom = canvas.enclosingScrollView?.magnification ?? 1
+            let marksBefore = document.annotations.count
+            let heightBefore = document.savedArea.height
+            let from = CGPoint(x: document.imageSize.width / 2, y: 40 / zoom)
+            let to = CGPoint(x: document.imageSize.width / 2, y: -12 / zoom)
+            var pointerEvents: [(NSEvent.EventType, CGPoint)] = [(.leftMouseDown, from)]
+            for step in 1...4 {
+                let y = from.y + (to.y - from.y) * CGFloat(step) / 4
+                pointerEvents.append((.leftMouseDragged, CGPoint(x: from.x, y: y)))
+            }
+            pointerEvents.append((.leftMouseUp, to))
+            for (type, point) in pointerEvents {
+                let location = canvas.convert(point, to: nil)
+                if let event = NSEvent.mouseEvent(with: type, location: location, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1) {
+                    NSApp.postEvent(event, atStart: false)
+                }
+            }
+            var drawnArrow: Annotation?
+            for _ in 0..<15 {
+                try? await Task.sleep(nanoseconds: 100_000_000)
+                if document.annotations.count > marksBefore {
+                    drawnArrow = document.annotations.last
+                    break
+                }
+            }
+            let reachedMargin = drawnArrow?.tool == .arrow && (drawnArrow?.end.y ?? 0) < 0
+            let grew = document.savedArea.minY < 0 && document.savedArea.height > heightBefore
+            results.append("drawInMargin=\(reachedMargin && grew)")
+            if let id = drawnArrow?.id {
+                document.delete(id)
+            }
             return results.joined(separator: " ")
 
         case "tooltip-probe":

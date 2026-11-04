@@ -214,6 +214,16 @@ extension DevChecks {
         plain.changeSize(by: 1)
         check(EditorMemory.screenshotStroke == strokeBefore, "+ on a selected mark leaves the size of new marks alone", "\(strokeBefore) → \(EditorMemory.screenshotStroke)")
 
+        // Zoom: 100% the first time, then the last zoom, whichever way it was set.
+        let backing = ScreenshotDocument.backing
+        check(abs(first.zoom * backing - 1) < 0.001, "a first screenshot opens at 100%", "\(first.zoom * backing)")
+        first.zoom = 1.5 / backing
+        guard let zoomed = newScreenshot() else { return }
+        check(abs(zoomed.zoom * backing - 1.5) < 0.001, "a new screenshot opens at the last zoom", "\(zoomed.zoom * backing)")
+
+        // Marks past the picture's edge: the save grows to hold them, the new part is black.
+        checkMarksPastTheEdge(plain)
+
         // Video: changed choices carry over, untouched ones keep what was remembered before.
         let fresh = EditorMemory.newVideoProject(duration: 10)
         check(fresh.showClicks && fresh.format == .mp4 && fresh.quality == .p1080, "a first clip starts with the usual choices")
@@ -282,6 +292,93 @@ extension DevChecks {
         }
         check(inside.red > 200 && inside.green < 60, "a placed picture is drawn in its frame", "\(inside)")
         check(outside.red > 245 && outside.green > 245, "the screenshot around it stays as it was", "\(outside)")
+    }
+
+    /// A text above the picture and an arrow out of its right side: the saved picture grows to them,
+    /// the added part is black, the picture itself is unchanged, and a crop may reach into the margin.
+    static func checkMarksPastTheEdge(_ document: ScreenshotDocument) {
+        let size = document.imageSize
+        let untouched = document.render()
+        check(untouched?.width == Int(size.width) && untouched?.height == Int(size.height), "marks inside keep the saved size", "\(untouched?.width ?? 0)×\(untouched?.height ?? 0) vs \(size)")
+
+        // An arrow to the very edge, a box dragged a little past it and an arrow with text from the
+        // edge add nothing: only what is really drawn outside counts, its click room does not.
+        let picture = CGRect(origin: .zero, size: size)
+        let toEdge = Annotation(tool: .arrow, start: CGPoint(x: 120, y: 80), end: CGPoint(x: 160, y: 2), color: .coral, lineWidth: document.lineWidth)
+        let pastEdge = Annotation(tool: .rectangle, start: CGPoint(x: -3, y: 30), end: CGPoint(x: 90, y: 70), color: .coral, lineWidth: document.lineWidth)
+        var fromEdge = Annotation(tool: .callout, start: CGPoint(x: 200, y: 4), end: CGPoint(x: 240, y: 60), color: .coral, lineWidth: document.lineWidth)
+        fromEdge.text = "Note"
+        fromEdge.fontSize = document.fontSize
+        fromEdge.labelArea = document.labelArea(startingAt: fromEdge.start)
+        for mark in [toEdge, pastEdge, fromEdge] {
+            document.add(mark)
+        }
+        check(document.savedArea == picture, "marks at the edge do not grow the saved picture", "\(document.savedArea)")
+        for mark in [toEdge, pastEdge, fromEdge] {
+            document.delete(mark.id)
+        }
+
+        // Blur across the edge: the part past the picture stays black, nothing is stretched into it.
+        let blur = Annotation(tool: .blur, start: CGPoint(x: -120, y: 10), end: CGPoint(x: 120, y: 90), color: .coral, lineWidth: 4)
+        document.add(blur)
+        let blurArea = document.savedArea
+        if let blurred = document.render(), let past = pixel(blurred, at: CGPoint(x: 20, y: 50 - blurArea.minY)) {
+            check(blurArea.minX < -100 && past.red == 0 && past.green == 0 && past.blue == 0, "blur across the edge leaves the margin black", "\(blurArea) \(past)")
+        } else {
+            check(false, "blur across the edge renders")
+        }
+        document.delete(blur.id)
+        var note = Annotation(tool: .text, start: CGPoint(x: 20, y: -60), end: CGPoint(x: 20, y: -60), color: .coral, lineWidth: 4)
+        note.text = "Above"
+        note.fontSize = 24
+        let arrow = Annotation(tool: .arrow, start: CGPoint(x: size.width - 40, y: size.height / 2), end: CGPoint(x: size.width + 120, y: size.height / 2), color: .blue, lineWidth: 4)
+        document.tool = .select
+        document.add(note)
+        document.add(arrow)
+        let area = document.savedArea
+        check(area.minY < -50 && area.maxX > size.width + 120 && area.minX == 0 && area.maxY == size.height, "the saved area grows to the marks around the picture", "\(area)")
+        guard let grown = document.render() else {
+            check(false, "a picture with marks around it renders")
+            return
+        }
+        check(grown.width == Int(area.width) && grown.height == Int(area.height), "the saved picture is the grown size", "\(grown.width)×\(grown.height)")
+        // Image (0, 0) sits at -area.origin in the saved picture.
+        guard let corner = pixel(grown, at: CGPoint(x: grown.width - 3, y: 2)),
+              let before = untouched,
+              let original = pixel(before, at: CGPoint(x: size.width / 2, y: size.height - 3)),
+              let inside = pixel(grown, at: CGPoint(x: -area.minX + size.width / 2, y: -area.minY + size.height - 3)) else {
+            check(false, "pixels of the grown picture")
+            return
+        }
+        check(corner.red == 0 && corner.green == 0 && corner.blue == 0, "the added margin is black", "\(corner)")
+        check(inside == original, "the picture inside stays as it was", "\(inside) vs \(original)")
+
+        // A see-through window capture keeps its see-through parts; only the margin turns black.
+        guard let clearContext = CGContext(data: nil, width: 100, height: 100, bitsPerComponent: 8, bytesPerRow: 0, space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue),
+              let clearBase = clearContext.makeImage(),
+              let rendered = AnnotationRenderer.renderImage(base: clearBase, annotations: [], crop: CGRect(x: -20, y: 0, width: 120, height: 100), badgeLines: nil, badgeCorner: .topRight, badgeScale: 1),
+              let onWhite = CGContext(data: nil, width: 120, height: 100, bitsPerComponent: 8, bytesPerRow: 0, space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else {
+            check(false, "a see-through picture renders with a margin")
+            return
+        }
+        onWhite.setFillColor(NSColor.white.cgColor)
+        onWhite.fill(CGRect(x: 0, y: 0, width: 120, height: 100))
+        onWhite.draw(rendered, in: CGRect(x: 0, y: 0, width: 120, height: 100))
+        guard let composed = onWhite.makeImage(),
+              let margin = pixel(composed, at: CGPoint(x: 5, y: 50)),
+              let seeThrough = pixel(composed, at: CGPoint(x: 70, y: 50)) else {
+            check(false, "pixels of the see-through picture")
+            return
+        }
+        check(margin.red == 0 && seeThrough.red == 255, "a see-through capture stays see-through, the margin is black", "\(margin) \(seeThrough)")
+
+        // A crop can take in part of the margin, but not go past it.
+        document.setCrop(CGRect(x: -100, y: -100, width: size.width, height: size.height))
+        check(document.crop?.minX == -100 && document.crop?.minY == -100, "a crop can reach into the margin", "\(String(describing: document.crop))")
+        document.setCrop(CGRect(x: -100_000, y: 0, width: 200_000, height: 50))
+        let wide = document.crop ?? .null
+        check(document.editingArea.contains(wide), "a crop stops at the margin", "\(wide)")
+        document.setCrop(nil)
     }
 
     /// A filled rectangle tints what is inside it; an outline one leaves it as it was.

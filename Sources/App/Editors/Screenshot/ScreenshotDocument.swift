@@ -148,7 +148,10 @@ final class ScreenshotDocument {
     /// File size in bytes of each export format for the picture as it is now.
     var exportSizes: [ExportFormat: Int] = [:]
     @ObservationIgnored private var sizeTask: Task<Void, Never>?
-    var zoom: CGFloat = 1
+    /// Opens at the last zoom (100% the first time); every change is remembered for the next one.
+    var zoom: CGFloat = max(0.05, min(8, EditorMemory.screenshotZoom / ScreenshotDocument.backing)) {
+        didSet { EditorMemory.screenshotZoom = zoom * ScreenshotDocument.backing }
+    }
     var fitRequest = 0
     var message: String?
     /// Id of the text annotation being typed into.
@@ -186,6 +189,40 @@ final class ScreenshotDocument {
 
     var imageSize: CGSize {
         return CGSize(width: base.width, height: base.height)
+    }
+
+    /// Zoom 1 / backing shows actual pixels, the 100% in the bottom bar.
+    static var backing: CGFloat {
+        return NSScreen.main?.backingScaleFactor ?? 2
+    }
+
+    /// The picture with the margin around it where marks can go.
+    var editingArea: CGRect {
+        return PictureArea.editing(imageSize: imageSize)
+    }
+
+    /// What a save keeps without a crop: the picture grown to the marks drawn around it.
+    var uncroppedArea: CGRect {
+        var marks: [CGRect] = []
+        for annotation in AnnotationRenderer.forExport(annotations) {
+            marks.append(annotation.drawnBounds)
+        }
+        return PictureArea.grown(imageSize: imageSize, marks: marks, slack: 8 * unit)
+    }
+
+    /// Where an arrow with text keeps its note: inside the picture when the arrow starts on it,
+    /// so an arrow from the edge does not push the note into the margin.
+    func labelArea(startingAt point: CGPoint) -> CGRect {
+        let picture = CGRect(origin: .zero, size: imageSize)
+        if picture.contains(point) {
+            return picture
+        }
+        return editingArea
+    }
+
+    /// What a save keeps.
+    var savedArea: CGRect {
+        return crop ?? uncroppedArea
     }
 
     /// Screenshots are usually 2x; scale marks so they look the same on any image.
@@ -453,8 +490,7 @@ final class ScreenshotDocument {
     func setCrop(_ rect: CGRect?) {
         checkpoint()
         if let value = rect {
-            let bounds = CGRect(origin: .zero, size: imageSize)
-            let clipped = value.intersection(bounds).integral
+            let clipped = value.intersection(editingArea).integral
             crop = clipped.width > 8 && clipped.height > 8 ? clipped : nil
         } else {
             crop = nil
@@ -501,7 +537,7 @@ final class ScreenshotDocument {
         return AnnotationRenderer.renderImage(
             base: base,
             annotations: annotations,
-            crop: crop,
+            crop: savedArea,
             badgeLines: showBadge ? badgeLines : nil,
             badgeCorner: badgeCorner,
             badgeScale: unit

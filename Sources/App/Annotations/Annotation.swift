@@ -347,6 +347,33 @@ struct Annotation: Identifiable, Codable, Equatable {
         }
     }
 
+    /// What is painted, without the room `bounds` adds for clicking: a saved picture grows to this,
+    /// so an arrow at the very edge does not add a strip.
+    var drawnBounds: CGRect {
+        switch tool {
+        case .pen:
+            return bounds.insetBy(dx: lineWidth * 1.5, dy: lineWidth * 1.5)
+        case .highlighter:
+            // Drawn five times as wide as the line.
+            return bounds.insetBy(dx: -lineWidth / 2, dy: -lineWidth / 2)
+        case .line:
+            return rect.insetBy(dx: -lineWidth / 2, dy: -lineWidth / 2)
+        case .arrow:
+            // The head is wider than the line.
+            return rect.insetBy(dx: -lineWidth * 2, dy: -lineWidth * 2)
+        case .callout:
+            return rect.insetBy(dx: -lineWidth * 2, dy: -lineWidth * 2).union(AnnotationRenderer.calloutLabelBox(self))
+        case .magnifier:
+            // The lens is twice the size of what it shows, around the same middle.
+            let diameter = max(rect.width, rect.height) * 2 + lineWidth
+            return CGRect(x: rect.midX - diameter / 2, y: rect.midY - diameter / 2, width: diameter, height: diameter)
+        case .rectangle, .ellipse:
+            return rect.insetBy(dx: -lineWidth / 2, dy: -lineWidth / 2)
+        default:
+            return bounds
+        }
+    }
+
     var stepRadius: CGFloat {
         return fontSize * 0.75
     }
