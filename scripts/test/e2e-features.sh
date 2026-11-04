@@ -2684,6 +2684,14 @@ zoom_out=$(state_field "$(editor_state)" zoom)
 press_in screenshot: "100%" >/dev/null
 zoom_full=$(state_field "$(editor_state)" zoom)
 if [ "$zoom_in" != "$zoom_fit" ] && [ "$zoom_out" = "$zoom_fit" ] && [ "$zoom_full" != "" ]; then pass "editor \"Zoom in\", \"Zoom out\", \"Fit\" and \"100%\" change the zoom"; else fail "editor zoom" "$zoom_fit $zoom_in $zoom_out $zoom_full"; fi
+# The next screenshot opens at the zoom the last one was left at.
+press_in screenshot: "Zoom in" >/dev/null
+zoom_left=$(state_field "$(editor_state)" zoom)
+$R close-windows 10 >/dev/null
+$R screenshot-full 40 >/dev/null
+wait_for_text 10 "Save to folder" $R controls:screenshot: 30
+zoom_reopened=$(state_field "$(editor_state)" zoom)
+if [ "$zoom_left" != "$zoom_full" ] && [ "$zoom_reopened" = "$zoom_left" ]; then pass "a new screenshot opens at the last zoom ($zoom_left)"; else fail "editor remembers the zoom" "$zoom_full → $zoom_left, reopened at $zoom_reopened"; fi
 printf '' | pbcopy
 press_in screenshot: "Copy" >/dev/null
 if pbpaste | grep -q "Environment"; then pass "editor environment \"Copy\" puts the environment on the clipboard"; else fail "editor environment copy" "$(pbpaste | head -2)"; fi
@@ -3126,6 +3134,8 @@ for focus in canvas elsewhere; do
     if [[ "$result" == "added=1 picture=true"* ]]; then pass "a real ⌘V pastes a picture with the focus on the $focus ($result)"; else fail "a real ⌘V pastes a picture ($focus)" "$result"; fi
 done
 if echo "$editor_checks" | grep -q "deleteInEditorWindow=true"; then pass "Delete in the editor window removes the selected mark with the focus away from the canvas"; else fail "Delete key" "$editor_checks"; fi
+if echo "$editor_checks" | grep -q "pictureCentered=true"; then pass "the editor opens centered on the picture"; else fail "editor opens centered" "$editor_checks"; fi
+if echo "$editor_checks" | grep -q "drawInMargin=true"; then pass "an arrow drawn past the top edge stays there and the saved picture grows to it"; else fail "draw in the margin" "$editor_checks"; fi
 $R close-windows 10 >/dev/null
 $R press-status-item 10 >/dev/null
 wait_for_text 10 "|Recent" $R controls:menubar 30

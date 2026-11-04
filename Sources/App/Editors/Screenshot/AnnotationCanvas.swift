@@ -22,8 +22,10 @@ struct AnnotationCanvas: NSViewRepresentable {
         context.coordinator.canvas = canvas
         context.coordinator.scrollView = scrollView
         NotificationCenter.default.addObserver(context.coordinator, selector: #selector(Coordinator.magnificationChanged), name: NSScrollView.didEndLiveMagnifyNotification, object: scrollView)
+        // Opens at the remembered zoom, centered on the picture rather than the margin's corner.
         DispatchQueue.main.async {
-            context.coordinator.fit()
+            scrollView.magnification = document.zoom
+            canvas.centerPicture()
         }
         return scrollView
     }
@@ -68,16 +70,11 @@ struct AnnotationCanvas: NSViewRepresentable {
         }
 
         func fit() {
-            guard let scrollView = scrollView, let canvas = canvas else { return }
-            let available = scrollView.contentSize
-            let size = canvas.frame.size
-            if size.width <= 0 || size.height <= 0 || available.width <= 0 { return }
-            let scale = min((available.width - 40) / size.width, (available.height - 40) / size.height)
-            let backing = scrollView.window?.backingScaleFactor ?? 2
-            // Never enlarge past actual pixels when fitting.
-            let magnification = min(scale, 1 / backing)
-            scrollView.magnification = magnification
-            document.zoom = magnification
+            guard let canvas = canvas else { return }
+            // Never enlarge past actual pixels when fitting; the same backing the 100% button uses.
+            if let magnification = canvas.fitPicture(largest: 1 / ScreenshotDocument.backing) {
+                document.zoom = magnification
+            }
         }
 
         @objc func magnificationChanged() {
@@ -194,11 +191,38 @@ final class CanvasView: NSView, NSTextFieldDelegate {
         return enclosingScrollView?.magnification ?? 1
     }
 
-    /// While cropping we show the whole image; otherwise only the cropped region.
+    /// The picture and the margin around it to draw in; only the cropped region once cropped.
     private var displayedArea: CGRect {
-        let full = CGRect(origin: .zero, size: document.imageSize)
-        if document.tool == .crop { return full }
-        return document.crop ?? full
+        if document.tool == .crop { return document.editingArea }
+        return document.crop ?? document.editingArea
+    }
+
+    /// Zooms so the saved picture fills the view, at most `largest`, and centers it.
+    /// Returns the zoom, or nil before the view has a size.
+    @MainActor
+    @discardableResult
+    func fitPicture(largest: CGFloat) -> CGFloat? {
+        guard let scrollView = enclosingScrollView else { return nil }
+        let available = scrollView.contentSize
+        let size = document.savedArea.size
+        if size.width <= 0 || size.height <= 0 || available.width <= 0 { return nil }
+        let scale = min((available.width - 40) / size.width, (available.height - 40) / size.height)
+        let magnification = min(scale, largest)
+        scrollView.magnification = magnification
+        centerPicture()
+        return magnification
+    }
+
+    /// Scrolls so the saved picture is in the middle of the view.
+    @MainActor
+    func centerPicture() {
+        guard let scrollView = enclosingScrollView else { return }
+        let clip = scrollView.contentView
+        let area = document.savedArea
+        let middle = convert(CGPoint(x: area.midX, y: area.midY), to: clip)
+        let origin = CGPoint(x: middle.x - clip.bounds.width / 2, y: middle.y - clip.bounds.height / 2)
+        clip.scroll(to: clip.constrainBoundsRect(CGRect(origin: origin, size: clip.bounds.size)).origin)
+        scrollView.reflectScrolledClipView(clip)
     }
 
     func updateGeometry() {
@@ -225,6 +249,12 @@ final class CanvasView: NSView, NSTextFieldDelegate {
     private func drawContents() {
         guard let context = NSGraphicsContext.current?.cgContext else { return }
         let full = CGRect(origin: .zero, size: document.imageSize)
+        // The part of the margin a save keeps is black, as in the saved file.
+        let saved = NSBezierPath(rect: document.savedArea)
+        saved.append(NSBezierPath(rect: full))
+        saved.windingRule = .evenOdd
+        NSColor.black.setFill()
+        saved.fill()
         let image = NSImage(cgImage: document.base, size: full.size)
         image.draw(in: full, from: .zero, operation: .copy, fraction: 1, respectFlipped: true, hints: [.interpolation: NSNumber(value: NSImageInterpolation.high.rawValue)])
 
@@ -238,11 +268,11 @@ final class CanvasView: NSView, NSTextFieldDelegate {
         AnnotationRenderer.draw(visible, baseImage: document.base, in: context)
 
         if document.showBadge {
-            AnnotationRenderer.drawBadge(lines: document.badgeLines, corner: document.badgeCorner, bounds: document.crop ?? full, scale: document.unit, in: context)
+            AnnotationRenderer.drawBadge(lines: document.badgeLines, corner: document.badgeCorner, bounds: document.savedArea, scale: document.unit, in: context)
         }
 
         if document.tool == .crop {
-            drawCropOverlay(full: full)
+            drawCropOverlay(full: document.editingArea)
         }
 
         if let selected = document.selected, document.tool == .select {
@@ -252,7 +282,7 @@ final class CanvasView: NSView, NSTextFieldDelegate {
 
     @MainActor
     private func drawCropOverlay(full: CGRect) {
-        let area = cropDraft ?? document.crop ?? full
+        let area = cropDraft ?? document.savedArea
         let dim = NSBezierPath(rect: full)
         dim.append(NSBezierPath(rect: area))
         dim.windingRule = .evenOdd
@@ -305,7 +335,7 @@ final class CanvasView: NSView, NSTextFieldDelegate {
         let textSize = label.size(withAttributes: attributes)
         let padding = 5 / magnification
         var origin = CGPoint(x: area.minX, y: area.minY - textSize.height - padding * 3)
-        if origin.y < 0 {
+        if origin.y < document.editingArea.minY {
             origin.y = area.minY + padding
             origin.x = area.minX + padding
         }
@@ -354,8 +384,9 @@ final class CanvasView: NSView, NSTextFieldDelegate {
         return nil
     }
 
-    private var fullImageRect: CGRect {
-        return CGRect(origin: .zero, size: document.imageSize)
+    /// Where a crop can go: the picture and its margin.
+    private var cropBounds: CGRect {
+        return document.editingArea
     }
 
     @MainActor
@@ -431,11 +462,11 @@ final class CanvasView: NSView, NSTextFieldDelegate {
             document.selectedId = nil
         case .crop:
             // Drag an edge or corner to resize, inside to move, outside to draw a new area.
-            let area = document.crop ?? fullImageRect
+            let area = document.savedArea
             if let edges = cropEdges(at: point, area: area) {
                 gesture = .cropResize(edges: edges, original: area)
                 cropDraft = area
-            } else if area.contains(point) && area != fullImageRect {
+            } else if area.contains(point) && document.crop != nil {
                 gesture = .cropMove(start: point, original: area)
                 cropDraft = area
                 NSCursor.closedHand.set()
@@ -462,7 +493,7 @@ final class CanvasView: NSView, NSTextFieldDelegate {
             }
             if document.tool == .callout {
                 annotation.clearBackground = document.clearTextBackground
-                annotation.labelArea = CGRect(origin: .zero, size: document.imageSize)
+                annotation.labelArea = document.labelArea(startingAt: point)
             }
             if document.tool == .pen || document.tool == .highlighter {
                 annotation.points = [point]
@@ -512,13 +543,13 @@ final class CanvasView: NSView, NSTextFieldDelegate {
             }
             document.replace(resized)
         case .crop(let start):
-            let full = fullImageRect
+            let full = cropBounds
             let clamped = CGPoint(x: max(full.minX, min(full.maxX, point.x)), y: max(full.minY, min(full.maxY, point.y)))
             cropDraft = CGRect(x: min(start.x, clamped.x), y: min(start.y, clamped.y), width: abs(clamped.x - start.x), height: abs(clamped.y - start.y))
         case .cropResize(let edges, let original):
             cropDraft = resized(original, edges: edges, to: point)
         case .cropMove(let start, let original):
-            let full = fullImageRect
+            let full = cropBounds
             var moved = original
             moved.origin.x = max(full.minX, min(full.maxX - original.width, original.minX + point.x - start.x))
             moved.origin.y = max(full.minY, min(full.maxY - original.height, original.minY + point.y - start.y))
@@ -530,7 +561,7 @@ final class CanvasView: NSView, NSTextFieldDelegate {
     /// The crop area with the dragged sides moved to the pointer, inside the image and at least
     /// 16 px wide and tall.
     private func resized(_ original: CGRect, edges: CropEdges, to point: CGPoint) -> CGRect {
-        let full = fullImageRect
+        let full = cropBounds
         let smallest: CGFloat = 16
         var minX = original.minX
         var maxX = original.maxX
@@ -615,7 +646,7 @@ final class CanvasView: NSView, NSTextFieldDelegate {
             document.saveProject()
         case .crop, .cropResize, .cropMove:
             if let rect = cropDraft, rect.width > 8, rect.height > 8 {
-                if rect == fullImageRect {
+                if rect == document.uncroppedArea {
                     document.setCrop(nil)
                 } else if rect != document.crop {
                     document.setCrop(rect)
@@ -647,7 +678,7 @@ final class CanvasView: NSView, NSTextFieldDelegate {
     @MainActor
     private func updateCropCursor(at point: CGPoint) {
         guard document.tool == .crop else { return }
-        let area = document.crop ?? fullImageRect
+        let area = document.savedArea
         if let edges = cropEdges(at: point, area: area) {
             let horizontal = edges.left || edges.right
             let vertical = edges.top || edges.bottom
@@ -658,7 +689,7 @@ final class CanvasView: NSView, NSTextFieldDelegate {
             } else {
                 NSCursor.resizeUpDown.set()
             }
-        } else if area.contains(point) && area != fullImageRect {
+        } else if area.contains(point) && document.crop != nil {
             NSCursor.openHand.set()
         } else {
             NSCursor.crosshair.set()
@@ -817,7 +848,7 @@ final class CanvasView: NSView, NSTextFieldDelegate {
         var annotation = Annotation(tool: document.tool, start: start, end: end, color: document.color, lineWidth: document.lineWidth)
         annotation.fontSize = document.fontSize
         annotation.clearBackground = document.clearTextBackground
-        annotation.labelArea = CGRect(origin: .zero, size: document.imageSize)
+        annotation.labelArea = document.labelArea(startingAt: start)
         finishDrawing(annotation)
     }
 

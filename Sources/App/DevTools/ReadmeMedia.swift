@@ -74,6 +74,7 @@ enum ReadmeMedia {
         twoDisplays.selectedScreen = "display-1"
         render(VideoEditorView(capture: twoDisplays).environment(AppState.shared), size: CGSize(width: 980, height: 640), wait: 3, to: screens.appendingPathComponent("video-editor-narrow.png"))
         writeMarkupFrames(for: shot, to: folder.appendingPathComponent("markup-frames", isDirectory: true))
+        writeMarginPicture(for: shot, to: screens.appendingPathComponent("screenshot-margin.png"))
         writeInstallFrames(to: folder.appendingPathComponent("install-frames", isDirectory: true))
         await makeDocsMedia(folder: folder, clip: clip)
         print("README media written to \(folder.path)")
@@ -305,6 +306,20 @@ enum ReadmeMedia {
         writeProject(for: capture, annotations: marks, showBadge: true)
     }
 
+    /// The screenshot editor with a note written above the picture and an arrow from it into the page:
+    /// the black strip is what the saved picture gains.
+    private static func writeMarginPicture(for capture: Capture, to url: URL) {
+        var note = Annotation(tool: .text, start: CGPoint(x: 560, y: -130), end: CGPoint(x: 560, y: -130), color: .coral, lineWidth: 5)
+        note.text = "Total goes negative after the coupon"
+        note.fontSize = 34
+        var marks: [Annotation] = [note]
+        marks.append(Annotation(tool: .arrow, start: CGPoint(x: 900, y: -60), end: CGPoint(x: 1000, y: 300), color: .coral, lineWidth: 6))
+        marks.append(Annotation(tool: .rectangle, start: CGPoint(x: 975, y: 308), end: CGPoint(x: 1425, y: 362), color: .coral, lineWidth: 6))
+        writeProject(for: capture, annotations: marks, showBadge: false)
+        render(ScreenshotEditorView(capture: capture).environment(AppState.shared), size: CGSize(width: 1220, height: 780), wait: 0.6, to: url)
+        writeProject(for: capture, annotations: demoAnnotations, showBadge: true)
+    }
+
     /// The one-line install in a terminal, the way scripts/install.sh draws it: the command is typed,
     /// the logo appears, then the steps, the build spinner and the welcome.
     private static func writeInstallFrames(to folder: URL) {
@@ -395,14 +410,10 @@ enum ReadmeMedia {
         for subview in view.subviews {
             fitCanvases(in: subview)
         }
-        guard let canvas = view as? CanvasView, let scrollView = canvas.enclosingScrollView else { return }
-        let available = scrollView.contentSize
-        let size = canvas.frame.size
-        if size.width <= 0 || size.height <= 0 { return }
-        let scale = min((available.width - 40) / size.width, (available.height - 40) / size.height)
-        let magnification = min(scale, 0.5)
-        scrollView.magnification = magnification
-        canvas.document.zoom = magnification
+        guard let canvas = view as? CanvasView else { return }
+        if let magnification = canvas.fitPicture(largest: 0.5) {
+            canvas.document.zoom = magnification
+        }
     }
 
     /// Renders like DevChecks.render but waits longer, for views that load media first.

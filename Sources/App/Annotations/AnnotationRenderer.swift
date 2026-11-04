@@ -316,9 +316,11 @@ enum AnnotationRenderer {
             NSBezierPath(rect: area).fill()
             return
         }
-        let nsImage = NSImage(cgImage: pixelated, size: area.size)
+        // Only the part on the picture is blurred; past its edge there is nothing to hide.
+        let visible = area.intersection(CGRect(x: 0, y: 0, width: image.width, height: image.height))
+        let nsImage = NSImage(cgImage: pixelated, size: visible.size)
         let hints: [NSImageRep.HintKey: Any] = [.interpolation: NSNumber(value: NSImageInterpolation.none.rawValue)]
-        nsImage.draw(in: area, from: .zero, operation: .copy, fraction: 1, respectFlipped: true, hints: hints)
+        nsImage.draw(in: visible, from: .zero, operation: .copy, fraction: 1, respectFlipped: true, hints: hints)
     }
 
     /// Crops `rect` from the image and scales it down so it reads as blocks when drawn back up.
@@ -368,7 +370,9 @@ enum AnnotationRenderer {
         let source = annotation.rect.integral
         guard source.width > 4, source.height > 4, let image = baseImage else { return }
         let bounds = CGRect(x: 0, y: 0, width: image.width, height: image.height)
-        guard let cropped = image.cropping(to: source.intersection(bounds)) else { return }
+        // A source partly past the picture's edge shows only the part on the picture, in its place.
+        let inside = source.intersection(bounds)
+        guard !inside.isNull, let cropped = image.cropping(to: inside) else { return }
         let center = CGPoint(x: source.midX, y: source.midY)
         let diameter = max(source.width, source.height) * 2
         let circle = CGRect(x: center.x - diameter / 2, y: center.y - diameter / 2, width: diameter, height: diameter)
@@ -379,8 +383,8 @@ enum AnnotationRenderer {
         NSGraphicsContext.saveGraphicsState()
         NSBezierPath(ovalIn: circle).addClip()
         let scale = diameter / max(source.width, source.height)
-        let drawRect = CGRect(x: center.x - source.width * scale / 2, y: center.y - source.height * scale / 2, width: source.width * scale, height: source.height * scale)
-        let nsImage = NSImage(cgImage: cropped, size: source.size)
+        let drawRect = CGRect(x: center.x + (inside.minX - center.x) * scale, y: center.y + (inside.minY - center.y) * scale, width: inside.width * scale, height: inside.height * scale)
+        let nsImage = NSImage(cgImage: cropped, size: inside.size)
         nsImage.draw(in: drawRect, from: .zero, operation: .sourceOver, fraction: 1, respectFlipped: true, hints: [.interpolation: NSNumber(value: NSImageInterpolation.high.rawValue)])
         NSGraphicsContext.restoreGraphicsState()
         let border = NSBezierPath(ovalIn: circle)
@@ -447,9 +451,10 @@ enum AnnotationRenderer {
     }
 
     /// Renders base image + annotations (+ optional badge) cropped to `crop`, at image pixel size.
+    /// `crop` may reach past the image (marks drawn around it); that part is black.
     static func renderImage(base: CGImage, annotations: [Annotation], crop: CGRect?, badgeLines: [String]?, badgeCorner: BadgeCorner, badgeScale: CGFloat) -> CGImage? {
         let full = CGRect(x: 0, y: 0, width: base.width, height: base.height)
-        let area = (crop ?? full).intersection(full).integral
+        let area = (crop ?? full).integral
         guard area.width >= 1, area.height >= 1 else { return nil }
         let width = Int(area.width)
         let height = Int(area.height)
@@ -458,6 +463,12 @@ enum AnnotationRenderer {
         context.translateBy(x: 0, y: CGFloat(height))
         context.scaleBy(x: 1, y: -1)
         context.translateBy(x: -area.minX, y: -area.minY)
+        // Black around the image only, so a window capture keeps its see-through corners.
+        if !full.contains(area) {
+            context.setFillColor(CGColor(gray: 0, alpha: 1))
+            context.fill(area)
+            context.clear(full)
+        }
         // Draw the base image right side up inside the flipped context.
         context.saveGState()
         context.translateBy(x: 0, y: full.height)

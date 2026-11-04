@@ -76,6 +76,15 @@ enum EditorMemory {
         set { defaults.set(newValue, forKey: "shapeFill") }
     }
 
+    /// Zoom as a share of actual pixels, 1 = 100%, so it means the same on any display.
+    static var screenshotZoom: CGFloat {
+        get {
+            guard let scale = defaults.object(forKey: "screenshotZoom") as? Double, scale > 0 else { return 1 }
+            return CGFloat(scale)
+        }
+        set { defaults.set(Double(newValue), forKey: "screenshotZoom") }
+    }
+
     static var screenshotFormat: String {
         get { return defaults.string(forKey: "screenshotExportFormat") ?? "" }
         set { defaults.set(newValue, forKey: "screenshotExportFormat") }
