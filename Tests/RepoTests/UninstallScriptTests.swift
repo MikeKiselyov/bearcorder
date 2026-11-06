@@ -172,6 +172,8 @@ final class UninstallScriptTests: XCTestCase {
         XCTAssertTrue(result.output.contains("lsregister -u \(home.path)/Applications/Renamed.app"), "macOS forgets the removed app")
         XCTAssertTrue(result.output.contains("lsregister -u \(home.path)/\(AppInfo.sourceFolder)/build/\(AppInfo.name).app"), "and the installer's build")
         XCTAssertTrue(result.output.contains("lsregister -u \(home.path)/Gone/\(AppInfo.name).app"), "and a remembered copy that is gone")
+        // The Screen Recording alert keeps the id it saw at a path; a new install would be filed under the old one.
+        XCTAssertTrue(result.output.contains("would run: killall universalAccessAuthWarn"), "the alert forgets the old bundle id")
         // Permissions first: tccutil refuses a bundle id whose app is already gone.
         if let reset = result.output.range(of: "tccutil reset All test.ourapp"), let removed = result.output.range(of: "Removed \(home.path)/Applications/Renamed.app") {
             XCTAssertTrue(reset.lowerBound < removed.lowerBound, "permissions are reset before the app is removed")

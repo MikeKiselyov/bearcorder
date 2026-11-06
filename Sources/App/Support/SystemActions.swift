@@ -64,14 +64,59 @@ enum SystemActions {
         try FileManager.default.trashItem(at: url, resultingItemURL: nil)
     }
 
+    /// "Not in the list?" next to Screen Recording: Allow… asked macOS and there is still no access,
+    /// so the app may be missing from the list to switch on.
+    /// Views read the flag through @AppStorage(askedScreenRecordingKey), so the row appears as soon as Allow… sets it.
+    static func offersScreenRecordingFix(hasAccess: Bool, asked: Bool) -> Bool {
+        return asked && !hasAccess
+    }
+
+    static let askedScreenRecordingKey = "askedPermission.Privacy_ScreenCapture"
+
+    /// Fix for "Not in the list?". macOS's Screen Recording window comes from universalAccessAuthWarn,
+    /// which keeps the bundle id it once saw at the app's path: after a copy with another id sat
+    /// there, it files the request under the old id and the app never shows up in the list. Quitting
+    /// it is safe (macOS starts it again for the next window); macOS is asked again once it is gone,
+    /// so the new window does not go to the old process.
+    static func fixScreenRecordingList(prompt: @escaping @MainActor () -> Void) {
+        if recordInstead("restart permission alert") {
+            askPermission("Screen Recording", prompt: prompt)
+            return
+        }
+        Task.detached {
+            run("/usr/bin/killall", ["universalAccessAuthWarn"])
+            for _ in 0..<20 {
+                if run("/usr/bin/pgrep", ["-x", "universalAccessAuthWarn"]) != 0 {
+                    break
+                }
+                try? await Task.sleep(for: .milliseconds(50))
+            }
+            await MainActor.run {
+                askPermission("Screen Recording", prompt: prompt)
+            }
+        }
+    }
+
+    /// Runs a tool and returns its exit status (-1 when it did not start).
+    nonisolated private static func run(_ path: String, _ arguments: [String]) -> Int32 {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: path)
+        process.arguments = arguments
+        process.standardOutput = FileHandle.nullDevice
+        process.standardError = FileHandle.nullDevice
+        if (try? process.run()) == nil {
+            return -1
+        }
+        process.waitUntilExit()
+        return process.terminationStatus
+    }
+
     /// Allow… for Screen Recording or Accessibility. macOS shows its own window with Open System
     /// Settings only the first time an app asks, so the first press only asks and later presses
-    /// open System Settings: both at once put two windows on the screen. `askedBefore` is for what
-    /// asked before this button kept count (the buffer asks for the screen once the guide is done),
-    /// so that press is not spent on a window macOS no longer shows.
-    static func askOnceThenOpenSettings(_ name: String, pane: String, askedBefore: Bool = false, defaults: UserDefaults = .standard, prompt: () -> Void) {
+    /// open System Settings: both at once put two windows on the screen.
+    static func askOnceThenOpenSettings(_ name: String, pane: String, defaults: UserDefaults = .standard, prompt: () -> Void) {
         let key = "askedPermission.\(pane)"
-        if !askedBefore && !defaults.bool(forKey: key) {
+        if !defaults.bool(forKey: key) {
             defaults.set(true, forKey: key)
             askPermission(name, prompt: prompt)
             return

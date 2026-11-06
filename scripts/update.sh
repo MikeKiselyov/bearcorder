@@ -96,5 +96,6 @@ if ! replace_app "build/$APP_NAME.app" "$TARGET_APP" "$built_version"; then
     echo "The update was not installed. Run scripts/update.sh again, or scripts/build-app.sh to see the build." >&2
     exit 5
 fi
+forget_cached_app_ids
 open "$TARGET_APP"
 echo "==> updated"

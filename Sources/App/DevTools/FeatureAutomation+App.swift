@@ -22,6 +22,12 @@ extension FeatureAutomation {
             let camera = AVCaptureDevice.authorizationStatus(for: .video) == .authorized
             return "screen=\(ScreenBuffer.hasScreenRecordingAccess) accessibility=\(InputEventRecorder.hasAccessibilityAccess) microphone=\(microphone) camera=\(camera)"
 
+        case "screen-access":
+            // screen-access:missing|real: the Screen Recording check says no (for "Not in the list?"),
+            // or asks macOS again.
+            ScreenBuffer.pretendNoAccess = argument == "missing"
+            return "screen=\(ScreenBuffer.hasScreenRecordingAccess)"
+
         case "buffer-needs-permission":
             // buffer-needs-permission:on|off: the buffer state the guide shows "Relaunch" for (access
             // given but the buffer not started yet); off puts the real state back.

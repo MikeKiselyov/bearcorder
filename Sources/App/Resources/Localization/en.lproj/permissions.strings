@@ -4,6 +4,9 @@
 "permissions.screen.title" = "Screen & System Audio Recording";
 "permissions.screen.detail" = "Required for screenshots, recordings and the buffer. After allowing it, relaunch the app.";
 "permissions.screen.relaunch" = "Relaunch";
+"permissions.screen.missing" = "%@ is not in the list?";
+"permissions.screen.fix" = "Fix";
+"permissions.screen.fix.tip" = "Restart macOS's Screen Recording window and ask again, for when the app does not show up in the list";
 "permissions.accessibility.title" = "Accessibility";
 "permissions.accessibility.detail" = "Names what you click and type into, and shows the shortcut keys you press, as steps in videos and bug reports.";
 "permissions.microphone.title" = "Microphone";

@@ -106,6 +106,36 @@ extension DevChecks {
         check(recorded == ["open /tmp/captures", "ask Accessibility", "login true", "choose folder /tmp", "trash \(kept.path)"] && loginWorked && chosen == nil, "buttons that open macOS things are recorded in tests, not opened", recorded.joined(separator: " | "))
         check(trashWorked && FileManager.default.fileExists(atPath: kept.path), "a file moved to the Trash in tests stays where it is")
         checkAllowShowsOneWindow()
+        checkScreenRecordingFix()
+    }
+
+    /// "Not in the list?" shows once Allow… asked for Screen Recording and there is still no access. Fix
+    /// quits the agent of macOS's Screen Recording window (it can keep an old bundle id for the app's
+    /// path) and asks macOS again, even though Allow… would only open System Settings by now.
+    private static func checkScreenRecordingFix() {
+        let suite = "\(AppInfo.name).selftest.permissions.\(UUID().uuidString)"
+        guard let defaults = UserDefaults(suiteName: suite) else {
+            check(false, "a settings store for the Screen Recording fix check")
+            return
+        }
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let askedBefore = defaults.bool(forKey: SystemActions.askedScreenRecordingKey)
+        let beforeAsking = SystemActions.offersScreenRecordingFix(hasAccess: false, asked: askedBefore)
+        SystemActions.startRecording()
+        SystemActions.askOnceThenOpenSettings("Screen Recording", pane: "Privacy_ScreenCapture", defaults: defaults) {
+            check(false, "a recorded permission prompt is not shown")
+        }
+        let askedAfter = defaults.bool(forKey: SystemActions.askedScreenRecordingKey)
+        let afterAsking = SystemActions.offersScreenRecordingFix(hasAccess: false, asked: askedAfter)
+        let withAccess = SystemActions.offersScreenRecordingFix(hasAccess: true, asked: askedAfter)
+        let countBefore = SystemActions.recorded.count
+        SystemActions.fixScreenRecordingList {
+            check(false, "a recorded permission prompt is not shown")
+        }
+        let fixed = Array(SystemActions.recorded.dropFirst(countBefore))
+        SystemActions.stopRecording()
+        check(!beforeAsking && afterAsking && !withAccess, "\"Not in the list?\" shows only after Allow… asked for Screen Recording and without access", "\(beforeAsking) \(afterAsking) \(withAccess)")
+        check(fixed == ["restart permission alert", "ask Screen Recording"], "Fix restarts macOS's Screen Recording window and asks again", fixed.joined(separator: " | "))
     }
 
     /// The grip that moves the recording area sits above the frame, clear of the top handle, and
@@ -190,17 +220,7 @@ extension DevChecks {
             check(false, "a recorded permission prompt is not shown")
         }
         let second = Array(SystemActions.recorded.dropFirst(first.count))
-        let afterGuide = UserDefaults(suiteName: suite + ".guide")
-        defer { afterGuide?.removePersistentDomain(forName: suite + ".guide") }
-        let countBefore = SystemActions.recorded.count
-        if let fresh = afterGuide {
-            SystemActions.askOnceThenOpenSettings("Screen Recording", pane: "Privacy_ScreenCapture", askedBefore: true, defaults: fresh) {
-                check(false, "a recorded permission prompt is not shown")
-            }
-        }
-        let asked = Array(SystemActions.recorded.dropFirst(countBefore))
         SystemActions.stopRecording()
-        check(asked == ["open x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture"], "Allow after something else asked already opens System Settings at once", asked.joined(separator: " | "))
         check(first == ["ask Screen Recording"], "the first Allow only asks macOS, without opening System Settings too", first.joined(separator: " | "))
         check(second == ["open x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture"], "a later Allow opens System Settings, without asking macOS again", second.joined(separator: " | "))
     }

@@ -370,6 +370,14 @@ System Settings.
 
 After allowing Screen Recording, Quit & Reopen in System Settings opens Bearcorder again by itself.
 
+If Bearcorder is not in the Screen Recording list after Allow…, press **Fix** next to it (on the
+Permissions page, in the welcome guide or in the menu). macOS asks again so that the app shows up
+in the list.
+
+<p align="center">
+  <img src="images/permissions-fix.png" width="720" alt="Screen Recording not allowed yet: Bearcorder is not in the list? and Fix">
+</p>
+
 ## Updates and feedback
 
 <p align="center">

@@ -94,6 +94,8 @@ picture layout-measure 960
 picture layout-design 960
 palette_picture space-review-category space-review 900
 palette_picture space-window-find space-window 1000
+# Only the Screen Recording row with "Not in the list?" and Fix (2x pixels: the row ends at 310).
+ffmpeg -loglevel error -y -i "$WORK/screens/permissions-fix.png" -vf "crop=iw:310:0:0,scale=720:-1:flags=lanczos" "$OUT/permissions-fix.png"
 ffmpeg -loglevel error -y -i "$WORK/screens/toolbox-colorcontrast.png" -vf "scale=1000:-1:flags=lanczos" "$OUT/layout-contrast.png"
 cp "$WORK/screens/logo.png" "$OUT/logo.png"
 

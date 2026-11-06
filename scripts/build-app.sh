@@ -297,6 +297,7 @@ for argument in "$@"; do
                 rm -rf "$kept_dir"
                 kept_dir=""
             fi
+            forget_cached_app_ids
             if [ -z "${APP_NO_OPEN:-}" ]; then
                 open "$TARGET_DIR/$APP_NAME.app"
             fi

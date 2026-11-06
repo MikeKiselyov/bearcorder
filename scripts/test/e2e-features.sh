@@ -2423,6 +2423,28 @@ wait_for_text 10 Relaunch $R controls:settings 30
 relaunch_result=$(press_in settings Relaunch)
 $R buffer-needs-permission:off 10 >/dev/null
 if [ "$relaunch_result" = "pressed" ] && [[ "$($R system-actions:read 10)" == *"relaunch"* ]]; then pass "settings \"Relaunch\" restarts the app after Screen Recording is allowed"; else fail "settings Relaunch" "$relaunch_result"; fi
+# Allow… asked and still no access: "Not in the list?" with Fix, which restarts macOS's Screen
+# Recording window and asks again (recorded, not done).
+# Fix shows only once Allow… asked macOS, and right after it: start from a Mac that never asked.
+saved_asked_screen=$(defaults read "$BUNDLE_ID" askedPermission.Privacy_ScreenCapture 2>/dev/null || echo "")
+defaults delete "$BUNDLE_ID" askedPermission.Privacy_ScreenCapture 2>/dev/null
+$R screen-access:missing 10 >/dev/null
+wait_for_text 10 "Allow Screen & System Audio Recording" $R controls:settings 30
+fix_before_asking=$($R controls:settings 30 | grep -cE "[|]Fix( ;;|$)")
+press_in settings "Allow Screen & System Audio Recording" >/dev/null
+wait_for_text 10 "Fix" $R controls:settings 30
+before_count=$($R system-actions:read 10 | sed 's/ ;; /\n/g' | grep -c .)
+fix_result=$(press_in settings Fix)
+wait_for_text 10 "ask Screen Recording" actions_since "$before_count"
+fix_recorded=$(actions_since "$before_count")
+$R screen-access:real 10 >/dev/null
+if [ -n "$saved_asked_screen" ]; then
+    defaults write "$BUNDLE_ID" askedPermission.Privacy_ScreenCapture -bool "$saved_asked_screen"
+else
+    defaults delete "$BUNDLE_ID" askedPermission.Privacy_ScreenCapture 2>/dev/null
+fi
+if [ "$fix_before_asking" = 0 ]; then pass "settings \"Fix\" is hidden until Allow… asked macOS"; else fail "settings Fix shows before Allow… asked macOS"; fi
+if [ "$fix_result" = "pressed" ] && [[ "$fix_recorded" == *"restart permission alert"*"ask Screen Recording"* ]]; then pass "settings \"Fix\" restarts the Screen Recording window and asks macOS again"; else fail "settings Fix" "$fix_result $fix_recorded"; fi
 $R settings-page:General 10 >/dev/null
 $R system-actions:stop 10 >/dev/null
 

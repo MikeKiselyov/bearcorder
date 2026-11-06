@@ -14,6 +14,7 @@ struct PermissionsList: View {
     var opensAllowed: Bool = false
 
     @State private var screenAccess = ScreenBuffer.hasScreenRecordingAccess
+    @AppStorage(SystemActions.askedScreenRecordingKey) private var askedScreenRecording = false
     @State private var accessibilityAccess = InputEventRecorder.hasAccessibilityAccess
     @State private var microphoneStatus = AVCaptureDevice.authorizationStatus(for: .audio)
     @State private var cameraStatus = AVCaptureDevice.authorizationStatus(for: .video)
@@ -30,7 +31,7 @@ struct PermissionsList: View {
                 required: true,
                 pane: "Privacy_ScreenCapture",
                 action: { app.requestScreenRecordingAccess() },
-                extra: screenAccess && app.bufferState == .needsPermission ? AnyView(Button(L("permissions.screen.relaunch")) { relaunch() }.buttonStyle(SecondaryButtonStyle())) : nil
+                extra: screenExtra
             )
             row(
                 title: L("permissions.accessibility.title"),
@@ -75,6 +76,17 @@ struct PermissionsList: View {
         }
         .onReceive(ticker) { _ in refresh() }
         .onAppear { refresh() }
+    }
+
+    /// Relaunch once Screen Recording is allowed; "Not in the list?" with Fix while it is not, after asking.
+    private var screenExtra: AnyView? {
+        if screenAccess && app.bufferState == .needsPermission {
+            return AnyView(Button(L("permissions.screen.relaunch")) { relaunch() }.buttonStyle(SecondaryButtonStyle()))
+        }
+        if SystemActions.offersScreenRecordingFix(hasAccess: screenAccess, asked: askedScreenRecording) {
+            return AnyView(ScreenRecordingFix())
+        }
+        return nil
     }
 
     private var browserDetail: String {
@@ -167,5 +179,21 @@ struct PermissionsList: View {
         .padding(.vertical, 8)
         .background(Theme.panel)
         .clipShape(RoundedRectangle(cornerRadius: 10))
+    }
+}
+
+/// "<App> is not in the list?" with Fix: in the Screen Recording row and in the menu's buffer card.
+struct ScreenRecordingFix: View {
+    @Environment(AppState.self) private var app
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Text(L("permissions.screen.missing", AppInfo.name))
+                .font(.system(size: 12))
+                .foregroundStyle(Theme.textSecondary)
+            Button(L("permissions.screen.fix")) { app.fixScreenRecordingList() }
+                .buttonStyle(SecondaryButtonStyle())
+                .tip(L("permissions.screen.fix.tip"))
+        }
     }
 }
