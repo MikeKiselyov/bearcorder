@@ -3,6 +3,11 @@
 /// top entry, the update badge compares it with GitHub, and CI refuses a pull request without one.
 public enum WhatsNewCatalog {
     public static let releases: [WhatsNewRelease] = [
+        WhatsNewRelease(id: 26, version: "0.17.0", title: "Not in the Screen Recording list?", items: [
+            WhatsNewRelease.Item(symbol: "lock.shield", title: "Fix next to Screen Recording", text: "If you pressed Allow… and \(AppInfo.name) is not in the Screen Recording list in System Settings, press Fix. macOS asks again so that the app shows up in the list.", shortcut: "Settings → Permissions", image: "permissions-fix"),
+            WhatsNewRelease.Item(symbol: "hand.tap", title: "Allow… after the guide asks macOS", text: "The first Allow… for Screen Recording asks macOS also after the welcome guide, instead of opening System Settings where the app was not listed yet.", shortcut: "Menu, Settings → Permissions"),
+            WhatsNewRelease.Item(symbol: "arrow.triangle.2.circlepath", title: "Back in the Screen Recording list", text: "If a copy of \(AppInfo.name) with another bundle id was installed in the same place before, the app could be missing from the Screen Recording list in System Settings. Installing, updating and uninstalling clear that.", shortcut: "Menu, Terminal"),
+        ]),
         WhatsNewRelease(id: 25, version: "0.16.0", title: "Room around the screenshot", items: [
             WhatsNewRelease.Item(symbol: "rectangle.expand.vertical", title: "Draw past the edges", text: "The dark area around the screenshot takes text, arrows and every other mark. The saved picture grows to hold them, and the added part is black. Crop can take in that area too.", shortcut: "Screenshot editor", image: "screenshot-margin"),
             WhatsNewRelease.Item(symbol: "plus.magnifyingglass", title: "Zoom is kept", text: "The screenshot editor opens at the zoom you left the last one at, and at 100% the first time.", shortcut: "Screenshot editor"),

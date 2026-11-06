@@ -145,6 +145,7 @@ onboarding	Choose…	guide \"Choose…\" asks for the save folder
 onboarding	Save the minute before an app crashes|\d+ days|Always	guide crash clips switch
 onboarding	Allow .+	guide \"Allow …\" asks macOS
 onboarding	Relaunch	guide \"Relaunch\" restarts the app
+onboarding	Fix	settings \"Fix\" restarts the Screen Recording window and asks macOS again
 onboarding	Show what I type in steps	guide \"Show what I type in steps\" switch
 onboarding	Start using {app}	guide \"Start using $APP_NAME\" finishes the guide
 onboarding	Skip	guide \"Skip\" closes the guide
@@ -176,6 +177,7 @@ settings	Keep all displays \(pick one or all side by side in the editor\)|Show t
 settings	Open at login|Choose…|Show in Finder	asks macOS for the right thing
 settings	Allow .+|Open .+ in System Settings	settings permissions page asks macOS or opens System Settings for each permission
 settings	Relaunch	settings \"Relaunch\" restarts the app after Screen Recording is allowed
+settings	Fix	settings \"Fix\" restarts the Screen Recording window and asks macOS again
 settings	Grant	asks macOS for the right thing
 settings	Restart buffer	restarts the buffer with the new settings
 settings	Report a problem…|Suggest a feature…|Show the welcome guide|Show what's new	opens the $window window

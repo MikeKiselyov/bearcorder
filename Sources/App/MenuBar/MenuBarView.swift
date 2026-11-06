@@ -57,6 +57,7 @@ enum MenuTab: String, CaseIterable, Identifiable {
 struct MenuBarView: View {
     @Environment(AppState.self) private var app
     @AppStorage("menuTab") private var tab: MenuTab = .capture
+    @AppStorage(SystemActions.askedScreenRecordingKey) private var askedScreenRecording = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -218,6 +219,9 @@ struct MenuBarView: View {
                         Button(L("menubar.permission.relaunch")) { relaunch() }
                             .buttonStyle(SecondaryButtonStyle())
                             .tip(L("menubar.permission.relaunch.tip", AppInfo.name))
+                    }
+                    if SystemActions.offersScreenRecordingFix(hasAccess: ScreenBuffer.hasScreenRecordingAccess, asked: askedScreenRecording) {
+                        ScreenRecordingFix()
                     }
                 }
             } else if case .failed(let message) = app.bufferState {

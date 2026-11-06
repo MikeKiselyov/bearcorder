@@ -95,9 +95,14 @@ extension AppState {
     }
 
     func requestScreenRecordingAccess() {
-        // After the welcome guide the buffer starts, and starting it asks macOS for the screen.
-        let guideDone = UserDefaults.standard.bool(forKey: OnboardingView.completedKey)
-        SystemActions.askOnceThenOpenSettings("Screen Recording", pane: "Privacy_ScreenCapture", askedBefore: guideDone) { ScreenBuffer.requestScreenRecordingAccess() }
+        // The buffer never asks macOS (without access it does not start), so the first Allow… asks,
+        // also after the welcome guide.
+        SystemActions.askOnceThenOpenSettings("Screen Recording", pane: "Privacy_ScreenCapture") { ScreenBuffer.requestScreenRecordingAccess() }
+    }
+
+    func fixScreenRecordingList() {
+        Log.info("Screen Recording: restarting macOS's permission window and asking again")
+        SystemActions.fixScreenRecordingList { ScreenBuffer.requestScreenRecordingAccess() }
     }
 
     func requestAccessibilityAccess() {

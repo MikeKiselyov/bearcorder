@@ -332,6 +332,9 @@ fi
 for remembered in "${forget_paths[@]}"; do
     system "$LSREGISTER" -u "$remembered" >/dev/null 2>&1 || true
 done
+# The agent of macOS's Screen Recording alert keeps the bundle id it saw at the app's path while it
+# runs (scripts/lib/permissions.sh, forget_cached_app_ids); macOS starts it again for the next alert.
+system killall universalAccessAuthWarn >/dev/null 2>&1 || true
 done_step "macOS forgot the removed copies"
 
 for folder in "$SUPPORT_DIR" "$LOGS_DIR"; do

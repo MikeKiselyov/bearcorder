@@ -115,7 +115,17 @@ final class ScreenBuffer: NSObject, SCStreamOutput, SCStreamDelegate {
         self.queue = DispatchQueue(label: "app.buffer.\(displayID)", qos: .userInitiated)
     }
 
+    #if AUTOMATION
+    /// e2e (screen-access:missing): the access check says no, to show what a Mac without it shows.
+    static var pretendNoAccess = false
+    #endif
+
     static var hasScreenRecordingAccess: Bool {
+        #if AUTOMATION
+        if pretendNoAccess {
+            return false
+        }
+        #endif
         return CGPreflightScreenCaptureAccess()
     }
 

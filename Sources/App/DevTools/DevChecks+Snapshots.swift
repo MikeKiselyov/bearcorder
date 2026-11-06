@@ -103,6 +103,7 @@ extension DevChecks {
             render(SettingsView().environment(app).preferredColorScheme(.dark), size: CGSize(width: 780, height: 900), to: folder.appendingPathComponent(name))
         }
         SettingsNavigation.shared.page = shownPage
+        renderScreenRecordingFix(app: app, folder: folder)
         render(HistoryView().environment(app).preferredColorScheme(.dark), size: CGSize(width: 980, height: 680), to: folder.appendingPathComponent("history.png"))
         render(RecordingHUDView().environment(app).preferredColorScheme(.dark), size: CGSize(width: 700, height: 44), to: folder.appendingPathComponent("hud.png"))
         app.overlay.isDrawing = true
@@ -120,6 +121,28 @@ extension DevChecks {
         }
         print("Snapshots written to \(folder.path)")
         return 0
+    }
+
+    /// The Permissions list on a Mac where Screen Recording was asked for and is still missing:
+    /// "Not in the list?" with Fix (What's New, docs/features.md).
+    private static func renderScreenRecordingFix(app: AppState, folder: URL) {
+        let key = SystemActions.askedScreenRecordingKey
+        let asked = UserDefaults.standard.object(forKey: key)
+        UserDefaults.standard.set(true, forKey: key)
+        ScreenBuffer.pretendNoAccess = true
+        let view = PermissionsList(relaunch: {})
+            .padding(16)
+            .frame(width: 720)
+            .auroraBackground()
+            .environment(app)
+            .preferredColorScheme(.dark)
+        render(view, size: CGSize(width: 720, height: 560), to: folder.appendingPathComponent("permissions-fix.png"))
+        ScreenBuffer.pretendNoAccess = false
+        if asked == nil {
+            UserDefaults.standard.removeObject(forKey: key)
+        } else {
+            UserDefaults.standard.set(asked, forKey: key)
+        }
     }
 
     /// AppKit views (area picker, recording outline) over a grey "desktop".

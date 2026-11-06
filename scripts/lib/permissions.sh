@@ -10,6 +10,7 @@
 #   is_our_earlier_app <app> <bundle id being installed>   prints the app's id when it is a copy of this
 #                                                          one with another id, fails otherwise
 #   forget_permissions <old bundle id> <copy of the old app>
+#   forget_cached_app_ids                                  quits the agent of macOS's Screen Recording alert
 #
 # The user's records go with tccutil, the copy registered around it as the old app is already gone. Screen Recording and Accessibility live in the system's
 # records, which need root: macOS asks for the password once. tccutil only takes ids LaunchServices
@@ -81,4 +82,13 @@ APPLESCRIPT
         echo "    not removed: if System Settings lists $APP_NAME twice, select the old one and press -"
     fi
     return 0
+}
+
+# universalAccessAuthWarn shows macOS's "would like to record this screen" alert and adds the app to
+# the Screen Recording list. While it runs it keeps the bundle id it once saw at an app's path, so
+# after a copy with another id sat at the same path (an earlier build, or a copy uninstalled before
+# this install) it files the new copy under the old id: the app never shows up in the list to switch
+# on. Quitting it is safe, macOS starts it again for the next alert.
+forget_cached_app_ids() {
+    killall universalAccessAuthWarn >/dev/null 2>&1 || true
 }

@@ -62,6 +62,49 @@ final class PermissionsScriptTests: XCTestCase {
         XCTAssertTrue(result.output.contains("password"), "says a password dialog is coming: \(result.output)")
     }
 
+    /// The agent behind macOS's Screen Recording alert keeps the bundle id it once saw at an app's
+    /// path. After a copy with another id sat there, it files the new copy's request under the old id
+    /// and the app never shows up in the list. Every install quits it; macOS starts it for the next alert.
+    func testTheScreenRecordingAlertForgetsOldIds() throws {
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent("alert-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let calls = folder.appendingPathComponent("calls.txt")
+        let stub = folder.appendingPathComponent("killall")
+        try "#!/bin/bash\necho \"killall $*\" >> '\(calls.path)'\nexit 1\n".write(to: stub, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: stub.path)
+        let script = """
+        set -euo pipefail
+        export PATH='\(folder.path)':"$PATH"
+        source '\(root.appendingPathComponent("scripts/lib/app-name.sh").path)'
+        source '\(root.appendingPathComponent("scripts/lib/permissions.sh").path)'
+        forget_cached_app_ids
+        """
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/bin/bash")
+        process.arguments = ["-c", script]
+        try process.run()
+        process.waitUntilExit()
+        XCTAssertEqual(process.terminationStatus, 0, "a missing agent does not stop the install")
+        let recorded = (try? String(contentsOf: calls, encoding: .utf8)) ?? ""
+        XCTAssertEqual(recorded, "killall universalAccessAuthWarn\n")
+    }
+
+    /// Every install quits the alert's agent, not only one that replaced a copy with another id: the
+    /// old copy may be gone already (uninstalled, then installed). The call is a line of its own at
+    /// the level of the install steps, after the new copy is in place and before it opens and asks.
+    func testEveryInstallQuitsTheAlertAgent() throws {
+        let cases: [(script: String, after: String, call: String, before: String)] = [
+            ("scripts/build-app.sh", "                kept_dir=\"\"\n            fi\n", "            forget_cached_app_ids\n", "            if [ -z \"${APP_NO_OPEN:-}\" ]; then\n"),
+            // The Update button runs update.sh with the installed app's path.
+            ("scripts/update.sh", "    exit 5\nfi\n", "forget_cached_app_ids\n", "open \"$TARGET_APP\"\n"),
+        ]
+        for item in cases {
+            let text = try String(contentsOf: root.appendingPathComponent(item.script), encoding: .utf8)
+            XCTAssertTrue(text.contains(item.after + item.call + item.before), "\(item.script): forget_cached_app_ids is not between the install and the open")
+        }
+    }
+
     func testKeepingPermissionsSkipsThePasswordDialog() throws {
         let result = try run("export APP_KEEP_PERMISSIONS=1")
         XCTAssertFalse(result.calls.contains("osascript"), result.calls)
