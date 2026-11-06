@@ -203,6 +203,17 @@ extension DevChecks {
         let drawn = ScreenshotDocument(capture: plain.capture, forEditing: false)
         check(plain.showBadge && drawn?.showBadge == false, "a step guide or comparison draws an unedited screenshot without the remembered badge")
 
+        // The editor opens centered on the picture also when its view gets a size only after the
+        // centering was due (a busy Mac): centered at zero size it ended up in the margin's far corner.
+        let (scrollView, canvas) = AnnotationCanvas.makeScrollView(document: plain)
+        try? await Task.sleep(for: .milliseconds(100))
+        scrollView.setFrameSize(CGSize(width: 80, height: 50))
+        try? await Task.sleep(for: .milliseconds(100))
+        let shown = canvas.visibleRect
+        let pictureArea = plain.savedArea
+        let centered = abs(shown.midX - pictureArea.midX) < 4 && abs(shown.midY - pictureArea.midY) < 4
+        check(centered, "the editor opens centered on the picture when its view is sized late", "shown \(shown) picture \(pictureArea)")
+
         // + on a selected old mark resizes that mark, not the size new marks start with.
         let strokeBefore = EditorMemory.screenshotStroke
         var thin = Annotation(tool: .rectangle, start: CGPoint(x: 10, y: 10), end: CGPoint(x: 60, y: 40), color: .blue, lineWidth: 2)
