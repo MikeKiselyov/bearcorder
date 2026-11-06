@@ -3,6 +3,9 @@
 /// top entry, the update badge compares it with GitHub, and CI refuses a pull request without one.
 public enum WhatsNewCatalog {
     public static let releases: [WhatsNewRelease] = [
+        WhatsNewRelease(id: 27, version: "0.17.1", title: "Screenshot editor opens on the picture", items: [
+            WhatsNewRelease.Item(symbol: "viewfinder", title: "Centered on the picture", text: "The screenshot editor sometimes opened scrolled to the bottom right corner when the Mac was busy. It opens centered on the picture.", shortcut: "Screenshot editor"),
+        ]),
         WhatsNewRelease(id: 26, version: "0.17.0", title: "Not in the Screen Recording list?", items: [
             WhatsNewRelease.Item(symbol: "lock.shield", title: "Fix next to Screen Recording", text: "If you pressed Allow… and \(AppInfo.name) is not in the Screen Recording list in System Settings, press Fix. macOS asks again so that the app shows up in the list.", shortcut: "Settings → Permissions", image: "permissions-fix"),
             WhatsNewRelease.Item(symbol: "hand.tap", title: "Allow… after the guide asks macOS", text: "The first Allow… for Screen Recording asks macOS also after the welcome guide, instead of opening System Settings where the app was not listed yet.", shortcut: "Menu, Settings → Permissions"),

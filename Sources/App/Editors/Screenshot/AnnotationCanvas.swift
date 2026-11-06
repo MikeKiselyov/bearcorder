@@ -7,8 +7,19 @@ struct AnnotationCanvas: NSViewRepresentable {
     let document: ScreenshotDocument
 
     func makeNSView(context: Context) -> NSScrollView {
+        let (scrollView, canvas) = AnnotationCanvas.makeScrollView(document: document)
+        context.coordinator.canvas = canvas
+        context.coordinator.scrollView = scrollView
+        NotificationCenter.default.addObserver(context.coordinator, selector: #selector(Coordinator.magnificationChanged), name: NSScrollView.didEndLiveMagnifyNotification, object: scrollView)
+        return scrollView
+    }
+
+    /// The scroll view with the canvas in it, opening at the remembered zoom and centered on the picture.
+    @MainActor
+    static func makeScrollView(document: ScreenshotDocument) -> (NSScrollView, CanvasView) {
         let scrollView = NSScrollView()
-        scrollView.contentView = CenteringClipView()
+        let clip = CenteringClipView()
+        scrollView.contentView = clip
         scrollView.hasVerticalScroller = true
         scrollView.hasHorizontalScroller = true
         scrollView.autohidesScrollers = true
@@ -19,15 +30,14 @@ struct AnnotationCanvas: NSViewRepresentable {
         scrollView.drawsBackground = true
         let canvas = CanvasView(document: document)
         scrollView.documentView = canvas
-        context.coordinator.canvas = canvas
-        context.coordinator.scrollView = scrollView
-        NotificationCenter.default.addObserver(context.coordinator, selector: #selector(Coordinator.magnificationChanged), name: NSScrollView.didEndLiveMagnifyNotification, object: scrollView)
         // Opens at the remembered zoom, centered on the picture rather than the margin's corner.
-        DispatchQueue.main.async {
-            scrollView.magnification = document.zoom
+        // Weak: a view closed before it got a size must not stay alive through this.
+        clip.onceSized { [weak canvas] in
+            guard let canvas, let scrollView = canvas.enclosingScrollView else { return }
+            scrollView.magnification = canvas.document.zoom
             canvas.centerPicture()
         }
-        return scrollView
+        return (scrollView, canvas)
     }
 
     func updateNSView(_ scrollView: NSScrollView, context: Context) {
@@ -86,6 +96,27 @@ struct AnnotationCanvas: NSViewRepresentable {
 
 /// Centers the document when it is smaller than the visible area.
 final class CenteringClipView: NSClipView {
+    private var whenSized: (() -> Void)?
+
+    /// Runs `action` once the view has a size: centering at zero size ends up in the far corner
+    /// once the view grows, which happens when the window is laid out late on a busy Mac.
+    func onceSized(_ action: @escaping () -> Void) {
+        whenSized = action
+        runIfSized()
+    }
+
+    override func setFrameSize(_ newSize: NSSize) {
+        super.setFrameSize(newSize)
+        runIfSized()
+    }
+
+    private func runIfSized() {
+        guard let action = whenSized, bounds.width > 0, bounds.height > 0 else { return }
+        whenSized = nil
+        // After the layout pass that gave the size, so the canvas has its frame too.
+        DispatchQueue.main.async(execute: action)
+    }
+
     override func constrainBoundsRect(_ proposedBounds: NSRect) -> NSRect {
         var rect = super.constrainBoundsRect(proposedBounds)
         guard let document = documentView else { return rect }
