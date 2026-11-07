@@ -387,9 +387,18 @@ in the list.
 - Bearcorder checks for a new version every 6 hours and shows a badge in the menu.
 - Update now rebuilds the app on your Mac and restarts it. If the new app fails its check, the old
   one is put back.
+- While it updates, the menu and Settings → Updates show how far it is in percent and the step
+  (downloading, building, finishing, installing).
+- **Check now** in Settings → Updates: when it finds a version, **What's changed** lists the changes and
+  **Update to** with the new version installs it right there.
 - What's new shows what changed, with pictures.
 - **Report a problem** or **suggest a feature** from the menu: it opens a filled-in GitHub issue,
   and can attach a zip of the logs. The log is kept as `.log.1` when it passes 2 MB, and the zip has
   both files; if zipping takes too long, the form still opens.
 - Uninstall everything with one command: see [uninstall](uninstall.md). At the end it asks, if you
   can, to say in a short form what you did not like.
+
+<p align="center">
+  <img src="images/update-settings.png" width="420" alt="Settings, Updates: What's changed and Update to">
+  <img src="images/update-progress.png" width="420" alt="Updating 47% in the menu, Building 47% in Settings">
+</p>

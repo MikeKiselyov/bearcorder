@@ -154,8 +154,14 @@
 "menubar.update.badge" = "Update to %@";
 /* 1 the new version, 2 the installed version. */
 "menubar.update.badge.tip" = "Version %1$@ is available, you have %2$@";
-"menubar.update.updating" = "Updating…";
-"menubar.update.updating.tip" = "Pulling and building the new version. The app restarts when it is ready.";
+/* %@: the step and percent, as "Building… 45%". */
+"menubar.update.updating.tip" = "%@. The app restarts on the new version when it is ready.";
+/* %ld: percent done, estimated from the steps and the time the last build took. */
+"menubar.update.updatingPercent" = "Updating %ld%%";
+"menubar.update.step.downloading" = "Downloading… %ld%%";
+"menubar.update.step.building" = "Building… %ld%%";
+"menubar.update.step.finishing" = "Finishing… %ld%%";
+"menubar.update.step.installing" = "Installing… %ld%%";
 "menubar.update.failed.accessibility" = "The update failed, show why";
 "menubar.update.failed.title" = "Update";
 "menubar.update.details.version" = "Version %@";
@@ -182,6 +188,8 @@
 "menubar.updateSettings.whatsNew.show.tip" = "Show what changed in this version";
 "menubar.updateSettings.autoCheck" = "Check GitHub for new versions";
 "menubar.updateSettings.autoCheck.tip" = "Check for a newer %@ release every 6 hours and show a badge in the menu bar panel";
+"menubar.updateSettings.changes" = "What's changed";
+"menubar.updateSettings.changes.tip" = "Show the changes in the new version";
 "menubar.updateSettings.checkNow" = "Check now";
 "menubar.updateSettings.checkNow.tip" = "Check GitHub for a new version right now";
 "menubar.updateSettings.unavailable" = "Updates work for copies built from a git clone of a GitHub repository, as scripts/install.sh does. This copy has no repository or commit to compare.";

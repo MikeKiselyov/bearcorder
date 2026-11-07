@@ -604,5 +604,39 @@ extension DevChecks {
         check(registered == true, "crash reports are offered by default")
         forgetScratchDefaults(defaults, domain: "\(AppInfo.name)-feedback-check")
     }
+
+    /// The update's build step counts its time from the first log read that reached it, against the
+    /// last build's time, which a finished build saves for the next update.
+    @MainActor
+    static func checkUpdateProgressTiming() {
+        let key = Updater.buildSecondsKey
+        let saved = UserDefaults.standard.object(forKey: key)
+        defer {
+            if let saved {
+                UserDefaults.standard.set(saved, forKey: key)
+            } else {
+                UserDefaults.standard.removeObject(forKey: key)
+            }
+        }
+        UserDefaults.standard.set(100.0, forKey: key)
+        let updater = Updater.shared
+        updater.startProgress(log: URL(fileURLWithPath: "/nonexistent/update.log"))
+        updater.stopProgress()
+        let start = Date()
+        updater.readProgress(log: "==> git fetch\n", now: start)
+        let fetching = updater.progress.percent
+        updater.readProgress(log: "==> git fetch\n==> build\n", now: start.addingTimeInterval(10))
+        let buildStarted = updater.progress.percent
+        updater.readProgress(log: "==> git fetch\n==> build\n", now: start.addingTimeInterval(60))
+        let halfway = updater.progress.percent
+        // A read that came back empty (cut in the middle of a write) keeps the percent and the build clock.
+        updater.readProgress(log: "", now: start.addingTimeInterval(61))
+        let afterEmptyRead = updater.progress.percent
+        updater.readProgress(log: "==> git fetch\n==> build\nBuild of product 'App' complete! (80.5s)\n", now: start.addingTimeInterval(90))
+        let savedSeconds = UserDefaults.standard.double(forKey: key)
+        check(fetching == 0 && buildStarted == 5 && halfway == 47 && afterEmptyRead == 47 && updater.progress.step == .finishing && savedSeconds == 80.5,
+              "update progress: the build follows its time and saves it for next time",
+              "\(fetching) \(buildStarted) \(halfway) \(afterEmptyRead) \(updater.progress.step) \(savedSeconds)")
+    }
 }
 #endif

@@ -87,6 +87,8 @@ picture hud-drawing 720
 picture menu-space 360
 picture toolbox-jsondiff 1220
 picture feedback-problem 560
+picture update-settings 560
+picture update-progress 560
 picture compare 1000
 picture step-guide 700
 picture screenshot-margin 1000

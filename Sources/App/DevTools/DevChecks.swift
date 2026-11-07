@@ -72,6 +72,7 @@ enum DevChecks {
         failures = []
         checkAnnotationColors()
         checkScreenshotFormats()
+        checkUpdateProgressTiming()
         await checkRecentColors()
         checkShortcutWords()
         checkShapeFill()

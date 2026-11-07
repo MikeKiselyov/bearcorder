@@ -46,15 +46,25 @@ extension FeatureAutomation {
             return "\(app.bufferState)"
 
         case "update-fake":
-            // update-fake:available|failed|idle: the update badge as it shows for a new version or
-            // a failed update, without asking GitHub.
+            // update-fake:available|progress|texts|failed|idle: the update badge as it shows for a new version,
+            // an update on its way or a failed update, without asking GitHub.
             let updater = Updater.shared
             if argument == "available" {
                 let changes = [UpdateInfo.Change(title: "Fake change for tests", shortSHA: "abc1234", pullRequest: 42), UpdateInfo.Change(title: "Another fake change", shortSHA: "def5678")]
                 updater.state = .available(UpdateInfo(version: "9.9.9", newCommitCount: 2, changes: changes))
+            } else if argument == "progress" {
+                // An update whose log reached the install step, read the way a real one is.
+                let log = FileManager.default.temporaryDirectory.appendingPathComponent("update-fake.log")
+                try? "==> git fetch\n==> updating main\n==> build\n==> version 9.9.9 (1)\n==> replacing /Applications/Fake.app\n".write(to: log, atomically: true, encoding: .utf8)
+                updater.state = .updating
+                updater.startProgress(log: log)
+            } else if argument == "texts" {
+                // What the menu badge and the Settings status row say about the update.
+                return "\(updater.progressText)|\(updater.progressStepText)"
             } else if argument == "failed" {
                 updater.state = .failed("Update failed: fake failure for tests")
             } else {
+                updater.stopProgress()
                 updater.state = .idle
             }
             return "\(updater.state)"
