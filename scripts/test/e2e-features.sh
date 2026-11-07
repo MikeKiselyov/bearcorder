@@ -2092,6 +2092,24 @@ if [[ "$($R controls:settings 30)" == *"|Check now"* ]]; then
     checks_flipped=$(setting_value checkForUpdates)
     press_in settings "Check GitHub for new versions" >/dev/null
     if [[ "$checked" == *"check for updates"* ]] && [ "$checks_before" != "$checks_flipped" ]; then pass "settings \"Check now\" and \"Check GitHub for new versions\""; else fail "settings update checks" "$checks_before $checks_flipped"; fi
+    # A check that found a version: Settings shows its changes and installs it in place.
+    $R update-fake:available 10 >/dev/null
+    wait_for_text 10 "|Update to 9.9.9" $R controls:settings 30
+    press_in settings "What's changed" >/dev/null
+    wait_for_text 10 "|Update now" $R controls:popover 30
+    changes=$($R controls:popover 30)
+    press_in popover Later >/dev/null
+    $R system-actions:start 10 >/dev/null
+    press_in settings "Update to 9.9.9" >/dev/null
+    started=$($R system-actions:read 10)
+    if [[ "$changes" == *"|#42 Fake change for tests"* && "$started" == *"update"* ]]; then pass "settings \"What's changed\" and \"Update to\" after a check finds a version"; else fail "settings update buttons" "$changes / $started"; fi
+    # The fake log has reached the install step; the app reads it every 0.5 s like a real update's.
+    $R update-fake:progress 10 >/dev/null
+    wait_for_text 10 "Updating 97%" $R update-fake:texts 10
+    progress=$($R update-fake:texts 10)
+    wait_for_no_text 10 "|Update to 9.9.9" $R controls:settings 30
+    if [ "$progress" = "Updating 97%|Installing… 97%" ] && [[ "$($R controls:settings 30)" != *"|Update to"* ]]; then pass "update progress in percent in the menu and Settings"; else fail "update progress" "$progress"; fi
+    $R update-fake:idle 10 >/dev/null
 fi
 $R system-actions:stop 10 >/dev/null
 $R close-windows 10 >/dev/null

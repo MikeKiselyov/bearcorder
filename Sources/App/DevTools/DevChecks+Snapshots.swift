@@ -23,6 +23,7 @@ extension DevChecks {
             UpdateInfo.Change(title: "Space: clear delete confirmation in the menu panel (0.8.1)", shortSHA: "2222222", pullRequest: 11),
         ]))
         render(UpdateBadge(detailsOnly: true).padding(16).auroraBackground().environment(app).preferredColorScheme(.dark), size: CGSize(width: 360, height: 260), to: folder.appendingPathComponent("update-badge.png"))
+        renderUpdateSettings(app: app, folder: folder)
 
         await renderSpaceReview(folder: folder, app: app)
 
@@ -121,6 +122,34 @@ extension DevChecks {
         }
         print("Snapshots written to \(folder.path)")
         return 0
+    }
+
+    /// Settings → Updates after a check found a version ("Update to", "What's changed"), and while it
+    /// installs, with the menu badge in percent (What's New, docs/features.md).
+    private static func renderUpdateSettings(app: AppState, folder: URL) {
+        let updater = Updater.shared
+        let found = updater.state
+        updater.pretendCanCheck = true
+        let settings = Form { UpdateSettingsSection() }
+            .formStyle(.grouped)
+            .frame(width: 560)
+            .auroraBackground()
+            .environment(app)
+            .preferredColorScheme(.dark)
+        render(settings, size: CGSize(width: 560, height: 260), to: folder.appendingPathComponent("update-settings.png"))
+        updater.state = .updating
+        updater.progress = UpdateProgress(step: .building, percent: 47)
+        let updating = VStack(alignment: .trailing, spacing: 0) {
+            UpdateBadge().padding(.horizontal, 24).padding(.top, 16)
+            Form { UpdateSettingsSection() }.formStyle(.grouped)
+        }
+            .frame(width: 560)
+            .auroraBackground()
+            .environment(app)
+            .preferredColorScheme(.dark)
+        render(updating, size: CGSize(width: 560, height: 300), to: folder.appendingPathComponent("update-progress.png"))
+        updater.state = found
+        updater.pretendCanCheck = false
     }
 
     /// The Permissions list on a Mac where Screen Recording was asked for and is still missing:

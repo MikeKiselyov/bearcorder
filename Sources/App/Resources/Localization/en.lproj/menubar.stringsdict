@@ -54,7 +54,7 @@
     <key>menubar.updateSettings.status.available</key>
     <dict>
         <key>NSStringLocalizedFormatKey</key>
-        <string>%#@changes@, see the menu bar panel</string>
+        <string>%#@changes@</string>
         <key>changes</key>
         <dict>
             <key>NSStringFormatSpecTypeKey</key>
