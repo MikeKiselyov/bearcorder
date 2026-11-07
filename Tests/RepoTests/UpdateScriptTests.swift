@@ -164,6 +164,27 @@ final class UpdateScriptTests: XCTestCase {
         XCTAssertEqual(leftovers, [], "no temporary copy left")
     }
 
+    /// The app runs update.sh itself, and pkill / pgrep skip their own ancestors unless given -a:
+    /// without it the running app is never quit, the new copy never starts and the menu says
+    /// "Updating…" for good.
+    func testUpdateQuitsTheAppThatStartedIt() throws {
+        let installedFolder = try makeFolder()
+        let installed = installedFolder.appendingPathComponent("apps/\(try appName).app")
+        try makeApp(at: installed, bundleId: "test.old")
+        let inPlaceFolder = try makeFolder()
+        let inPlace = inPlaceFolder.appendingPathComponent("repo/build/\(try appName).app")
+        for (folder, target) in [(installedFolder, installed), (inPlaceFolder, inPlace)] {
+            let result = try update(in: folder, target: target)
+            XCTAssertEqual(result.status, 0, result.output)
+            var quits = 0
+            for call in result.calls.split(separator: "\n") where call.hasPrefix("pkill") || call.hasPrefix("pgrep") {
+                XCTAssertTrue(call.split(separator: " ").contains("-a"), "\(target.path): \(call) misses the app that runs the script")
+                quits += 1
+            }
+            XCTAssertGreaterThan(quits, 0, "the app is quit: \(result.calls)")
+        }
+    }
+
     /// The fresh build replaces the copy and the old one leaves no copy behind.
     func testUpdateLeavesNoTemporaryCopy() throws {
         let folder = try makeFolder()
