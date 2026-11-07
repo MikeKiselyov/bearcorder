@@ -8,15 +8,16 @@
 set -euo pipefail
 
 # The app stops its screen capture before it quits (up to 2 s), so wait for it to be gone.
+# -a: the app runs this script, and pgrep / pkill skip their own ancestors without it.
 wait_for_app_to_quit() {
     local tries=0
-    while pgrep -x "$APP_NAME" >/dev/null 2>&1 && [ "$tries" -lt 50 ]; do
+    while pgrep -a -x "$APP_NAME" >/dev/null 2>&1 && [ "$tries" -lt 50 ]; do
         sleep 0.1
         tries=$((tries + 1))
     done
     # Still there (stuck in a modal alert): it must not keep running from a replaced app.
-    if pgrep -x "$APP_NAME" >/dev/null 2>&1; then
-        pkill -9 -x "$APP_NAME" 2>/dev/null || true
+    if pgrep -a -x "$APP_NAME" >/dev/null 2>&1; then
+        pkill -9 -a -x "$APP_NAME" 2>/dev/null || true
         sleep 0.5
     fi
 }
@@ -62,7 +63,7 @@ scripts/build-app.sh
 # Running straight from this folder's build/: the fresh build is already in place. -ef compares the
 # folder itself, so another spelling of its path (a symlink, /tmp or /private/tmp) never deletes it.
 if [ "$TARGET_APP" -ef "build/$APP_NAME.app" ]; then
-    pkill -x "$APP_NAME" 2>/dev/null || true
+    pkill -a -x "$APP_NAME" 2>/dev/null || true
     wait_for_app_to_quit
     open "$TARGET_APP"
     echo "==> updated"
@@ -86,7 +87,7 @@ source scripts/lib/replace-app.sh
 built_version=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "build/$APP_NAME.app/Contents/Info.plist" 2>/dev/null || true)
 
 echo "==> replacing $TARGET_APP"
-pkill -x "$APP_NAME" 2>/dev/null || true
+pkill -a -x "$APP_NAME" 2>/dev/null || true
 wait_for_app_to_quit
 if ! replace_app "build/$APP_NAME.app" "$TARGET_APP" "$built_version"; then
     # The old copy is back in place (or was never moved): it was quit for the update, so start it again.
