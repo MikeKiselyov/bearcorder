@@ -40,6 +40,7 @@ final class Updater {
     var progress = UpdateProgress(step: .downloading, percent: 0)
     @ObservationIgnored private var progressTimer: Timer?
     @ObservationIgnored private var buildStartedAt: Date?
+    @ObservationIgnored private var isReadingProgress = false
     /// How long the last update's build took, the time the next one expects.
     static let buildSecondsKey = "lastUpdateBuildSeconds"
 
@@ -203,11 +204,31 @@ final class Updater {
         buildStartedAt = nil
         progressTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { _ in
             Task { @MainActor in
-                // Decoding never fails: a read can end in the middle of a character being written.
-                let data = (try? Data(contentsOf: log)) ?? Data()
-                Updater.shared.readProgress(log: String(decoding: data, as: UTF8.self))
+                await Updater.shared.readProgress(file: log)
             }
         }
+    }
+
+    /// Reads and searches the log off the main thread: the build it follows already loads the Mac.
+    private func readProgress(file: URL) async {
+        // A read slower than the timer is not started a second time.
+        if isReadingProgress { return }
+        isReadingProgress = true
+        defer { isReadingProgress = false }
+        let timer = progressTimer
+        let now = Date()
+        let elapsed = secondsInBuild(at: now)
+        let expected = expectedBuildSeconds
+        let read = await Task.detached(priority: .utility) { () -> (progress: UpdateProgress, buildSeconds: Double?) in
+            // Decoding never fails: a read can end in the middle of a character being written.
+            let data = (try? Data(contentsOf: file)) ?? Data()
+            let text = String(decoding: data, as: UTF8.self)
+            let progress = UpdateProgress.estimate(log: text, elapsedInBuild: elapsed, expectedBuild: expected)
+            return (progress: progress, buildSeconds: UpdateProgress.buildSeconds(inLog: text))
+        }.value
+        // The update ended, or the next one started, while the log was read.
+        if progressTimer !== timer { return }
+        show(read.progress, buildSeconds: read.buildSeconds, now: now)
     }
 
     func stopProgress() {
@@ -215,23 +236,38 @@ final class Updater {
         progressTimer = nil
     }
 
+    /// How long the last build took, nil before any update has run on this Mac.
+    private var expectedBuildSeconds: Double? {
+        let saved = UserDefaults.standard.double(forKey: Updater.buildSecondsKey)
+        if saved > 0 {
+            return saved
+        }
+        return nil
+    }
+
+    private func secondsInBuild(at now: Date) -> Double {
+        guard let buildStartedAt else { return 0 }
+        return now.timeIntervalSince(buildStartedAt)
+    }
+
     /// Called with the whole log while updating; the build step's time counts from the first call that
     /// sees it, and the percent never goes back.
     func readProgress(log: String, now: Date = Date()) {
-        let saved = UserDefaults.standard.double(forKey: Updater.buildSecondsKey)
-        var elapsed: Double = 0
-        if let buildStartedAt {
-            elapsed = now.timeIntervalSince(buildStartedAt)
-        }
-        let next = UpdateProgress.estimate(log: log, elapsedInBuild: elapsed, expectedBuild: saved > 0 ? saved : nil)
-        if next.percent >= progress.percent {
+        let read = UpdateProgress.estimate(log: log, elapsedInBuild: secondsInBuild(at: now), expectedBuild: expectedBuildSeconds)
+        show(read, buildSeconds: UpdateProgress.buildSeconds(inLog: log), now: now)
+    }
+
+    /// Writes only what changed: before Swift 6.2 every write of `progress` redraws the views that
+    /// show it, also with the same value, and this runs twice a second.
+    private func show(_ read: UpdateProgress, buildSeconds: Double?, now: Date) {
+        if let next = UpdateProgress.next(shown: progress, read: read) {
             progress = next
         }
-        if next.step == .building && buildStartedAt == nil {
+        if read.step == .building && buildStartedAt == nil {
             buildStartedAt = now
         }
-        if let seconds = UpdateProgress.buildSeconds(inLog: log) {
-            UserDefaults.standard.set(seconds, forKey: Updater.buildSecondsKey)
+        if let buildSeconds, buildSeconds != expectedBuildSeconds {
+            UserDefaults.standard.set(buildSeconds, forKey: Updater.buildSecondsKey)
         }
     }
 

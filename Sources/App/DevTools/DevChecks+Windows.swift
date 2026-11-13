@@ -259,6 +259,40 @@ extension DevChecks {
         check(!before && changed.value && store.hasSystemLog(capture), "an open editor learns about a system log saved after it opened", "before=\(before) changed=\(changed.value)")
     }
 
+    /// macOS writes the menu bar item's state back on every update of the app's scene. A write of
+    /// the same value must not count as a change, or the scene updates again and never stops.
+    static func checkMenuBarItemSameValueIsNoChange() {
+        final class Writes {
+            var value = true
+            var count = 0
+        }
+        let writes = Writes()
+        let binding = Binding.changesOnly(get: { writes.value }, set: { value in
+            writes.value = value
+            writes.count += 1
+        })
+        binding.wrappedValue = true
+        check(writes.count == 0, "a binding for changes only drops a write of the same value", "writes=\(writes.count)")
+        binding.wrappedValue = false
+        check(writes.count == 1 && !writes.value, "a binding for changes only passes a new value on", "writes=\(writes.count)")
+
+        let app = AppState.shared
+        final class Changed {
+            var value = false
+        }
+        let changed = Changed()
+        let shown = withObservationTracking {
+            app.showsMenuBarItem
+        } onChange: {
+            changed.value = true
+        }
+        app.menuBarItemInserted.wrappedValue = shown
+        check(!changed.value, "writing the same value to the menu bar item binding is not a change")
+        app.menuBarItemInserted.wrappedValue = !shown
+        check(changed.value && app.showsMenuBarItem == !shown, "a new value for the menu bar item binding is a change")
+        app.menuBarItemInserted.wrappedValue = shown
+    }
+
     /// A capture.json that cannot be read is skipped and logged; the other captures still load.
     static func checkCaptureStoreSkipsBrokenCapture(folder: URL) {
         // A new name every run: lines from older runs may already be in the log.

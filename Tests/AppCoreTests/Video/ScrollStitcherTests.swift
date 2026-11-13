@@ -33,6 +33,26 @@ final class ScrollStitcherTests: XCTestCase {
         XCTAssertEqual(ScrollStitcher.offset(previous: first, next: second), 84)
     }
 
+    /// A sticky header and footer with plain padding around their text: the padding is empty in both
+    /// frames, and page text that scrolled under it is not a mismatch.
+    func testPlainRowsOfAStickyBarAreNotAMismatch() {
+        var first = frame(at: 0, height: 160)
+        var second = frame(at: 60, height: 160)
+        for row in 0..<30 {
+            var bar: [UInt8]? = nil
+            if row >= 10 && row < 20 {
+                bar = ScrollStitcherTests.profile(9_000 + row)
+            }
+            first[row] = bar
+            second[row] = bar
+            first[130 + row] = bar
+            second[130 + row] = bar
+        }
+        let best = ScrollStitcher.bestShift(previous: first, next: second)
+        XCTAssertEqual(best.shift, 60)
+        XCTAssertLessThan(best.error, 1)
+    }
+
     func testStickyHeaderStillWorks() {
         var first = frame(at: 0, height: 120)
         var second = frame(at: 60, height: 120)
@@ -72,14 +92,34 @@ final class ScrollStitcherTests: XCTestCase {
     func testRowSignatureSkipsFlatRows() {
         let flat = [UInt8](repeating: 200, count: 400)
         var striped = flat
-        striped[4] = 0
-        striped[5] = 0
-        striped[6] = 0
+        // A dark pixel in the middle of the row (pixel 50).
+        striped[200] = 0
+        striped[201] = 0
+        striped[202] = 0
         flat.withUnsafeBufferPointer { buffer in
             XCTAssertNil(ScrollStitcher.rowSignature(buffer, rowStart: 0, width: 100))
         }
         striped.withUnsafeBufferPointer { buffer in
             XCTAssertNotNil(ScrollStitcher.rowSignature(buffer, rowStart: 0, width: 100))
+        }
+    }
+
+    /// The first and last pixels of a picked area can show the window's edge or the window behind it:
+    /// an empty row stays empty with a dark pixel there.
+    func testADarkPixelAtTheEdgeLeavesTheRowFlat() {
+        var leftEdge = [UInt8](repeating: 200, count: 400)
+        leftEdge[4] = 0
+        leftEdge[5] = 0
+        leftEdge[6] = 0
+        var rightEdge = [UInt8](repeating: 200, count: 400)
+        rightEdge[392] = 0
+        rightEdge[393] = 0
+        rightEdge[394] = 0
+        leftEdge.withUnsafeBufferPointer { buffer in
+            XCTAssertNil(ScrollStitcher.rowSignature(buffer, rowStart: 0, width: 100))
+        }
+        rightEdge.withUnsafeBufferPointer { buffer in
+            XCTAssertNil(ScrollStitcher.rowSignature(buffer, rowStart: 0, width: 100))
         }
     }
 }

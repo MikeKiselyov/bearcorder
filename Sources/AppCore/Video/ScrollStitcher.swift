@@ -18,6 +18,9 @@ public enum ScrollStitcher {
         var profile = [UInt8](repeating: 0, count: bins)
         var lowest = 255
         var highest = 0
+        // A picked area often takes a pixel or two of the window's edge or of what is behind it. That
+        // strip stays put while the page scrolls, and it must not make an empty row look like content.
+        let edge = width >= 64 ? 4 : 0
         for bin in 0..<bins {
             let from = bin * width / bins
             let to = max(from + 1, (bin + 1) * width / bins)
@@ -29,8 +32,10 @@ public enum ScrollStitcher {
                 let luma = (Int(pixels[offset]) * 299 + Int(pixels[offset + 1]) * 587 + Int(pixels[offset + 2]) * 114) / 1000
                 sum += luma
                 count += 1
-                lowest = min(lowest, luma)
-                highest = max(highest, luma)
+                if x >= edge && x < width - edge {
+                    lowest = min(lowest, luma)
+                    highest = max(highest, luma)
+                }
             }
             if count > 0 {
                 profile[bin] = UInt8(sum / count)
@@ -87,6 +92,27 @@ public enum ScrollStitcher {
             if isStationary(previous[row], next[row]) {
                 stationary[row] = true
             }
+        }
+        // A sticky header or footer also has plain rows (its padding). They are empty in both frames
+        // and belong to the bar: a text row that scrolled under them must not count as a mismatch.
+        var barEnd = -1
+        var row = 0
+        while row < height && (stationary[row] || (previous[row] == nil && next[row] == nil)) {
+            if stationary[row] { barEnd = row }
+            row += 1
+        }
+        // The bar ends where its plain rows end, a few rows of page background at most.
+        if barEnd >= 0 {
+            for index in 0..<row { stationary[index] = true }
+        }
+        var barStart = height
+        row = height - 1
+        while row >= 0 && (stationary[row] || (previous[row] == nil && next[row] == nil)) {
+            if stationary[row] { barStart = row }
+            row -= 1
+        }
+        if barStart < height {
+            for index in (row + 1)..<height { stationary[index] = true }
         }
         var bestShift: Int? = nil
         var bestError = Double.greatestFiniteMagnitude

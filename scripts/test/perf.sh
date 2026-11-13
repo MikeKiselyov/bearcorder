@@ -142,6 +142,7 @@ echo "==> core speed"
 
 errors=$(run_log | grep -c "ERROR" || true)
 if [ "$errors" = "0" ]; then echo "PASS  no errors in the log"; else echo "FAIL  $errors errors in the log"; FAILURES=$((FAILURES + 1)); fi
+if stalls=$(no_stalls); then echo "PASS  the main thread never stalled"; else echo "FAIL  the main thread stalled (limit $MAX_STALL_MS ms)"; echo "$stalls"; FAILURES=$((FAILURES + 1)); fi
 
 defaults write "$BUNDLE_ID" automationEnabled -bool false
 echo

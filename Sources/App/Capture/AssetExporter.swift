@@ -13,7 +13,7 @@ enum AssetExporter {
         var videoBitrate: Int?
     }
 
-    static func export(asset: AVAsset, videoComposition: AVVideoComposition?, options: Options, to url: URL, progress: ((Double) -> Void)? = nil) async throws {
+    static func export(asset: AVAsset, videoComposition: AVVideoComposition?, options: Options, to url: URL, progress: ((Double) -> Void)? = nil, timeout: Double? = nil) async throws {
         try? FileManager.default.removeItem(at: url)
         let videoTracks = try await asset.loadTracks(withMediaType: .video)
         let audioTracks = try await asset.loadTracks(withMediaType: .audio)
@@ -117,9 +117,11 @@ enum AssetExporter {
         let start = options.timeRange?.start ?? .zero
         writer.startSession(atSourceTime: start)
         let total = (options.timeRange?.duration ?? duration).seconds
+        let limit = timeout ?? ExportTimeout.withoutAFrame
 
-        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
-            let group = DispatchGroup()
+        let group = DispatchGroup()
+        let framesWritten = ExportFrameCount()
+        let timedOut = await withCheckedContinuation { (continuation: CheckedContinuation<Bool, Never>) in
             let videoQueue = DispatchQueue(label: "app.export.video")
             let audioQueue = DispatchQueue(label: "app.export.audio")
 
@@ -132,6 +134,7 @@ enum AssetExporter {
                         if total > 0 {
                             progress?(min(1, time / total))
                         }
+                        framesWritten.add()
                         if !videoInput.append(sample) {
                             videoDone = true
                             videoInput.markAsFinished()
@@ -165,11 +168,49 @@ enum AssetExporter {
                 }
             }
 
-            group.notify(queue: .global()) {
-                continuation.resume()
+            // An encoder that stops asking for data would keep the save waiting forever: the end of
+            // the data or the time limit, whichever comes first on this queue, ends the wait.
+            let finishQueue = DispatchQueue(label: "app.export.finish")
+            var resumed = false
+            var framesSeen = 0
+            // The limit is for time without a new frame, not for the whole export: a slow Mac that
+            // keeps writing is not stuck.
+            let timer = DispatchSource.makeTimerSource(queue: finishQueue)
+            timer.schedule(deadline: .now() + limit, repeating: max(limit, 0.01))
+            timer.setEventHandler {
+                if resumed { return }
+                let frames = framesWritten.value
+                if frames != framesSeen {
+                    framesSeen = frames
+                    return
+                }
+                timer.cancel()
+                resumed = true
+                continuation.resume(returning: true)
+            }
+            timer.resume()
+            group.notify(queue: finishQueue) {
+                timer.cancel()
+                if resumed { return }
+                resumed = true
+                continuation.resume(returning: false)
             }
         }
 
+        if timedOut {
+            // With the reader cancelled the loops run out of samples and end. The writer must not be
+            // cancelled while one of them is still appending.
+            reader.cancelReading()
+            await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+                DispatchQueue.global().async {
+                    _ = group.wait(timeout: .now() + 5)
+                    continuation.resume()
+                }
+            }
+            writer.cancelWriting()
+            try? FileManager.default.removeItem(at: url)
+            throw BufferError.exportFailed(L("capture.export.timedOut"))
+        }
         if reader.status == .failed {
             writer.cancelWriting()
             throw BufferError.exportFailed(reader.error?.localizedDescription ?? L("capture.export.readingFailed"))
@@ -184,5 +225,23 @@ enum AssetExporter {
             throw BufferError.exportFailed(writer.error?.localizedDescription ?? L("capture.export.writingFailed"))
         }
         progress?(1)
+    }
+}
+
+/// Frames written so far, counted on the export's queue and read by its time limit.
+private final class ExportFrameCount: @unchecked Sendable {
+    private let lock = NSLock()
+    private var count = 0
+
+    var value: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return count
+    }
+
+    func add() {
+        lock.lock()
+        count += 1
+        lock.unlock()
     }
 }

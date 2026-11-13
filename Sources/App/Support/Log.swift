@@ -43,29 +43,20 @@ enum Log {
         queue.sync {}
     }
 
-    private static func write(_ line: String) {
-        let stamp = TimeFormatStamp.now()
-        queue.async {
-            let url = fileURL
-            let data = Data("\(stamp) \(line)\n".utf8)
-            if let handle = try? FileHandle(forWritingTo: url) {
-                handle.seekToEndOfFile()
-                handle.write(data)
-                try? handle.close()
-            } else {
-                try? data.write(to: url)
-            }
-            // Keep the file small: past 2 MB it moves to <name>.log.1 and a new one starts.
-            LogRotation.rotateIfNeeded(url, limit: 2_000_000)
-        }
-    }
-}
-
-private enum TimeFormatStamp {
-    static func now() -> String {
+    /// One open file and one formatter for every line; both are used only on `queue`.
+    private static let file = LogFile(url: fileURL, limit: 2_000_000)
+    private static let stampFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.dateFormat = "yyyy-MM-dd HH:mm:ss.SSS"
-        return formatter.string(from: Date())
+        return formatter
+    }()
+
+    private static func write(_ line: String) {
+        let date = Date()
+        queue.async {
+            // Keeps the file small: past 2 MB it moves to <name>.log.1 and a new one starts.
+            file.append("\(stampFormatter.string(from: date)) \(line)")
+        }
     }
 }

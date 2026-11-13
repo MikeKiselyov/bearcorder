@@ -3,6 +3,14 @@
 /// top entry, the update badge compares it with GitHub, and CI refuses a pull request without one.
 public enum WhatsNewCatalog {
     public static let releases: [WhatsNewRelease] = [
+        WhatsNewRelease(id: 30, version: "0.19.0", title: "No freezes, safer recording", items: [
+            WhatsNewRelease.Item(symbol: "hourglass", title: "No freeze after launch", text: "Fixed a freeze of a few seconds soon after launch that some Macs had, with the processor kept busy."),
+            WhatsNewRelease.Item(symbol: "externaldrive.badge.exclamationmark", title: "Recording stops before the disk is full", text: "The recording stops by itself while there is still room to save it, with 1 GB to spare, and a note says \"Recording stopped: the disk is almost full.\"", shortcut: "Recording"),
+            WhatsNewRelease.Item(symbol: "bolt", title: "Lighter on a busy Mac", text: "A screenshot of all displays, a long scrolling screenshot, clip thumbnails and the update progress are prepared in the background, and the menu and the editors keep responding meanwhile. Collecting the system log of a clip takes far less memory.", shortcut: "Menu, editors"),
+            WhatsNewRelease.Item(symbol: "square.and.arrow.down", title: "A failed save does not hold the next one", text: "The next clip is saved without waiting for the error window of a failed save to be closed. A clip whose writing stops making progress ends with an error.", shortcut: "Buffer, recording"),
+            WhatsNewRelease.Item(symbol: "arrow.down.to.line", title: "Scrolling screenshot with a sticky header", text: "A page with a header or footer that stays in place sometimes stopped after a few screens. The whole page is captured.", shortcut: "Menu → Scrolling screenshot"),
+            WhatsNewRelease.Item(symbol: "doc.text", title: "Freezes are noted in the log", text: "When the app does not respond for more than a second, the log gets a line with how long. Report a problem sends the log along.", shortcut: "Settings → Updates and feedback"),
+        ]),
         WhatsNewRelease(id: 29, version: "0.18.0", title: "Update from Settings, with percent", items: [
             WhatsNewRelease.Item(symbol: "arrow.down.circle", title: "Update from Settings", text: "When Check now finds a version, What's changed lists the changes and Update to with the new version installs it right there.", shortcut: "Settings → Updates", image: "update-settings"),
             WhatsNewRelease.Item(symbol: "percent", title: "How far the update is", text: "While updating, the menu shows the percent and Settings shows the step: downloading, building, finishing or installing.", shortcut: "Menu, Settings → Updates", image: "update-progress"),

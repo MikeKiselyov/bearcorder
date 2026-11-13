@@ -637,6 +637,145 @@ extension DevChecks {
         check(fetching == 0 && buildStarted == 5 && halfway == 47 && afterEmptyRead == 47 && updater.progress.step == .finishing && savedSeconds == 80.5,
               "update progress: the build follows its time and saves it for next time",
               "\(fetching) \(buildStarted) \(halfway) \(afterEmptyRead) \(updater.progress.step) \(savedSeconds)")
+
+        // The log is read twice a second: a read that brings nothing new writes no setting.
+        final class Writes: @unchecked Sendable {
+            var count = 0
+        }
+        let writes = Writes()
+        let observer = NotificationCenter.default.addObserver(forName: UserDefaults.didChangeNotification, object: UserDefaults.standard, queue: nil) { _ in
+            writes.count += 1
+        }
+        updater.readProgress(log: "==> git fetch\n==> build\nBuild of product 'App' complete! (80.5s)\n", now: start.addingTimeInterval(91))
+        NotificationCenter.default.removeObserver(observer)
+        check(writes.count == 0, "update progress: a read with nothing new writes no setting", "\(writes.count) writes")
+    }
+
+    /// A failed save frees the saving flag before its alert: the alert of a menu bar app can sit
+    /// behind other windows, and saves, crash clips and buffer recovery would wait for it.
+    static func checkSaveErrorFreesSavingFlag() async {
+        let app = AppState.shared
+        let defaults = UserDefaults.standard
+        let automation = defaults.object(forKey: "automationEnabled")
+        let state = app.bufferState
+        let buffers = app.buffers
+        let message = app.statusMessage
+        defer {
+            if let automation {
+                defaults.set(automation, forKey: "automationEnabled")
+            } else {
+                defaults.removeObject(forKey: "automationEnabled")
+            }
+            app.bufferState = state
+            app.buffers = buffers
+            app.statusMessage = message
+        }
+        // No alert window in the test.
+        defaults.set(true, forKey: "automationEnabled")
+        // A running buffer with no display: the save fails.
+        app.bufferState = .running
+        app.buffers = []
+        app.statusMessage = nil
+        final class Seen {
+            var isSaving: Bool?
+        }
+        let seen = Seen()
+        withObservationTracking {
+            _ = app.statusMessage
+        } onChange: {
+            // The message is set right before the alert.
+            MainActor.assumeIsolated {
+                seen.isSaving = app.isSaving
+            }
+        }
+        // The alert's line is not the person's log.
+        Log.errorObserver = { _ in true }
+        await app.saveFromBuffer(seconds: 5)
+        Log.errorObserver = nil
+        check(seen.isSaving == false, "a failed save frees the saving flag before its alert", "isSaving at the alert: \(String(describing: seen.isSaving))")
+    }
+
+    /// An export that does not end in its time is cancelled and fails like any other save.
+    static func checkExportTimeout(folder: URL) async {
+        let source = folder.appendingPathComponent("timeout-source.mov")
+        let output = folder.appendingPathComponent("timeout-output.mp4")
+        let size = CGSize(width: 640, height: 360)
+        var message = "no error"
+        do {
+            try await writeSyntheticVideo(to: source, seconds: 2, size: size)
+            try await AssetExporter.export(asset: AVURLAsset(url: source), videoComposition: nil, options: .init(renderSize: size), to: output, timeout: 0)
+        } catch {
+            message = error.localizedDescription
+        }
+        let expected = BufferError.exportFailed(L("capture.export.timedOut")).localizedDescription
+        let fileLeft = FileManager.default.fileExists(atPath: output.path)
+        check(message == expected && !fileLeft, "an export over its time limit fails and leaves no file", "\(message), file left: \(fileLeft)")
+        // With the usual limit the same clip is written.
+        var written = false
+        do {
+            try await AssetExporter.export(asset: AVURLAsset(url: source), videoComposition: nil, options: .init(renderSize: size), to: output)
+            written = FileManager.default.fileExists(atPath: output.path)
+        } catch {
+            message = error.localizedDescription
+        }
+        check(written, "an export within its time limit is written", message)
+    }
+
+    /// The system log tool is read while it runs (a full pipe would stop it for good), only the end
+    /// of its output is kept, and a tool that does not end is stopped.
+    static func checkSystemLogReading() {
+        func shell(_ command: String) -> (process: Process, pipe: Pipe) {
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: "/bin/sh")
+            process.arguments = ["-c", command]
+            let pipe = Pipe()
+            process.standardOutput = pipe
+            return (process: process, pipe: pipe)
+        }
+        // About 1.3 MB, far more than a pipe holds.
+        let long = shell("seq 1 200000")
+        let tail = SystemLogCollector.run(long.process, output: long.pipe, limit: 1000, timeout: 20)
+        var text = "stopped"
+        if let tail {
+            text = String(decoding: tail.tail(), as: UTF8.self)
+        }
+        let lines = text.split(separator: "\n")
+        check(tail?.isCut == true && text.hasSuffix("199999\n200000\n") && text.utf8.count <= 1000 && text.utf8.count > 990 && lines.first?.count == 6,
+              "system log: a long output keeps whole lines from its end", "\(text.utf8.count) bytes, first line \(lines.first ?? "")")
+
+        let stuck = shell("echo start; sleep 20")
+        let started = Date()
+        let stopped = SystemLogCollector.run(stuck.process, output: stuck.pipe, limit: 1000, timeout: 0.5)
+        let waited = Date().timeIntervalSince(started)
+        check(stopped == nil && waited < 5, "system log: a tool that does not end is stopped and saves nothing", String(format: "%.1fs", waited))
+    }
+
+    /// A main thread that stops answering leaves one line in the log, however many pings it missed.
+    /// Starts and stops the one watchdog of the process: fine in a self-test, which is a process of its own.
+    @MainActor
+    static func checkMainThreadWatchdog() async {
+        final class Lines: @unchecked Sendable {
+            var all: [String] = []
+        }
+        let lines = Lines()
+        // A tenth of the real timing, so the check takes about a second.
+        final class Waiting: @unchecked Sendable {
+            let lock = NSLock()
+            var lines: [String] = []
+        }
+        let waiting = Waiting()
+        MainThreadWatchdog.start(interval: 0.1, threshold: 300_000_000, report: { lines.all.append($0) }, notAnswering: { line in
+            waiting.lock.withLock { waiting.lines.append(line) }
+        })
+        // Real time: the main thread is held past several pings, then left free for several more.
+        usleep(800_000)
+        try? await Task.sleep(nanoseconds: 500_000_000)
+        MainThreadWatchdog.stop()
+        let milliseconds = Int(lines.all.first?.split(separator: " ").dropLast().last ?? "") ?? 0
+        check(lines.all.count == 1 && lines.all[0].hasPrefix("main thread stalled ") && lines.all[0].hasSuffix(" ms") && milliseconds >= 300 && milliseconds < 2_000,
+              "watchdog: a held main thread is one log line with its length", "\(lines.all)")
+        let whileHeld = waiting.lock.withLock { waiting.lines }
+        check(whileHeld.count == 1 && whileHeld[0].hasPrefix("main thread not answering for "), "watchdog: a main thread still held is said once, before it answers", "\(whileHeld)")
     }
 }
 #endif

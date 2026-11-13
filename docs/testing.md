@@ -20,6 +20,10 @@ The scripts drive the real app through a local automation hook (off by default, 
 the run). They move the mouse and open a Chrome window; don't touch the Mac while they run. Logs of
 the last run are in `build/test-logs/`.
 
+The app notes in its log when the main thread did not answer for more than a second
+(`main thread stalled <N> ms`). `e2e.sh`, `e2e-features.sh` and `perf.sh` fail when their run added
+such a line; `MAX_STALL_MS=1500 scripts/test/e2e.sh` allows stalls up to that length.
+
 A command goes out through a small sender (`scripts/dev/app-send.swift`, compiled with `swiftc` into
 `.build/app-send` the first time and when the source changes; `osascript` is the fallback). The
 script that waits for a result (`scripts/dev/app-run.sh`) adds ` #id=<token>` to the command, and the

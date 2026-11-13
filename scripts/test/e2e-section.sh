@@ -26,8 +26,9 @@ R=scripts/dev/app-run.sh
 # shellcheck disable=SC2034
 BROWSER="${E2E_BROWSER:-Google Chrome}"
 WORK="$ROOT/build/e2e-features"
-# shellcheck disable=SC2034
 LOG="$HOME/Library/Logs/$APP_NAME/$APP_NAME.log"
+# shellcheck disable=SC1091
+source "$ROOT/scripts/test/lib/run-log.sh"
 FAILURES=0
 PASSES=0
 pass() { echo "PASS  $1"; PASSES=$((PASSES + 1)); }
@@ -55,6 +56,11 @@ mkdir -p "$WORK"
 defaults write "$BUNDLE_ID" automationEnabled -bool true
 # Editor choices made by the tests go to a store of their own (EditorMemory); start it empty.
 defaults delete "$BUNDLE_ID.tests" 2>/dev/null
+# For the last section's "the main thread never stalled".
+# shellcheck disable=SC2034
+log_lines_before=$(log_line_count)
+# shellcheck disable=SC2034
+log_first_before=$(log_first_line)
 open "$TEST_APP"
 # The app answers and its buffer has started.
 wait_for 20 status_starts running

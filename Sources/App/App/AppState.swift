@@ -31,7 +31,7 @@ final class AppState {
 
     var bufferState: BufferState = .off
     var coveredSeconds: Double = 0
-    var activity: [Double] = Array(repeating: 0, count: 16)
+    var activity: [Double] = Array(repeating: 0, count: ScreenBuffer.activityBuckets)
     var recording: RecordingSession?
     var recordingTarget: RecordingTarget = .screens
     var isSaving = false
@@ -83,6 +83,9 @@ final class AppState {
     var bufferRecovery = BufferRecovery()
     @ObservationIgnored var bufferRecoveryTask: Task<Void, Never>?
     @ObservationIgnored var bufferStart: Task<Void, Never>?
+    /// After a start, checks until the capture leaves our own windows out (`startBufferNow`). One at
+    /// a time: the check of an earlier start would go on asking about the new buffers.
+    @ObservationIgnored var bufferFilterRefresh: Task<Void, Never>?
     /// Tests only: the next starts fail as if no display were there.
     @ObservationIgnored var failingBufferStartsForTests = 0
 
@@ -108,6 +111,7 @@ final class AppState {
     func launch() {
         if launched { return }
         launched = true
+        MainThreadWatchdog.start()
         ScreenBuffer.clearBufferFolder()
         Task { await keepMenuBarItemVisible(reason: "launch") }
 
@@ -176,12 +180,12 @@ final class AppState {
         if isFirstLaunch && (!Automation.isEnabled || showsGuideInTests) {
             // First launch: the guide asks for permissions before the buffer starts.
             Log.info("first launch: opening the welcome guide")
-            bufferState = ScreenBuffer.hasScreenRecordingAccess ? .paused : .needsPermission
+            setBufferState(ScreenBuffer.hasScreenRecordingAccess ? .paused : .needsPermission)
             WindowManager.shared.openOnboarding()
         } else if settings.startBufferOnLaunch {
             Task { await startBuffer() }
         } else {
-            bufferState = ScreenBuffer.hasScreenRecordingAccess ? .paused : .needsPermission
+            setBufferState(ScreenBuffer.hasScreenRecordingAccess ? .paused : .needsPermission)
         }
     }
 
@@ -198,8 +202,22 @@ final class AppState {
         return !systemAgents.contains(bundleId)
     }
 
-    /// Thread-safe reference for the microphone callback.
-    @ObservationIgnored nonisolated(unsafe) var micSink: ScreenBuffer?
+    /// Where the microphone's samples go. The main thread sets it, the microphone's queue reads it
+    /// for every sample: behind a lock.
+    nonisolated var micSink: ScreenBuffer? {
+        get {
+            micSinkLock.lock()
+            defer { micSinkLock.unlock() }
+            return lockedMicSink
+        }
+        set {
+            micSinkLock.lock()
+            lockedMicSink = newValue
+            micSinkLock.unlock()
+        }
+    }
+    @ObservationIgnored private nonisolated(unsafe) var lockedMicSink: ScreenBuffer?
+    @ObservationIgnored private nonisolated let micSinkLock = NSLock()
 
     /// Registers the shortcuts from Settings (defaults: ⌥⇧ + key). Called again whenever they change.
     func registerHotKeys() {
@@ -228,7 +246,7 @@ final class AppState {
             return
         }
         if !force && !isMenuPanelOpen { return }
-        let status = primary.status(buckets: 16)
+        let status = primary.status()
         if Int(status.covered) != Int(coveredSeconds) {
             coveredSeconds = status.covered
         }
@@ -250,7 +268,10 @@ final class AppState {
     }
 
     private func screensChanged() {
-        displayCount = NSScreen.screens.count
+        // The Dock appearing posts this notification too: the count is written only when it changes.
+        if displayCount != NSScreen.screens.count {
+            displayCount = NSScreen.screens.count
+        }
         let signature = AppState.currentScreenSignature()
         if signature == screenSignature {
             // Displays that wake up keep their frames, but a waiting buffer can start now.

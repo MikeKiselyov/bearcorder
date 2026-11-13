@@ -382,6 +382,306 @@ extension DevChecks {
         try? FileManager.default.removeItem(at: support)
     }
 
+    /// The menu asks for the buffer's status once a second on the main thread. The capture queue
+    /// opens a writer and an encoder every 10 s, finishes segments and deletes files, so the status
+    /// is what the queue last published and the answer never waits for the queue.
+    static func checkBufferStatusDoesNotWait(folder: URL) async {
+        let previousSupport = AppPaths.supportOverride
+        let support = folder.appendingPathComponent("buffer-status", isDirectory: true)
+        AppPaths.supportOverride = support
+        defer {
+            AppPaths.supportOverride = previousSupport
+        }
+        let framesPerSecond = 10
+        let size = CGSize(width: 160, height: 96)
+        let buffer = ScreenBuffer(displayID: 990_011)
+        buffer.queue.sync {
+            buffer.configuration.framesPerSecond = framesPerSecond
+            buffer.outputSize = size
+        }
+        let empty = buffer.status()
+        check(empty.covered == 0 && empty.activity == [Double](repeating: 0, count: 16), "buffer status: an empty buffer covers nothing", "\(empty)")
+        guard let pixels = solidPixelBuffer(size: size) else {
+            check(false, "buffer status: made-up frame")
+            return
+        }
+        // 12 s of frames until now: with the 180 s window, all of them are in the last two bars.
+        let start = CACurrentMediaTime()
+        let firstFrame = start - 12
+        var time = firstFrame
+        while time <= start {
+            await waitUntilBufferTakesFrames(buffer)
+            if let sample = sampleBuffer(pixels, at: time) {
+                buffer.queue.sync {
+                    buffer.appendVideo(sample, at: time)
+                }
+            }
+            time += 1.0 / Double(framesPerSecond)
+        }
+        let expected = CACurrentMediaTime() - firstFrame
+        let status = buffer.status()
+        check(abs(status.covered - expected) < 0.1, "buffer status: the covered time is the time since the first frame", String(format: "%.3f s of %.3f s", status.covered, expected))
+        check(status.activity.count == 16 && status.activity[15] == 1 && status.activity[0] == 0, "buffer status: the newest bar is the busiest", "\(status.activity)")
+
+        // The queue is busy for a second, as while a segment opens on a loaded Mac.
+        let gate = DispatchSemaphore(value: 0)
+        buffer.queue.async {
+            gate.wait()
+        }
+        DispatchQueue.global().asyncAfter(deadline: .now() + 1) {
+            gate.signal()
+        }
+        let asked = CACurrentMediaTime()
+        let whileBusy = buffer.status()
+        let waited = CACurrentMediaTime() - asked
+        check(waited < 0.2 && whileBusy.covered >= status.covered, "buffer status: the answer does not wait for a busy capture queue", String(format: "waited %.2f s", waited))
+        await buffer.finishCurrentSegment()
+        try? FileManager.default.removeItem(at: support)
+    }
+
+    /// The stream's delegate, a stop and the main thread touch the buffer's heartbeat at once (the lid
+    /// closes while the displays change), and the microphone's queue reads the sink the main thread
+    /// replaces. Both are behind a lock; without it these loops crash the self-test.
+    static func checkBufferStateFromSeveralThreads() {
+        let buffer = ScreenBuffer(displayID: 990_012)
+        DispatchQueue.concurrentPerform(iterations: 20_000) { iteration in
+            if iteration % 2 == 0 {
+                buffer.startHeartbeat()
+            } else {
+                buffer.stopHeartbeat()
+            }
+        }
+        buffer.stopHeartbeat()
+        check(!buffer.hasHeartbeat, "the buffer's heartbeat takes starts and stops from several threads at once")
+
+        final class Readers: @unchecked Sendable {
+            var finished = false
+        }
+        let app = AppState.shared
+        let savedSink = app.micSink
+        let readers = Readers()
+        let done = DispatchSemaphore(value: 0)
+        for _ in 0..<3 {
+            DispatchQueue.global().async {
+                var seen = 0
+                while !readers.finished {
+                    if let sink = app.micSink {
+                        seen += Int(sink.displayID % 2)
+                    }
+                }
+                done.signal()
+            }
+        }
+        for number in 0..<20_000 {
+            app.micSink = ScreenBuffer(displayID: CGDirectDisplayID(991_000 + number))
+        }
+        readers.finished = true
+        for _ in 0..<3 {
+            done.wait()
+        }
+        app.micSink = savedSink
+        check(app.micSink === savedSink, "the microphone's sink is replaced while its queue reads it")
+    }
+
+    /// A writer that failed (a full disk) refuses every frame until its segment ends. That is one line
+    /// in the log and a count at the end of the segment, not a line per frame. The writer is failed
+    /// here by a frame stamped before the ones it already has.
+    static func checkFailedAppendsLogOnce(folder: URL) async {
+        let previousSupport = AppPaths.supportOverride
+        let support = folder.appendingPathComponent("failed-appends", isDirectory: true)
+        AppPaths.supportOverride = support
+        defer {
+            AppPaths.supportOverride = previousSupport
+        }
+        let framesPerSecond = 10
+        let size = CGSize(width: 160, height: 96)
+        let buffer = ScreenBuffer(displayID: 990_013)
+        buffer.queue.sync {
+            buffer.configuration.framesPerSecond = framesPerSecond
+            buffer.outputSize = size
+        }
+        guard let pixels = solidPixelBuffer(size: size) else {
+            check(false, "failed appends: made-up frame")
+            return
+        }
+        final class Lines: @unchecked Sendable {
+            private let lock = NSLock()
+            private var kept: [String] = []
+            func add(_ line: String) {
+                lock.lock()
+                kept.append(line)
+                lock.unlock()
+            }
+            var all: [String] {
+                lock.lock()
+                defer { lock.unlock() }
+                return kept
+            }
+        }
+        // Only this buffer's lines, and they stay out of the real log file.
+        let lines = Lines()
+        Log.errorObserver = { line in
+            if !line.contains("buffer[990013]") { return false }
+            lines.add(line)
+            return true
+        }
+        defer {
+            Log.errorObserver = nil
+        }
+        let start = CACurrentMediaTime()
+        var time = start - 4
+        while time <= start - 3 {
+            await waitUntilBufferTakesFrames(buffer)
+            if let sample = sampleBuffer(pixels, at: time) {
+                buffer.queue.sync {
+                    buffer.appendVideo(sample, at: time)
+                }
+            }
+            time += 1.0 / Double(framesPerSecond)
+        }
+        for step in 0..<20 {
+            try? await Task.sleep(nanoseconds: 20_000_000)
+            if let sample = sampleBuffer(pixels, at: start - 10 + Double(step) * 0.01) {
+                buffer.queue.sync {
+                    buffer.appendVideo(sample, at: time)
+                }
+            }
+            time += 1.0 / Double(framesPerSecond)
+        }
+        let refused = buffer.queue.sync { buffer.failedAppends }
+        var whileOpen = 0
+        for line in lines.all where line.contains("append failed") {
+            whileOpen += 1
+        }
+        check(refused >= 10 && whileOpen == 1, "failed appends: one log line while the segment is open", "\(refused) frames refused, \(whileOpen) lines")
+        await buffer.finishCurrentSegment()
+        var counted = 0
+        for line in lines.all where line.contains("append failed for \(refused) frames") {
+            counted += 1
+        }
+        check(counted == 1, "failed appends: the count is logged once, when the segment ends", lines.all.joined(separator: " | "))
+        try? FileManager.default.removeItem(at: support)
+    }
+
+    /// A recording keeps every segment and would fill the disk. The buffer looks at the free space
+    /// when a recording starts and at every new segment, and tells the app once per recording; the
+    /// rolling buffer alone (nothing kept) tells nothing.
+    static func checkRecordingIsToldAboutFullDisk(folder: URL) async {
+        let previousSupport = AppPaths.supportOverride
+        let support = folder.appendingPathComponent("disk-almost-full", isDirectory: true)
+        AppPaths.supportOverride = support
+        defer {
+            AppPaths.supportOverride = previousSupport
+        }
+        let framesPerSecond = 10
+        let size = CGSize(width: 160, height: 96)
+        let almostFull: Int64 = 500_000_000
+        let plenty: Int64 = 50_000_000_000
+        let buffer = ScreenBuffer(displayID: 990_014)
+        buffer.queue.sync {
+            buffer.configuration.framesPerSecond = framesPerSecond
+            buffer.outputSize = size
+            buffer.freeBytesForTests = almostFull
+        }
+        var told = 0
+        buffer.onDiskAlmostFull = {
+            told += 1
+        }
+        // The made-up full disk stays out of the real log file.
+        Log.errorObserver = { line in
+            return line.contains("buffer[990014]")
+        }
+        defer {
+            Log.errorObserver = nil
+        }
+        guard let pixels = solidPixelBuffer(size: size) else {
+            check(false, "disk almost full: made-up frame")
+            return
+        }
+        var time = CACurrentMediaTime() - 5
+        /// Feeds half a second of frames; the first one starts a new segment when asked.
+        func feed(newSegment: Bool) async {
+            for position in 0..<5 {
+                await waitUntilBufferTakesFrames(buffer)
+                if let sample = sampleBuffer(pixels, at: time) {
+                    let frameTime = time
+                    buffer.queue.sync {
+                        if newSegment && position == 0 {
+                            buffer.startNewSegment = true
+                        }
+                        buffer.appendVideo(sample, at: frameTime)
+                    }
+                }
+                time += 1.0 / Double(framesPerSecond)
+            }
+            await settle(buffer)
+        }
+        await feed(newSegment: false)
+        check(told == 0, "disk almost full: the buffer alone, with no recording, stops nothing", "told \(told) times")
+        buffer.pin(from: time)
+        await settle(buffer)
+        check(told == 1, "disk almost full: a recording that starts is told at once", "told \(told) times")
+        await feed(newSegment: true)
+        check(told == 1, "disk almost full: a recording is told once", "told \(told) times")
+
+        buffer.pin(from: nil)
+        buffer.queue.sync {
+            buffer.freeBytesForTests = plenty
+        }
+        buffer.pin(from: time)
+        await feed(newSegment: true)
+        check(told == 1, "disk almost full: a recording with room goes on", "told \(told) times")
+        buffer.queue.sync {
+            buffer.freeBytesForTests = almostFull
+        }
+        await feed(newSegment: false)
+        check(told == 1, "disk almost full: the disk is looked at when a segment starts, not at every frame", "told \(told) times")
+        await feed(newSegment: true)
+        check(told == 2, "disk almost full: a disk that fills up while recording is seen at the next segment", "told \(told) times")
+        buffer.pin(from: nil)
+        await buffer.finishCurrentSegment()
+        try? FileManager.default.removeItem(at: support)
+    }
+
+    /// Waits until the buffer's queue, and then the main queue, ran what was put on them.
+    private static func settle(_ buffer: ScreenBuffer) async {
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            buffer.queue.async {
+                DispatchQueue.main.async {
+                    continuation.resume()
+                }
+            }
+        }
+    }
+
+    /// After a start the app checks every 2 s, up to a minute, whether the capture leaves its own
+    /// windows out. A new start or a pause ends the check of the start before it, which would go on
+    /// asking macOS about the new buffers.
+    static func checkFilterRefreshEndsWithTheBuffer() async {
+        let app = AppState.shared
+        let savedState = app.bufferState
+        let savedRefresh = app.bufferFilterRefresh
+        defer {
+            app.bufferFilterRefresh = savedRefresh
+            app.setBufferState(savedState)
+        }
+        let beforeStart = Task {
+            _ = try? await Task.sleep(nanoseconds: 60_000_000_000)
+        }
+        app.bufferFilterRefresh = beforeStart
+        // Without Screen Recording access a start ends right away and captures nothing.
+        ScreenBuffer.pretendNoAccess = true
+        await app.startBuffer()
+        ScreenBuffer.pretendNoAccess = false
+        check(beforeStart.isCancelled, "a new buffer start ends the capture filter check of the start before it")
+        let beforePause = Task {
+            _ = try? await Task.sleep(nanoseconds: 60_000_000_000)
+        }
+        app.bufferFilterRefresh = beforePause
+        await app.pauseBuffer()
+        check(beforePause.isCancelled, "pausing the buffer ends the capture filter check")
+    }
+
     /// Segment layout relative to `now`, for a failed check.
     private static func describe(_ segments: [ScreenBuffer.Segment], from now: Double) -> String {
         var parts: [String] = []

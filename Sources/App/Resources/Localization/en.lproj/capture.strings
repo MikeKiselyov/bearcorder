@@ -24,6 +24,7 @@
 "capture.export.writerFailed" = "writer failed";
 "capture.export.readingFailed" = "reading failed";
 "capture.export.writingFailed" = "writing failed";
+"capture.export.timedOut" = "writing the clip took too long";
 
 /* Window size presets: the width, then the height. */
 "capture.resize.phone" = "Phone · %1$ld × %2$ld";

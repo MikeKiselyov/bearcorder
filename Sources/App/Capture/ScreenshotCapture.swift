@@ -114,6 +114,25 @@ enum ScreenshotCapture {
         return url
     }
 
+    /// The pictures side by side in one PNG file. Loading, stitching and encoding two 5K displays
+    /// takes seconds, so it runs off the main thread.
+    static func stitchToFile(_ files: [URL]) async -> URL {
+        let stitchedFile = AppPaths.temporary.appendingPathComponent("all-\(UUID().uuidString).png")
+        await Task.detached(priority: .userInitiated) {
+            HeavyWork.ran("stitching displays")
+            var images: [CGImage] = []
+            for file in files {
+                if let image = ImageFiles.load(file) {
+                    images.append(image)
+                }
+            }
+            if let stitched = stitchHorizontally(images) {
+                ImageFiles.write(stitched, to: stitchedFile, type: "public.png")
+            }
+        }.value
+        return stitchedFile
+    }
+
     /// Places images left to right, scaled to the tallest one's height, with a small gap.
     static func stitchHorizontally(_ images: [CGImage], gap: Int = 0) -> CGImage? {
         guard let tallest = images.map({ image in image.height }).max() else { return nil }

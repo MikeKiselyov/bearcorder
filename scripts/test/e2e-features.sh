@@ -24,6 +24,9 @@ source "$ROOT/scripts/lib/app-name.sh"
 BUNDLE_ID="${APP_BUNDLE_ID:-$DEFAULT_BUNDLE_ID}"
 # shellcheck disable=SC1091
 source "$ROOT/scripts/test/lib/test-app.sh"
+LOG="$HOME/Library/Logs/$APP_NAME/$APP_NAME.log"
+# shellcheck disable=SC1091
+source "$ROOT/scripts/test/lib/run-log.sh"
 R=scripts/dev/app-run.sh
 BROWSER="${E2E_BROWSER:-Google Chrome}"
 WORK="$ROOT/build/e2e-features"
@@ -40,6 +43,8 @@ section "build and launch"
 build_test_app || exit 1
 # Quit the person's copy of the app and keep a copy of their settings before any test setting is written.
 quit_running_app
+log_lines_before=$(log_line_count)
+log_first_before=$(log_first_line)
 rm -rf "$WORK"
 mkdir -p "$WORK"
 defaults write "$BUNDLE_ID" automationEnabled -bool true
@@ -235,6 +240,8 @@ text = open(sys.argv[1]).read()
 raw = [int(number) for number in re.findall(r"Row (\d{3})", text)]
 rows = []
 for number in raw:
+    if number < 1 or number > 150:
+        continue  # not a row of the page: OCR misread a line cut at the edge of a piece
     if number in rows[-8:]:
         continue  # repeated where OCR pieces overlap
     rows.append(number)
@@ -702,7 +709,6 @@ if [ "$(field "$result" windows)" = "0" ] && [ "$(field "$result" menu)" = "true
 $R close-panel 10 >/dev/null
 
 section "shortcuts"
-LOG="$HOME/Library/Logs/$APP_NAME/$APP_NAME.log"
 before=$(grep -c "marker added" "$LOG")
 $R post-key:46:option,shift 10 >/dev/null
 wait_for 10 marker_count_above "$before"
@@ -3257,7 +3263,7 @@ section "quitting stops the screen capture"
 # pkill (updates, reinstalls) used to end the app mid-capture, and macOS kept showing
 # "<name> - Currently Sharing" after it was gone.
 $R buffer-start 30 >/dev/null
-log_lines_before=$(wc -l < "$LOG")
+quit_lines_before=$(wc -l < "$LOG")
 pkill -x "$APP_NAME" 2>/dev/null
 # It has to quit by itself: wait_for_app_to_quit would end it with kill -9 and hide a hang.
 waited=0
@@ -3268,7 +3274,8 @@ while pgrep -x "$APP_NAME" >/dev/null && [ "$waited" -lt 30 ]; do
 done
 if pgrep -x "$APP_NAME" >/dev/null; then quit_by_itself=false; else quit_by_itself=true; fi
 wait_for_app_to_quit
-quit_log=$(tail -n +"$((log_lines_before + 1))" "$LOG")
+quit_log=$(tail -n +"$((quit_lines_before + 1))" "$LOG")
+if stalls=$(no_stalls); then pass "the main thread never stalled"; else fail "the main thread stalled" "(limit $MAX_STALL_MS ms)"; echo "$stalls"; fi
 if [ "$quit_by_itself" = true ]; then pass "$APP_NAME quits on SIGTERM"; else fail "$APP_NAME quits on SIGTERM" "still running after 6 s"; fi
 if echo "$quit_log" | grep -q "quit requested by SIGTERM" && echo "$quit_log" | grep -q "capture stopped for quit" && ! echo "$quit_log" | grep -q "quit timed out" && ! echo "$quit_log" | grep -q "quit did not finish"; then pass "SIGTERM stops the screen capture before quitting"; else fail "SIGTERM stops the screen capture" "$quit_log"; fi
 

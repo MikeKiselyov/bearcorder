@@ -23,7 +23,7 @@ extension AppState {
         if (mode == .fullScreen || mode == .allDisplays) && NSScreen.screens.count > 1 {
             let displays = await ScreenshotCapture.captureEachDisplay()
             let environment = await collected
-            saveScreenshotOfEachDisplay(displays, showAll: mode == .allDisplays, environment: environment, events: recentEvents, started: started)
+            await saveScreenshotOfEachDisplay(displays, showAll: mode == .allDisplays, environment: environment, events: recentEvents, started: started)
             return
         }
         guard let file = await ScreenshotCapture.capture(mode) else { return }
@@ -31,7 +31,7 @@ extension AppState {
         let environment = await collected
         do {
             let capture = try store.add(kind: .screenshot, mediaFile: file, environment: environment, events: recentEvents)
-            announceScreenshot(capture)
+            await announceScreenshot(capture)
             WindowManager.shared.openEditor(for: capture)
             Log.info(String(format: "screenshot: picked in %.2fs, editor after %.2fs more", captured.timeIntervalSince(started), Date().timeIntervalSince(captured)))
         } catch {
@@ -41,8 +41,16 @@ extension AppState {
 
 
     /// Puts a new screenshot on the clipboard (Settings → Screenshots) and says so.
-    private func announceScreenshot(_ capture: Capture) {
-        guard settings.copyScreenshots, let png = try? Data(contentsOf: capture.mediaURL) else {
+    private func announceScreenshot(_ capture: Capture) async {
+        var read: Data? = nil
+        if settings.copyScreenshots {
+            // A 5K screenshot is tens of megabytes: read off the main thread.
+            let file = capture.mediaURL
+            read = await Task.detached(priority: .userInitiated) {
+                return try? Data(contentsOf: file)
+            }.value
+        }
+        guard let png = read else {
             Toast.shared.show(L("app.screenshot.saved"), symbol: "photo")
             return
         }
@@ -60,7 +68,7 @@ extension AppState {
     /// Several displays: every display as its own picture, like clips. The side-by-side picture is built
     /// right after the editor opens, so the editor does not wait for it. The editor opens on the display
     /// under the pointer, or side by side for "All displays".
-    private func saveScreenshotOfEachDisplay(_ displays: [(displayID: CGDirectDisplayID, frame: CGRect, url: URL)], showAll: Bool, environment: EnvironmentSnapshot, events: [InputEvent], started: Date) {
+    private func saveScreenshotOfEachDisplay(_ displays: [(displayID: CGDirectDisplayID, frame: CGRect, url: URL)], showAll: Bool, environment: EnvironmentSnapshot, events: [InputEvent], started: Date) async {
         if displays.isEmpty {
             showError(L("app.screenshot.failed"))
             return
@@ -69,7 +77,7 @@ extension AppState {
             // A display went to sleep or was unplugged: keep the one picture that came back.
             do {
                 let capture = try store.add(kind: .screenshot, mediaFile: displays[0].url, environment: environment, events: events)
-                announceScreenshot(capture)
+                await announceScreenshot(capture)
                 WindowManager.shared.openEditor(for: capture)
             } catch {
                 showError(error.localizedDescription)
@@ -90,16 +98,11 @@ extension AppState {
         do {
             if showAll {
                 // Stitched now: it is the picture that opens.
-                var images: [CGImage] = []
+                var files: [URL] = []
                 for display in displays {
-                    if let image = ImageFiles.load(display.url) {
-                        images.append(image)
-                    }
+                    files.append(display.url)
                 }
-                let stitchedFile = AppPaths.temporary.appendingPathComponent("all-\(UUID().uuidString).png")
-                if let stitched = ScreenshotCapture.stitchHorizontally(images) {
-                    ImageFiles.write(stitched, to: stitchedFile, type: "public.png")
-                }
+                let stitchedFile = await ScreenshotCapture.stitchToFile(files)
                 var capture = try store.add(kind: .screenshot, mediaFile: stitchedFile, environment: environment, events: events)
                 try FileManager.default.linkItem(at: capture.mediaURL, to: capture.folder.appendingPathComponent("screen-all.png"))
                 for (index, display) in displays.enumerated() {
@@ -108,7 +111,7 @@ extension AppState {
                 capture.screens = variants
                 capture.selectedScreen = ScreenVariant.allID
                 try store.replace(capture)
-                announceScreenshot(capture)
+                await announceScreenshot(capture)
                 WindowManager.shared.openEditor(for: capture)
             } else {
                 var capture = try store.add(kind: .screenshot, mediaFile: displays[chosen].url, environment: environment, events: events)
@@ -123,7 +126,7 @@ extension AppState {
                 capture.screens = variants
                 capture.selectedScreen = variants[chosen].id
                 try store.replace(capture)
-                announceScreenshot(capture)
+                await announceScreenshot(capture)
                 WindowManager.shared.openEditor(for: capture)
                 let ready = capture
                 Task.detached(priority: .utility) {
@@ -204,7 +207,7 @@ extension AppState {
         do {
             guard let image = try await ScrollingCapture.shared.run(on: chosen, area: area) else { return }
             let file = AppPaths.temporary.appendingPathComponent("scroll-\(UUID().uuidString).png")
-            ImageFiles.write(image, to: file, type: "public.png")
+            await ImageFiles.writeInBackground(image, to: file, type: "public.png")
             let environment = await EnvironmentCollector.snapshot(for: app, readURL: settings.readBrowserURL)
             let capture = try store.add(kind: .screenshot, mediaFile: file, environment: environment)
             Toast.shared.show(L("app.scrolling.done", image.height), symbol: "arrow.down.to.line", seconds: 2)

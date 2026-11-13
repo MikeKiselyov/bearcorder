@@ -320,6 +320,18 @@ enum AppPaths {
         }
     }
 
+    private static let createdFolders = CreatedFolders()
+
+    /// Makes the folder the first time its path is asked for. For the folders views ask for on
+    /// every redraw; a folder that has to come back after someone deleted it uses `ensureFolder`.
+    private static func ensureFolderOnce(_ url: URL) {
+        do {
+            try createdFolders.ensure(url) { folder in try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true) }
+        } catch {
+            Log.error("paths: could not create \(url.path): \(error)")
+        }
+    }
+
     /// Set by `--readme-media` so the demo captures never mix with real ones.
     nonisolated(unsafe) static var supportOverride: URL?
 
@@ -329,10 +341,11 @@ enum AppPaths {
         if let override = supportOverride {
             folder = override
         }
-        AppPaths.ensureFolder(folder)
+        AppPaths.ensureFolderOnce(folder)
         return folder
     }
 
+    /// Made on every ask (once per segment): a deleted folder comes back for the next segment.
     static var buffer: URL {
         let folder = support.appendingPathComponent("Buffer", isDirectory: true)
         AppPaths.ensureFolder(folder)
@@ -341,10 +354,11 @@ enum AppPaths {
 
     static var captures: URL {
         let folder = support.appendingPathComponent("Captures", isDirectory: true)
-        AppPaths.ensureFolder(folder)
+        AppPaths.ensureFolderOnce(folder)
         return folder
     }
 
+    /// Made on every ask (once per capture or export): macOS clears old temporary folders while the app runs.
     static var temporary: URL {
         let folder = FileManager.default.temporaryDirectory.appendingPathComponent(AppInfo.name, isDirectory: true)
         AppPaths.ensureFolder(folder)

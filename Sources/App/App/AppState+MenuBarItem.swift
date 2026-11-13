@@ -3,10 +3,17 @@ import ScreenCaptureKit
 import Observation
 import AppCore
 import QuartzCore
+import SwiftUI
 
 extension AppState {
     // MARK: Menu bar item
 
+    /// What `MenuBarExtra(isInserted:)` reads and writes.
+    var menuBarItemInserted: Binding<Bool> {
+        Binding.changesOnly(get: { self.showsMenuBarItem }, set: { value in
+            self.showsMenuBarItem = value
+        })
+    }
 
     /// Whether the bear cannot be seen in the menu bar, nil when there is no item to look at.
     func menuBarItemIsHidden() -> Bool? {
