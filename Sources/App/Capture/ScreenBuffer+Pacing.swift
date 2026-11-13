@@ -93,7 +93,12 @@ extension ScreenBuffer {
     }
 
     func startHeartbeat() {
-        stopHeartbeat()
+        lock.withLock { startHeartbeatLocked() }
+    }
+
+    /// With `lock` held.
+    func startHeartbeatLocked() {
+        stopHeartbeatLocked()
         let timer = DispatchSource.makeTimerSource(queue: queue)
         timer.schedule(deadline: .now() + BufferTiming.heartbeatInterval, repeating: BufferTiming.heartbeatInterval)
         timer.setEventHandler { [weak self] in
@@ -104,8 +109,18 @@ extension ScreenBuffer {
     }
 
     func stopHeartbeat() {
+        lock.withLock { stopHeartbeatLocked() }
+    }
+
+    /// With `lock` held.
+    func stopHeartbeatLocked() {
         heartbeat?.cancel()
         heartbeat = nil
+    }
+
+    /// The buffer runs: the heartbeat is on from a start to the stop. Any thread.
+    var hasHeartbeat: Bool {
+        return lock.withLock { heartbeat != nil }
     }
 
     /// Queue only.
@@ -130,7 +145,7 @@ extension ScreenBuffer {
             // The last save closed the segment and the screen has been still since. While the buffer
             // runs, a new segment starts where the old one ended, so this clip is playable and reaches
             // its save too. A stopped buffer gets no made-up frames.
-            guard heartbeat != nil else { return }
+            guard hasHeartbeat else { return }
             let reopen = lastFrameTime + 1.0 / Double(configuration.framesPerSecond)
             guard BufferTiming.catchUpTime(now: now, lastFrame: reopen) != nil else { return }
             if let copy = ScreenBuffer.retimed(last, to: reopen) {

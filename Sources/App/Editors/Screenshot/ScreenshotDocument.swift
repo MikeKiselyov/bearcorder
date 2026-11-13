@@ -89,11 +89,6 @@ final class ScreenshotDocument {
         }
     }
 
-    /// An image handed to a background task; CGImage is immutable.
-    private struct FrozenImage: @unchecked Sendable {
-        let image: CGImage
-    }
-
     private(set) var capture: Capture
     private(set) var base: CGImage
     var annotations: [Annotation] = []
@@ -148,6 +143,8 @@ final class ScreenshotDocument {
     /// File size in bytes of each export format for the picture as it is now.
     var exportSizes: [ExportFormat: Int] = [:]
     @ObservationIgnored private var sizeTask: Task<Void, Never>?
+    /// How many times `render` ran; the self-test checks that a save renders the picture once.
+    @ObservationIgnored private(set) var renderCount = 0
     /// Opens at the last zoom (100% the first time); every change is remembered for the next one.
     var zoom: CGFloat = max(0.05, min(8, EditorMemory.screenshotZoom / ScreenshotDocument.backing)) {
         didSet { EditorMemory.screenshotZoom = zoom * ScreenshotDocument.backing }
@@ -540,6 +537,7 @@ final class ScreenshotDocument {
     }
 
     func render() -> CGImage? {
+        renderCount += 1
         return AnnotationRenderer.renderImage(
             base: base,
             annotations: annotations,
@@ -548,11 +546,6 @@ final class ScreenshotDocument {
             badgeCorner: badgeCorner,
             badgeScale: unit
         )
-    }
-
-    func encoded() -> Data? {
-        guard let image = render() else { return nil }
-        return ScreenshotDocument.encode(image, as: exportFormat)
     }
 
     nonisolated static func encode(_ image: CGImage, as format: ExportFormat) -> Data? {
@@ -581,18 +574,29 @@ final class ScreenshotDocument {
             if Task.isCancelled {
                 return
             }
-            guard let image = render() else { return }
-            let frozen = FrozenImage(image: image)
-            let sizes = await Task.detached(priority: .utility) { () -> [ExportFormat: Int] in
+            // What `render` needs is copied here; the drawing runs with the encoding, off the main
+            // thread, so an edit of a big screenshot does not hold up the next one.
+            let frozen = FrozenImage(image: base)
+            let marks = annotations
+            let area = savedArea
+            var lines: [String]? = nil
+            if showBadge {
+                lines = badgeLines
+            }
+            let corner = badgeCorner
+            let scale = unit
+            let measured = await Task.detached(priority: .utility) { () -> [ExportFormat: Int]? in
+                HeavyWork.ran("export sizes")
+                guard let image = AnnotationRenderer.renderImage(base: frozen.image, annotations: marks, crop: area, badgeLines: lines, badgeCorner: corner, badgeScale: scale) else { return nil }
                 var result: [ExportFormat: Int] = [:]
                 for format in ExportFormat.allCases {
-                    if let data = ScreenshotDocument.encode(frozen.image, as: format) {
+                    if let data = ScreenshotDocument.encode(image, as: format) {
                         result[format] = data.count
                     }
                 }
                 return result
             }.value
-            if !Task.isCancelled {
+            if let sizes = measured, !Task.isCancelled {
                 exportSizes = sizes
             }
         }
@@ -606,7 +610,12 @@ final class ScreenshotDocument {
 
     /// Writes the rendered image to a temp file named for sharing (drag and drop, Copy).
     func renderToTemporaryFile() -> URL? {
-        guard let data = encoded() else { return nil }
+        guard let image = render() else { return nil }
+        return temporaryFile(of: image)
+    }
+
+    private func temporaryFile(of image: CGImage) -> URL? {
+        guard let data = ScreenshotDocument.encode(image, as: exportFormat) else { return nil }
         let folder = AppPaths.temporary.appendingPathComponent(UUID().uuidString, isDirectory: true)
         try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         let url = folder.appendingPathComponent(AppPaths.exportName(date: capture.createdAt)).appendingPathExtension(exportFormat.fileExtension)
@@ -625,7 +634,7 @@ final class ScreenshotDocument {
         // Image data for chat apps plus a file for Finder and Jira attachments.
         let item = NSPasteboardItem()
         item.setData(png, forType: .png)
-        if let file = renderToTemporaryFile() {
+        if let file = temporaryFile(of: image) {
             item.setString(file.absoluteString, forType: .fileURL)
         }
         pasteboard.writeObjects([item])
@@ -634,13 +643,11 @@ final class ScreenshotDocument {
     }
 
     func saveToFolder() -> URL? {
-        guard let data = encoded() else { return nil }
+        guard let image = render(), let data = ScreenshotDocument.encode(image, as: exportFormat) else { return nil }
         let url = AppPaths.uniqueURL(in: AppSettings.shared.outputFolder, name: AppPaths.exportName(date: capture.createdAt), ext: exportFormat.fileExtension)
         do {
             try data.write(to: url)
-            if let image = render() {
-                updateThumbnail(image)
-            }
+            updateThumbnail(image)
             message = L("screenshot.message.saved", url.deletingLastPathComponent().lastPathComponent)
             return url
         } catch {

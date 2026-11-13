@@ -57,6 +57,27 @@ final class UpdateProgressTests: XCTestCase {
         XCTAssertEqual(progress.step, .building)
     }
 
+    func testSameProgressIsNotSetAgain() {
+        let shown = UpdateProgress(step: .building, percent: 47)
+        XCTAssertNil(UpdateProgress.next(shown: shown, read: shown))
+    }
+
+    func testProgressNeverGoesBack() {
+        let shown = UpdateProgress(step: .building, percent: 47)
+        XCTAssertNil(UpdateProgress.next(shown: shown, read: UpdateProgress(step: .downloading, percent: 0)))
+    }
+
+    func testProgressMovesOnAHigherPercentOrANewStep() {
+        let shown = UpdateProgress(step: .building, percent: 47)
+        let higher = UpdateProgress(step: .building, percent: 48)
+        XCTAssertEqual(UpdateProgress.next(shown: shown, read: higher), higher)
+        let built = UpdateProgress(step: .finishing, percent: 90)
+        let version = UpdateProgress(step: .finishing, percent: 90)
+        XCTAssertNil(UpdateProgress.next(shown: built, read: version))
+        let nextStep = UpdateProgress(step: .installing, percent: 90)
+        XCTAssertEqual(UpdateProgress.next(shown: built, read: nextStep), nextStep)
+    }
+
     func testReadsTheBuildTime() {
         XCTAssertEqual(UpdateProgress.buildSeconds(inLog: fetched + building + built), 91.39)
         XCTAssertNil(UpdateProgress.buildSeconds(inLog: fetched + building))

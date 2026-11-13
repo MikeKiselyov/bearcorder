@@ -55,6 +55,13 @@ public struct UpdateProgress: Equatable, Sendable {
         return progress
     }
 
+    /// What to show after a read of the log, nil to leave `shown` alone: the percent never goes back,
+    /// and the same value is not set again (every write redraws the views that show it).
+    public static func next(shown: UpdateProgress, read: UpdateProgress) -> UpdateProgress? {
+        if read.percent < shown.percent || read == shown { return nil }
+        return read
+    }
+
     /// A build shorter than this rebuilt almost nothing (a retry) and says nothing about the next one.
     public static let shortestFullBuildSeconds: Double = 20
 

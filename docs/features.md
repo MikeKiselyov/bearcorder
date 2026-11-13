@@ -134,6 +134,7 @@ opens in about half a second.
 </p>
 
 - `⌥⇧6` starts and stops a recording, `⌥⇧7` pauses and resumes; the pause is cut out of the result.
+- When the disk is almost full, the recording stops by itself while there is still room to save it.
 - System audio and your microphone are optional. A round camera bubble (`⌥⇧C`) can be dragged
   anywhere and resized by scrolling.
 

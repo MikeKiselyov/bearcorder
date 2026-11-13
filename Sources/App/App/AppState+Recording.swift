@@ -181,12 +181,6 @@ extension AppState {
         updateQuietZones()
         let app = lastExternalApp
         isSaving = true
-        defer {
-            isSaving = false
-            for buffer in buffers {
-                buffer.pin(from: nil)
-            }
-        }
         var exportBuffers = buffers
         if let display = recordingDisplay {
             exportBuffers = buffers.filter { buffer in buffer.displayID == display }
@@ -195,6 +189,7 @@ extension AppState {
             exportBuffers = buffers.filter { buffer in buffer.displayFrame.intersects(area) }
         }
         recordingDisplay = nil
+        var failure: String?
         do {
             if region == nil {
                 let capture = try await saveClip(from: exportBuffers, ranges: ranges, app: app, framesPerSecond: settings.recordingFramesPerSecond)
@@ -202,15 +197,21 @@ extension AppState {
             } else {
                 // The sound is on the main display's buffer, which the area may not touch.
                 let clip = try await ClipComposer.export(buffers: exportBuffers, ranges: ranges, area: region?.global, framesPerSecond: settings.recordingFramesPerSecond, audioFrom: primaryBuffer)
-                await finishClip(clip, app: app)
+                try await finishClip(clip, app: app)
             }
         } catch {
-            showError(error.localizedDescription)
+            failure = error.localizedDescription
         }
         for buffer in buffers {
             buffer.pin(from: nil)
         }
         await restoreBufferResolution()
+        // Before the alert, and not in a defer that runs when it closes: the alert of a menu bar app
+        // can sit behind other windows, and by then the flag may belong to the next save.
+        isSaving = false
+        if let failure {
+            showError(failure)
+        }
     }
 
     func discardRecording() {

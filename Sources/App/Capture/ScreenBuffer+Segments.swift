@@ -47,7 +47,12 @@ extension ScreenBuffer {
         }
         if input.isReadyForMoreMediaData {
             if !input.append(sampleBuffer) {
-                Log.error("buffer[\(displayID)] append failed: \(writer?.error?.localizedDescription ?? "unknown") status=\(writer?.status.rawValue ?? -1)")
+                // A writer that failed (a full disk) refuses every frame until the segment ends: one
+                // line now, the count when the segment is finished.
+                failedAppends += 1
+                if failedAppends == 1 {
+                    Log.error("buffer[\(displayID)] append failed: \(writer?.error?.localizedDescription ?? "unknown") status=\(writer?.status.rawValue ?? -1)")
+                }
             } else {
                 receivedFrames += 1
                 if receivedFrames == 1 || receivedFrames % 900 == 0 {
@@ -73,6 +78,7 @@ extension ScreenBuffer {
         if BufferTiming.shouldPrune(now: time, lastPrune: lastPrune, segmentFinished: segmentFinished) {
             lastPrune = time
             pruneSegments(now: time)
+            publishStatus()
         }
     }
 
@@ -82,7 +88,7 @@ extension ScreenBuffer {
     /// closed one ended (as catchUp does), so the segments stay contiguous. Queue only.
     private func bridgeFromLastSegment(to time: Double, size: CGSize) {
         // A stopped buffer (no heartbeat) gets no made-up frames.
-        guard heartbeat != nil, let last = lastSampleBuffer, let previous = segments.last else { return }
+        guard hasHeartbeat, let last = lastSampleBuffer, let previous = segments.last else { return }
         let gapStart = previous.end
         // A rotation already ends the old segment at this frame.
         if time - gapStart < 0.001 || gapStart <= lastFrameTime { return }
@@ -105,8 +111,8 @@ extension ScreenBuffer {
             return
         }
         let fps = configuration.framesPerSecond
-        let pixels = size.width * size.height
-        let bitrate = min(20_000_000, max(2_000_000, pixels * Double(fps) * 0.12))
+        let bitrate = ScreenBuffer.bitrate(size: size, framesPerSecond: fps)
+        checkDiskSpace()
         let settings: [String: Any] = [
             AVVideoCodecKey: AVVideoCodecType.h264,
             AVVideoWidthKey: Int(size.width),
@@ -156,6 +162,54 @@ extension ScreenBuffer {
         currentSegmentIndex = segments.count - 1
     }
 
+    /// The average bitrate a segment of this size is encoded at.
+    static func bitrate(size: CGSize, framesPerSecond: Int) -> Double {
+        return min(20_000_000, max(2_000_000, size.width * size.height * Double(framesPerSecond) * 0.12))
+    }
+
+    /// A recording keeps every segment, so it can fill the disk, and a full disk fails the writer.
+    /// Tells the app once per recording, while there is room to save what was recorded. Queue only.
+    func checkDiskSpace() {
+        if pinnedFrom == nil || toldDiskAlmostFull { return }
+        guard let free = freeBytes() else { return }
+        if !RecordingDiskSpace.shouldStop(freeBytes: free, recordedBytes: recordedBytes()) { return }
+        toldDiskAlmostFull = true
+        Log.error("buffer[\(displayID)] the disk is almost full while recording: \(free / 1_000_000) MB free")
+        DispatchQueue.main.async {
+            self.onDiskAlmostFull?()
+        }
+    }
+
+    /// The size of the pieces of every display: what a save has to write once more.
+    private func recordedBytes() -> Int64 {
+        let files = (try? FileManager.default.contentsOfDirectory(at: AppPaths.buffer, includingPropertiesForKeys: [.fileSizeKey])) ?? []
+        var total: Int64 = 0
+        for file in files {
+            let size = (try? file.resourceValues(forKeys: [.fileSizeKey]))?.fileSize ?? 0
+            total += Int64(size)
+        }
+        return total
+    }
+
+    /// Free space on the buffer's volume, nil when macOS does not say.
+    private func freeBytes() -> Int64? {
+        #if AUTOMATION
+        if let made = freeBytesForTests {
+            return made
+        }
+        #endif
+        // `AppPaths.buffer` is a new URL every time: a URL keeps the values it read once.
+        let values = try? AppPaths.buffer.resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey, .volumeAvailableCapacityKey])
+        if let important = values?.volumeAvailableCapacityForImportantUsage, important > 0 {
+            return important
+        }
+        // A volume that does not count "important usage" says 0 there.
+        if let plain = values?.volumeAvailableCapacity {
+            return Int64(plain)
+        }
+        return nil
+    }
+
     /// Finishes the open segment. Queue only. Completion runs on the queue. `nextFrameAt` is the time of
     /// the frame that starts the next segment: the session ends there. Without one (a save, a stop)
     /// it ends one frame after the last frame.
@@ -170,6 +224,10 @@ extension ScreenBuffer {
         audioInputs = [:]
         currentSegmentIndex = nil
         let url = segments[index].url
+        if failedAppends > 1 {
+            Log.error("buffer[\(displayID)] append failed for \(failedAppends) frames of the segment")
+        }
+        failedAppends = 0
 
         // A single frame has a duration only when the next frame ends it: its picture stays until then.
         var hasNextFrame = false
@@ -252,37 +310,30 @@ extension ScreenBuffer {
 
     // MARK: Status for the UI
 
-    /// Seconds of screen available right now, and frame activity per bucket (oldest first).
-    func status(buckets: Int) -> (covered: Double, activity: [Double]) {
-        return queue.sync {
-            let now = CACurrentMediaTime()
-            var covered = 0.0
-            if let first = segments.first {
-                covered = min(configuration.retentionSeconds, now - first.start)
-            }
-            let window = configuration.retentionSeconds
-            var counts = [Double](repeating: 0, count: buckets)
-            for time in frameTimes {
-                let age = now - time
-                if age < 0 || age >= window { continue }
-                let bucket = buckets - 1 - Int(age / window * Double(buckets))
-                if bucket >= 0 && bucket < buckets {
-                    counts[bucket] += 1
-                }
-            }
-            let maximum = counts.max() ?? 0
-            var activity: [Double] = []
-            for count in counts {
-                activity.append(maximum > 0 ? count / maximum : 0)
-            }
-            return (covered: max(0, covered), activity: activity)
-        }
+    /// Seconds of screen available right now, and frame activity per bucket (oldest first), as the
+    /// queue last published them (about once a second while frames come). It does not wait for the
+    /// queue: the menu asks once a second on the main thread, and the queue opens writers and
+    /// deletes files.
+    func status() -> (covered: Double, activity: [Double]) {
+        let published = lock.withLock { publishedStatus }
+        let covered = BufferTiming.coveredSeconds(now: CACurrentMediaTime(), firstSegmentStart: published.firstSegmentStart, retention: published.retentionSeconds)
+        return (covered: covered, activity: published.activity)
+    }
+
+    /// Queue only.
+    func publishStatus() {
+        let window = configuration.retentionSeconds
+        let activity = BufferTiming.activity(frameTimes: frameTimes, now: CACurrentMediaTime(), window: window, buckets: ScreenBuffer.activityBuckets)
+        let status = PublishedStatus(firstSegmentStart: segments.first?.start, retentionSeconds: window, activity: activity)
+        lock.withLock { publishedStatus = status }
     }
 
     /// Keeps segments from `time` on (for "record from now"). Nil releases the pin.
     func pin(from time: Double?) {
         queue.async {
             self.pinnedFrom = time
+            self.toldDiskAlmostFull = false
+            self.checkDiskSpace()
         }
     }
 

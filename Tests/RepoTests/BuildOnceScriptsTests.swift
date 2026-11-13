@@ -175,6 +175,47 @@ final class BuildOnceScriptsTests: XCTestCase {
         XCTAssertTrue(shorter.output.contains("x\n"), shorter.output)
     }
 
+    /// The app's watchdog logs "main thread stalled <N> ms" when its main thread did not answer.
+    /// no_stalls fails a run that got such a line and prints it; stalls from before the run and
+    /// ones no longer than MAX_STALL_MS do not count.
+    func testRunFailsOnAMainThreadStallInItsLog() throws {
+        let folder = try makeFolder()
+        let log = folder.appendingPathComponent("app.log")
+        let before = "2026-01-01 10:00:00.000 INFO  main thread stalled 9000 ms\n"
+        let start = "log_lines_before=$(log_line_count)\nlog_first_before=$(log_first_line)\n"
+        let verdict = "\nif no_stalls; then echo clean; else echo stalled; fi"
+        let stall = "printf '2026-01-01 10:00:05.000 INFO  buffer started\\n2026-01-01 10:00:09.000 INFO  main thread stalled 4012 ms\\n' >> \"$LOG\""
+
+        try before.write(to: log, atomically: false, encoding: .utf8)
+        let quiet = try runLogScript(start + "printf '2026-01-01 10:00:05.000 INFO  buffer started\\n' >> \"$LOG\"" + verdict, log: log)
+        XCTAssertEqual(quiet.output, "clean\n", "a stall from before the run does not count")
+
+        try before.write(to: log, atomically: false, encoding: .utf8)
+        let stalled = try runLogScript(start + stall + verdict, log: log)
+        XCTAssertEqual(stalled.output, "2026-01-01 10:00:09.000 INFO  main thread stalled 4012 ms\nstalled\n")
+
+        try before.write(to: log, atomically: false, encoding: .utf8)
+        let allowed = try runLogScript(start + "MAX_STALL_MS=4012\n" + stall + verdict, log: log)
+        XCTAssertEqual(allowed.output, "clean\n", "a stall up to the limit passes")
+
+        try before.write(to: log, atomically: false, encoding: .utf8)
+        let overLimit = try runLogScript(start + "MAX_STALL_MS=4011\n" + stall + verdict, log: log)
+        XCTAssertTrue(overLimit.output.hasSuffix("stalled\n"), overLimit.output)
+
+        // The line the scripts look for is the one the app writes.
+        let line = try XCTUnwrap(MainThreadStall.logLine(pingedAt: 0, answeredAt: 4_012_000_000))
+        try "".write(to: log, atomically: false, encoding: .utf8)
+        let fromApp = try runLogScript(start + "printf '%s\\n' \"2026-01-01 10:00:09.000 INFO  \(line)\" >> \"$LOG\"" + verdict, log: log)
+        XCTAssertTrue(fromApp.output.hasSuffix("stalled\n"), fromApp.output)
+
+        for name in ["e2e", "e2e-features", "perf"] {
+            let text = try read("scripts/test/\(name).sh")
+            XCTAssertTrue(text.contains("if stalls=$(no_stalls); then"), "\(name).sh fails on a main thread stall")
+            XCTAssertTrue(text.contains("echo \"$stalls\""), "\(name).sh prints the stall lines")
+            XCTAssertTrue(text.contains("log_lines_before=$(log_line_count)"), "\(name).sh notes where the log was when it started")
+        }
+    }
+
     func testPerfUsesTheSameAutomationBuildAsTheOthers() throws {
         // perf.sh sources test-app.sh, which exports APP_AUTOMATION=1 for the build.
         XCTAssertTrue(try read("scripts/test/perf.sh").contains("scripts/test/lib/test-app.sh"))

@@ -58,14 +58,30 @@ final class ScreenBuffer: NSObject, SCStreamOutput, SCStreamDelegate {
         case microphone = 1
     }
 
+    /// What the menu shows about the buffer, as the queue last saw it.
+    struct PublishedStatus {
+        var firstSegmentStart: Double?
+        var retentionSeconds: Double = 0
+        var activity = [Double](repeating: 0, count: ScreenBuffer.activityBuckets)
+    }
+
+    /// The bars of the activity strip in the menu.
+    static let activityBuckets = 16
+
     let displayID: CGDirectDisplayID
     let queue: DispatchQueue
     let segmentLength: Double = 10
+    /// Guards the fields marked "Locked": the stream's delegate, `start` and `stop` (thread pool) and
+    /// the main thread all touch them. Held for a few lines that wait for nothing, never across an
+    /// `await` or a `queue.sync`, so the queue may take it too.
+    let lock = NSLock()
+    /// Locked.
     private var stream: SCStream?
-    /// The settings the stream runs with, kept to change the frame rate without a restart.
+    /// The settings the stream runs with, kept to change the frame rate without a restart. Locked.
     private var streamSettings: SCStreamConfiguration?
     /// Start a new segment with the next frame (after a frame rate or size change). Queue only.
     var startNewSegment = false
+    /// Queue only.
     var configuration = BufferConfiguration(retentionSeconds: 180, framesPerSecond: 30, maxHeight: 1080, showsCursor: true, systemAudio: false, microphone: false)
 
     // Queue-confined state.
@@ -81,24 +97,38 @@ final class ScreenBuffer: NSObject, SCStreamOutput, SCStreamDelegate {
     var frameTimes: [Double] = []
     /// When old segments were last looked at (`pruneSegments`).
     var lastPrune: Double = 0
+    /// Locked.
     private var capturedDisplay: SCDisplay?
-    /// The display's full pixel size (even), what `upgradeToNative` goes to.
+    /// The display's full pixel size (even), what `upgradeToNative` goes to. Locked.
     private var nativeSize: CGSize = .zero
     /// Counts `stop()` calls. A start that sees it change while it waits was stopped meanwhile and
-    /// must not keep the stream it made.
+    /// must not keep the stream it made. Locked.
     private var stopCount = 0
+    /// Locked.
     private var excludedApplications: [SCRunningApplication] = []
     var receivedFrames = 0
     /// Repeats the last frame while the screen is static (ScreenCaptureKit only sends
-    /// frames on change), so the buffer timeline has no holes.
+    /// frames on change), so the buffer timeline has no holes. Locked.
     var heartbeat: DispatchSourceTimer?
     var droppedFrames = 0
+    /// Frames the open segment's writer refused. Queue only.
+    var failedAppends = 0
+    /// The queue writes it (`publishStatus`), so the main thread reads the status without waiting
+    /// for the queue. Locked.
+    var publishedStatus = PublishedStatus()
 
     /// Called on the main thread when the stream stops unexpectedly.
     var onStop: ((Error?) -> Void)?
+    /// Called on the main thread when the disk is almost full while a recording keeps every segment.
+    var onDiskAlmostFull: (() -> Void)?
+    /// The app was told about the disk; once per recording. Queue only.
+    var toldDiskAlmostFull = false
     /// Global AppKit frame of the captured display (origin bottom-left).
-    private(set) var displayFrame: CGRect = .zero
-    /// Height of the menu bar on this display, 0 when it hides itself.
+    var displayFrame: CGRect {
+        return lock.withLock { lockedDisplayFrame }
+    }
+    private var lockedDisplayFrame: CGRect = .zero
+    /// Height of the menu bar on this display, 0 when it hides itself. Queue only.
     var menuBarHeight: CGFloat = 0
     /// While recording, frames that changed only in the menu bar or under the recording bar are
     /// encoded a few times a second (see `FramePacing`). Queue only.
@@ -118,6 +148,8 @@ final class ScreenBuffer: NSObject, SCStreamOutput, SCStreamDelegate {
     #if AUTOMATION
     /// e2e (screen-access:missing): the access check says no, to show what a Mac without it shows.
     static var pretendNoAccess = false
+    /// Self-test: the free space the buffer sees instead of the disk's. Queue only.
+    var freeBytesForTests: Int64?
     #endif
 
     static var hasScreenRecordingAccess: Bool {
@@ -143,8 +175,10 @@ final class ScreenBuffer: NSObject, SCStreamOutput, SCStreamDelegate {
 
     func start(_ newConfiguration: BufferConfiguration, allowedWindowNumbers: [Int]) async throws {
         await stop()
-        let startedAfterStop = stopCount
-        configuration = newConfiguration
+        let startedAfterStop = lock.withLock { stopCount }
+        queue.sync {
+            configuration = newConfiguration
+        }
 
         // All windows, not only on-screen ones: an app without visible windows is left out of
         // `applications`, and then our own windows (outline, HUD, editors) would not be excluded.
@@ -165,8 +199,10 @@ final class ScreenBuffer: NSObject, SCStreamOutput, SCStreamDelegate {
             allowed.append(window)
         }
         let filter = SCContentFilter(display: display, excludingApplications: excluded, exceptingWindows: allowed)
-        capturedDisplay = display
-        excludedApplications = excluded
+        lock.withLock {
+            capturedDisplay = display
+            excludedApplications = excluded
+        }
 
         let screenInfo = await MainActor.run { () -> (scale: CGFloat, frame: CGRect, menuBar: CGFloat) in
             for screen in NSScreen.screens {
@@ -177,14 +213,12 @@ final class ScreenBuffer: NSObject, SCStreamOutput, SCStreamDelegate {
             }
             return (scale: 2, frame: NSScreen.main?.frame ?? .zero, menuBar: 0)
         }
-        displayFrame = screenInfo.frame
-        menuBarHeight = max(0, screenInfo.menuBar)
 
         var width = Double(display.width) * Double(screenInfo.scale)
         var height = Double(display.height) * Double(screenInfo.scale)
-        nativeSize = CGSize(width: Int(width / 2) * 2, height: Int(height / 2) * 2)
-        if configuration.maxHeight > 0 && height > Double(configuration.maxHeight) {
-            let ratio = Double(configuration.maxHeight) / height
+        let native = CGSize(width: Int(width / 2) * 2, height: Int(height / 2) * 2)
+        if newConfiguration.maxHeight > 0 && height > Double(newConfiguration.maxHeight) {
+            let ratio = Double(newConfiguration.maxHeight) / height
             width *= ratio
             height *= ratio
         }
@@ -192,28 +226,38 @@ final class ScreenBuffer: NSObject, SCStreamOutput, SCStreamDelegate {
         let evenWidth = Int(width / 2) * 2
         let evenHeight = Int(height / 2) * 2
 
-        let streamConfiguration = ScreenBuffer.streamConfiguration(width: evenWidth, height: evenHeight, framesPerSecond: configuration.framesPerSecond, configuration: configuration)
-        streamSettings = streamConfiguration
+        let streamConfiguration = ScreenBuffer.streamConfiguration(width: evenWidth, height: evenHeight, framesPerSecond: newConfiguration.framesPerSecond, configuration: newConfiguration)
+        lock.withLock {
+            lockedDisplayFrame = screenInfo.frame
+            nativeSize = native
+            streamSettings = streamConfiguration
+        }
 
         queue.sync {
             outputSize = CGSize(width: evenWidth, height: evenHeight)
+            menuBarHeight = max(0, screenInfo.menuBar)
         }
 
         let newStream = SCStream(filter: filter, configuration: streamConfiguration, delegate: self)
         try newStream.addStreamOutput(self, type: .screen, sampleHandlerQueue: queue)
-        if configuration.systemAudio {
+        if newConfiguration.systemAudio {
             try newStream.addStreamOutput(self, type: .audio, sampleHandlerQueue: queue)
         }
         try await newStream.startCapture()
         // Stopped while this start waited (the buffer was replaced): the new capture belongs to no one.
-        if stopCount != startedAfterStop {
+        // Checked and kept in one step, so a stop cannot come in between and miss the stream.
+        let kept = lock.withLock { () -> Bool in
+            if stopCount != startedAfterStop { return false }
+            stream = newStream
+            startHeartbeatLocked()
+            return true
+        }
+        if !kept {
             try? await newStream.stopCapture()
             Log.info("buffer[\(displayID)] stopped while starting, capture ended")
             throw CancellationError()
         }
-        stream = newStream
-        startHeartbeat()
-        Log.info("buffer[\(displayID)] started \(evenWidth)x\(evenHeight) @\(configuration.framesPerSecond)fps systemAudio=\(configuration.systemAudio) mic=\(configuration.microphone) allowed=\(allowed.count) excludedApps=\(excluded.count)")
+        Log.info("buffer[\(displayID)] started \(evenWidth)x\(evenHeight) @\(newConfiguration.framesPerSecond)fps systemAudio=\(newConfiguration.systemAudio) mic=\(newConfiguration.microphone) allowed=\(allowed.count) excludedApps=\(excluded.count)")
     }
 
     /// What the stream runs with. A new object every time: a change is tried on a copy, and the kept
@@ -237,16 +281,10 @@ final class ScreenBuffer: NSObject, SCStreamOutput, SCStreamDelegate {
     }
 
     func stop() async {
-        stopCount += 1
-        if stream != nil {
-            Log.info("buffer[\(displayID)] stopping")
-        }
-        stopHeartbeat()
-        // Cleared before waiting for the capture to end, so a change on its way (upgradeToNative)
+        // Taken before waiting for the capture to end, so a change on its way (upgradeToNative)
         // sees the stream is going and does not start it again.
-        let current = stream
-        stream = nil
-        if let current {
+        if let current = releaseStream() {
+            Log.info("buffer[\(displayID)] stopping")
             try? await current.stopCapture()
         }
         dropHeldFrame()
@@ -256,16 +294,26 @@ final class ScreenBuffer: NSObject, SCStreamOutput, SCStreamDelegate {
     /// On quit: only ends the capture, so macOS takes its indicator down. The segment is not
     /// finished, the buffer folder is deleted right after anyway.
     func stopCaptureForQuit() async {
-        stopHeartbeat()
-        if let current = stream {
+        if let current = releaseStream() {
             try? await current.stopCapture()
             Log.info("buffer[\(displayID)] capture stopped for quit")
         }
-        stream = nil
+    }
+
+    /// Lets go of the stream and its heartbeat in one step: a stop from here and one from the
+    /// stream's delegate (the lid closed) come at once, and only one of them gets the stream to end.
+    private func releaseStream() -> SCStream? {
+        return lock.withLock {
+            stopCount += 1
+            stopHeartbeatLocked()
+            let current = stream
+            stream = nil
+            return current
+        }
     }
 
     var isRunning: Bool {
-        return stream != nil
+        return lock.withLock { stream != nil }
     }
 
     var size: CGSize {
@@ -273,7 +321,7 @@ final class ScreenBuffer: NSObject, SCStreamOutput, SCStreamDelegate {
     }
 
     var excludesOwnApp: Bool {
-        return !excludedApplications.isEmpty
+        return lock.withLock { !excludedApplications.isEmpty }
     }
 
     /// Our own app as ScreenCaptureKit lists it. Right after launch it may not be listed yet, so the
@@ -290,7 +338,8 @@ final class ScreenBuffer: NSObject, SCStreamOutput, SCStreamDelegate {
     /// Changes the frame rate on the running stream, keeping what the buffer holds. The next frame
     /// starts a new segment, so the encoder's bitrate matches the new rate.
     func setFrameRate(_ framesPerSecond: Int) async {
-        guard let current = stream, let settings = streamSettings else { return }
+        let running = lock.withLock { (stream: stream, settings: streamSettings) }
+        guard let current = running.stream, let settings = running.settings else { return }
         settings.minimumFrameInterval = CMTime(value: 1, timescale: CMTimeScale(framesPerSecond))
         do {
             try await current.updateConfiguration(settings)
@@ -310,9 +359,10 @@ final class ScreenBuffer: NSObject, SCStreamOutput, SCStreamDelegate {
     /// new segment. False when the stream did not take the change: the caller restarts this display on
     /// the buffer's start chain (a restart from here could outlive a stop and leave a capture no one owns).
     func upgradeToNative(framesPerSecond: Int) async -> Bool {
-        guard let current = stream else { return true }
+        let running = lock.withLock { (stream: stream, nativeSize: nativeSize) }
+        guard let current = running.stream else { return true }
         let state = queue.sync { (size: outputSize, framesPerSecond: configuration.framesPerSecond, configuration: configuration) }
-        let target = nativeSize
+        let target = running.nativeSize
         let rate = max(framesPerSecond, state.framesPerSecond)
         if target.width <= 0 || (state.size == target && state.framesPerSecond == rate) { return true }
         let settings = ScreenBuffer.streamConfiguration(width: Int(target.width), height: Int(target.height), framesPerSecond: rate, configuration: state.configuration)
@@ -327,12 +377,14 @@ final class ScreenBuffer: NSObject, SCStreamOutput, SCStreamDelegate {
                 configuration.framesPerSecond = state.framesPerSecond
             }
             // Stopped meanwhile (the recording ended and the buffer restarts): nothing to change.
-            if stream !== current { return true }
+            if lock.withLock({ stream !== current }) { return true }
             Log.error("buffer[\(displayID)] native resolution change failed: \(error.localizedDescription)")
             return false
         }
-        if stream === current {
-            streamSettings = settings
+        lock.withLock {
+            if stream === current {
+                streamSettings = settings
+            }
         }
         queue.sync {
             applyNativeSize(target, framesPerSecond: rate)
@@ -358,32 +410,44 @@ final class ScreenBuffer: NSObject, SCStreamOutput, SCStreamDelegate {
     /// Leaves our own windows out of the capture again, and lets the listed ones (drawing overlay,
     /// camera bubble) in.
     func allowOwnWindows(_ windowNumbers: [Int]) async {
-        guard let current = stream, let display = capturedDisplay else { return }
+        let running = lock.withLock { (stream: stream, display: capturedDisplay) }
+        guard let current = running.stream, let display = running.display else { return }
         guard let content = try? await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: false) else { return }
         let own = ScreenBuffer.ownApplications(in: content)
-        if own.count != excludedApplications.count {
+        let excludedBefore = lock.withLock { () -> Int in
+            let count = excludedApplications.count
+            excludedApplications = own
+            return count
+        }
+        if own.count != excludedBefore {
             Log.info("buffer[\(displayID)] now excludes \(own.count) own app(s)")
         }
-        excludedApplications = own
         var allowed: [SCWindow] = []
         for window in content.windows where windowNumbers.contains(Int(window.windowID)) {
             allowed.append(window)
         }
-        let filter = SCContentFilter(display: display, excludingApplications: excludedApplications, exceptingWindows: allowed)
+        let filter = SCContentFilter(display: display, excludingApplications: own, exceptingWindows: allowed)
         try? await current.updateContentFilter(filter)
     }
 
     #if AUTOMATION
     /// Self-test: a buffer fed made-up frames has no display of its own.
     func setDisplayFrameForTests(_ frame: CGRect) {
-        displayFrame = frame
+        lock.withLock { lockedDisplayFrame = frame }
     }
     #endif
 
     func stream(_ stream: SCStream, didStopWithError error: Error) {
         Log.error("buffer[\(displayID)] stream stopped: \(error.localizedDescription)")
-        self.stream = nil
-        stopHeartbeat()
+        // Only the stream this buffer still runs. One that `stop()` already took is being ended
+        // there, and a late word about a stream that was replaced must not drop the new one.
+        let wasRunning = lock.withLock { () -> Bool in
+            if self.stream !== stream { return false }
+            self.stream = nil
+            stopHeartbeatLocked()
+            return true
+        }
+        if !wasRunning { return }
         dropHeldFrame()
         Task {
             await finishCurrentSegment()

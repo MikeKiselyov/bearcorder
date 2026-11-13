@@ -82,7 +82,15 @@ final class CaptureStore {
     static let shared = CaptureStore()
 
     private(set) var captures: [Capture] = []
-    private var thumbnailCache: [UUID: NSImage] = [:]
+    /// Not observed: filling it while a view draws must not redraw the other thumbnails. The limit
+    /// keeps a long history from holding every decoded thumbnail until quit.
+    @ObservationIgnored private let thumbnailCache: NSCache<NSUUID, NSImage> = {
+        let cache = NSCache<NSUUID, NSImage>()
+        cache.countLimit = 300
+        return cache
+    }()
+    /// Goes up when a thumbnail file changed, so the views showing thumbnails draw again.
+    private(set) var thumbnailVersion = 0
     /// Captures whose system log was written after they were added (it takes a few seconds), so an
     /// editor already open shows its "System log" button.
     private(set) var systemLogsSaved: Set<UUID> = []
@@ -231,7 +239,6 @@ final class CaptureStore {
         }
         try replace(updated)
         makeThumbnail(for: updated)
-        thumbnailCache[updated.id] = nil
         return updated
     }
 
@@ -342,36 +349,40 @@ final class CaptureStore {
 
     func delete(_ capture: Capture) {
         try? FileManager.default.removeItem(at: capture.folder)
-        thumbnailCache[capture.id] = nil
+        thumbnailCache.removeObject(forKey: capture.id as NSUUID)
         captures.removeAll { item in item.id == capture.id }
     }
 
     func thumbnail(for capture: Capture) -> NSImage? {
-        if let cached = thumbnailCache[capture.id] { return cached }
+        // Read so the calling view draws again after forgetThumbnail.
+        _ = thumbnailVersion
+        let key = capture.id as NSUUID
+        if let cached = thumbnailCache.object(forKey: key) { return cached }
         if let image = NSImage(contentsOf: capture.thumbnailURL) {
-            thumbnailCache[capture.id] = image
+            thumbnailCache.setObject(image, forKey: key)
             return image
         }
         return nil
     }
 
     func forgetThumbnail(_ id: UUID) {
-        thumbnailCache[id] = nil
+        thumbnailCache.removeObject(forKey: id as NSUUID)
+        thumbnailVersion += 1
     }
 
     /// Refreshes the thumbnail from an edited render.
     func updateThumbnail(for capture: Capture, image: CGImage) {
-        writeThumbnail(image, to: capture.thumbnailURL)
-        thumbnailCache[capture.id] = nil
+        CaptureStore.writeThumbnail(image, to: capture.thumbnailURL)
+        forgetThumbnail(capture.id)
     }
 
     private func makeThumbnail(for capture: Capture) {
+        let source = capture.mediaURL
+        let target = capture.thumbnailURL
+        let id = capture.id
         if capture.kind == .screenshot {
             // ImageIO scales while decoding, and off the main thread: a 4K screenshot no longer
             // holds up the editor.
-            let source = capture.mediaURL
-            let target = capture.thumbnailURL
-            let id = capture.id
             Task.detached(priority: .utility) {
                 let options: [CFString: Any] = [
                     kCGImageSourceCreateThumbnailFromImageAlways: true,
@@ -387,17 +398,29 @@ final class CaptureStore {
             }
             return
         }
-        let asset = AVURLAsset(url: capture.mediaURL)
-        let generator = AVAssetImageGenerator(asset: asset)
-        generator.appliesPreferredTrackTransform = true
-        generator.maximumSize = CGSize(width: 480, height: 480)
-        let time = CMTime(seconds: max(0, capture.duration - 0.5), preferredTimescale: 600)
-        if let image = try? generator.copyCGImage(at: time, actualTime: nil) {
-            writeThumbnail(image, to: capture.thumbnailURL)
+        // Decoding a frame of the clip is slow too.
+        let duration = capture.duration
+        Task.detached(priority: .utility) {
+            CaptureStore.writeClipThumbnail(of: source, duration: duration, to: target)
+            await MainActor.run {
+                CaptureStore.shared.forgetThumbnail(id)
+            }
         }
     }
 
-    private func writeThumbnail(_ image: CGImage, to url: URL) {
+    nonisolated private static func writeClipThumbnail(of media: URL, duration: Double, to target: URL) {
+        HeavyWork.ran("clip thumbnail")
+        let asset = AVURLAsset(url: media)
+        let generator = AVAssetImageGenerator(asset: asset)
+        generator.appliesPreferredTrackTransform = true
+        generator.maximumSize = CGSize(width: 480, height: 480)
+        let time = CMTime(seconds: max(0, duration - 0.5), preferredTimescale: 600)
+        if let image = try? generator.copyCGImage(at: time, actualTime: nil) {
+            writeThumbnail(image, to: target)
+        }
+    }
+
+    nonisolated private static func writeThumbnail(_ image: CGImage, to url: URL) {
         let maxSide = 480.0
         let scale = min(1, maxSide / Double(max(image.width, image.height)))
         let width = max(1, Int(Double(image.width) * scale))
@@ -424,8 +447,23 @@ enum ImageFiles {
         return CGImageSourceCreateImageAtIndex(source, 0, nil)
     }
 
+    /// `write` off the main thread, for a picture big enough to hold it up (a long scrolling screenshot).
+    @discardableResult
+    static func writeInBackground(_ image: CGImage, to url: URL, type: String) async -> Bool {
+        let frozen = FrozenImage(image: image)
+        return await Task.detached(priority: .userInitiated) {
+            HeavyWork.ran("writing a picture")
+            return ImageFiles.write(frozen.image, to: url, type: type)
+        }.value
+    }
+
     static func pngData(_ image: CGImage) -> Data? {
         let rep = NSBitmapImageRep(cgImage: image)
         return rep.representation(using: .png, properties: [:])
     }
+}
+
+/// An image handed to a background task; CGImage is immutable.
+struct FrozenImage: @unchecked Sendable {
+    let image: CGImage
 }

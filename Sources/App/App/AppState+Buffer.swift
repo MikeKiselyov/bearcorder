@@ -7,6 +7,15 @@ import QuartzCore
 extension AppState {
     // MARK: Buffer
 
+    /// The only place that writes `bufferState`, and only a new value. The menu bar icon reads it, and
+    /// before Swift 6.2 an observed property tells its observers about every write, also of the value
+    /// it already has: the icon would be drawn again for nothing.
+    func setBufferState(_ state: BufferState) {
+        if bufferState != state {
+            bufferState = state
+        }
+    }
+
     /// The settings one display's buffer runs with: native resolution and the recording frame rate
     /// for a display a recorded area touches, the buffer's own for the rest.
     func bufferConfiguration(for display: CGDirectDisplayID) -> BufferConfiguration {
@@ -104,11 +113,12 @@ extension AppState {
     }
 
     private func startBufferNow() async {
+        bufferFilterRefresh?.cancel()
         if !ScreenBuffer.hasScreenRecordingAccess {
-            bufferState = .needsPermission
+            setBufferState(.needsPermission)
             return
         }
-        bufferState = .starting
+        setBufferState(.starting)
         for buffer in buffers {
             await buffer.stop()
         }
@@ -129,6 +139,9 @@ extension AppState {
                 buffer.onStop = { [weak self] error in
                     self?.bufferStopped(error)
                 }
+                buffer.onDiskAlmostFull = { [weak self] in
+                    Task { await self?.stopRecordingForFullDisk() }
+                }
                 try await buffer.start(displayConfiguration, allowedWindowNumbers: allowedWindowNumbers)
                 buffers.append(buffer)
             }
@@ -142,7 +155,7 @@ extension AppState {
                 microphone.stop()
             }
             inputRecorder.start(clicks: settings.recordClicks, keys: settings.recordKeys && InputEventRecorder.hasAccessibilityAccess, typedText: settings.recordTypedText, pages: settings.readBrowserURL, retentionSeconds: settings.bufferSeconds)
-            bufferState = .running
+            setBufferState(.running)
             if bufferRecovery.isWaiting {
                 Log.info("buffer is back after \(bufferRecovery.attempts) tries")
             }
@@ -151,9 +164,10 @@ extension AppState {
             // New buffers start without quiet zones; a restart during a recording needs them again.
             updateQuietZones()
             // Right after launch the app is not listed for exclusion yet; check again until it is.
-            Task {
+            bufferFilterRefresh = Task {
                 for _ in 0..<30 {
                     try? await Task.sleep(nanoseconds: 2_000_000_000)
+                    if Task.isCancelled { return }
                     await refreshBufferFilters()
                     if buffersExcludeOwnApp() { break }
                 }
@@ -166,11 +180,11 @@ extension AppState {
             }
             buffers = []
             micSink = nil
-            bufferState = .failed(error.localizedDescription)
+            setBufferState(.failed(error.localizedDescription))
             var noDisplay = false
             if case BufferError.noDisplay = error {
                 noDisplay = true
-                bufferRecovery.bufferLost()
+                noteBufferLost()
             }
             if bufferRecovery.isWaiting {
                 if bufferRecovery.keepsTrying(afterNoDisplay: noDisplay) {
@@ -209,6 +223,9 @@ extension AppState {
             configuration.microphone = false
             buffer.onStop = { [weak self] error in
                 self?.bufferStopped(error)
+            }
+            buffer.onDiskAlmostFull = { [weak self] in
+                Task { await self?.stopRecordingForFullDisk() }
             }
             do {
                 try await buffer.start(configuration, allowedWindowNumbers: allowedWindowNumbers)
@@ -262,10 +279,27 @@ extension AppState {
             Task { await bufferStoppedByUser() }
             return
         }
-        bufferState = .failed(error?.localizedDescription ?? L("app.buffer.captureStopped"))
+        setBufferState(.failed(error?.localizedDescription ?? L("app.buffer.captureStopped")))
         // Display changes stop the stream (a closed lid, an unplugged monitor); it comes back by itself.
-        bufferRecovery.bufferLost()
+        noteBufferLost()
         scheduleBufferRecovery()
+    }
+
+    /// `bufferRecovery` is observed (the menu reads it): it is written only when it changes.
+    private func noteBufferLost() {
+        if !bufferRecovery.isWaiting {
+            bufferRecovery.bufferLost()
+        }
+    }
+
+    /// The disk is almost full while recording (every recorded display says so, the first one counts):
+    /// the recording stops as if the person stopped it, so what was recorded is saved while there is
+    /// room for it, and a message says why.
+    func stopRecordingForFullDisk() async {
+        if recording == nil { return }
+        Log.info("recording: stopped, the disk is almost full")
+        Toast.shared.show(L("app.recording.diskAlmostFull"), symbol: "exclamationmark.triangle.fill", seconds: 6)
+        await stopRecording()
     }
 
     /// The next try to bring a stopped buffer back, after a pause that grows with every try.
@@ -303,7 +337,9 @@ extension AppState {
     }
 
     private func endBufferRecovery() {
-        bufferRecovery.ended()
+        if bufferRecovery.isWaiting {
+            bufferRecovery.ended()
+        }
         bufferRecoveryTask?.cancel()
         bufferRecoveryTask = nil
     }
@@ -324,7 +360,7 @@ extension AppState {
             await pauseBuffer()
             return
         }
-        bufferState = .paused
+        setBufferState(.paused)
         var saved: Capture?
         if !isSaving, let available = primaryBuffer?.availability(), available.end - available.start >= 1 {
             isSaving = true
@@ -367,8 +403,11 @@ extension AppState {
         microphone.stop()
         inputRecorder.stop()
         crashWatcher.stop()
-        bufferState = .paused
-        coveredSeconds = 0
+        bufferFilterRefresh?.cancel()
+        setBufferState(.paused)
+        if coveredSeconds != 0 {
+            coveredSeconds = 0
+        }
         endBufferRecovery()
     }
 

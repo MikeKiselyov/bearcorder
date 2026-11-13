@@ -42,16 +42,22 @@ extension AppState {
         if isSaving { return }
         isSaving = true
         closeMenuPanel()
-        defer { isSaving = false }
         let end = CACurrentMediaTime()
         let app = lastExternalApp
         Log.info("save from buffer: last \(seconds)s, displays=\(buffers.count)")
         let start = clipStart(end: end, seconds: seconds)
+        var failure: String?
         do {
             let capture = try await saveClip(from: buffers, ranges: [(start: start, end: end)], app: app)
             WindowManager.shared.openEditor(for: capture)
         } catch {
-            showError(error.localizedDescription)
+            failure = error.localizedDescription
+        }
+        // Before the alert, and not in a defer that runs when it closes: the alert of a menu bar app
+        // can sit behind other windows, and by then the flag may belong to the next save.
+        isSaving = false
+        if let failure {
+            showError(failure)
         }
     }
 
@@ -206,15 +212,11 @@ extension AppState {
         }
     }
 
-    func finishClip(_ clip: ClipExport, app: NSRunningApplication?) async {
+    func finishClip(_ clip: ClipExport, app: NSRunningApplication?) async throws {
         let environment = await EnvironmentCollector.snapshot(for: app, readURL: settings.readBrowserURL)
         let events = inputRecorder.events(for: clip)
-        do {
-            let capture = try store.add(kind: .video, mediaFile: clip.url, environment: environment, events: events, duration: clip.duration)
-            attachSystemLog(to: capture, clip: clip, app: app)
-            WindowManager.shared.openEditor(for: capture)
-        } catch {
-            showError(error.localizedDescription)
-        }
+        let capture = try store.add(kind: .video, mediaFile: clip.url, environment: environment, events: events, duration: clip.duration)
+        attachSystemLog(to: capture, clip: clip, app: app)
+        WindowManager.shared.openEditor(for: capture)
     }
 }

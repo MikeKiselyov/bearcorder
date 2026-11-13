@@ -356,6 +356,7 @@ if [ "$(no_display_errors)" = "$((errors_before + 3))" ]; then pass "three tries
 # 12. Errors in the log (the tries in 11c that found no display are expected).
 errors=$(run_log | grep "ERROR" | grep -vc "$NO_DISPLAY_ERROR" || true)
 if [ "$errors" = "0" ]; then pass "no errors in the log"; else fail "no errors in the log" "$errors errors"; run_log | grep "ERROR" | tail -5; fi
+if stalls=$(no_stalls); then pass "the main thread never stalled"; else fail "the main thread stalled" "(limit $MAX_STALL_MS ms)"; echo "$stalls"; fi
 
 defaults write "$BUNDLE_ID" automationEnabled -bool false
 echo

@@ -192,7 +192,7 @@ enum ClipComposer {
         var copied = false
         // A picture that changes size on the way cannot be copied into one track as is.
         if placed.count == 1 && area == nil && audioTracks <= 1 && placed[0].sizes.count <= 1 {
-            copied = await copyWithoutReencoding(composition, duration: exactDuration, to: url)
+            copied = try await copyWithoutReencoding(composition, duration: exactDuration, to: url)
         }
         if !copied {
             let options = AssetExporter.Options(renderSize: renderSize, framesPerSecond: framesPerSecond, timeRange: CMTimeRange(start: .zero, duration: exactDuration))
@@ -273,7 +273,7 @@ enum ClipComposer {
         withExtendedLifetime(assets) {}
     }
 
-    private static func copyWithoutReencoding(_ composition: AVMutableComposition, duration: CMTime, to url: URL) async -> Bool {
+    private static func copyWithoutReencoding(_ composition: AVMutableComposition, duration: CMTime, to url: URL) async throws -> Bool {
         guard let session = AVAssetExportSession(asset: composition, presetName: AVAssetExportPresetPassthrough) else { return false }
         try? FileManager.default.removeItem(at: url)
         session.outputURL = url
@@ -281,7 +281,18 @@ enum ClipComposer {
         session.timeRange = CMTimeRange(start: .zero, duration: duration)
         session.shouldOptimizeForNetworkUse = true
         let started = CACurrentMediaTime()
+        // A copy that never ends would keep the save waiting forever.
+        let watchdog = Task {
+            try await Task.sleep(nanoseconds: UInt64(ExportTimeout.seconds(forClip: duration.seconds) * 1_000_000_000))
+            session.cancelExport()
+        }
         await session.export()
+        watchdog.cancel()
+        // Only the watchdog cancels it.
+        if session.status == .cancelled {
+            try? FileManager.default.removeItem(at: url)
+            throw BufferError.exportFailed(L("capture.export.timedOut"))
+        }
         if session.status != .completed {
             Log.info("compose: passthrough failed (\(session.error?.localizedDescription ?? "unknown")), re-encoding")
             try? FileManager.default.removeItem(at: url)

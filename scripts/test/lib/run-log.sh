@@ -1,7 +1,10 @@
 # shellcheck shell=bash
-# The app's log as the test runs see it. Sourced by e2e.sh and perf.sh after they set LOG.
+# The app's log as the test runs see it. Sourced by the test runs after they set LOG.
 # log_lines_before and log_first_before are set by the script when its run starts.
 # shellcheck disable=SC2154
+# The longest main thread stall a run may log, in ms. 0: any "main thread stalled" line fails the run.
+MAX_STALL_MS="${MAX_STALL_MS:-0}"
+
 # The log is the person's own: a run notes where it ended (log_lines_before) and its first line
 # (log_first_before), reads only the lines after that, and never deletes the file.
 log_line_count() { { wc -l < "$LOG"; } 2>/dev/null || echo 0; }
@@ -30,4 +33,13 @@ run_log() {
         return
     fi
     tail -n +"$((log_lines_before + 1))" "$LOG"
+}
+
+# Prints this run's "main thread stalled <N> ms" lines (the app's watchdog writes one when its main
+# thread did not answer for over a second) that are longer than MAX_STALL_MS; fails when there are any.
+no_stalls() {
+    run_log | awk -v allowed="$MAX_STALL_MS" '
+        /main thread stalled [0-9]+ ms$/ && $(NF - 1) + 0 > allowed + 0 { print; found = 1 }
+        END { exit found }
+    '
 }

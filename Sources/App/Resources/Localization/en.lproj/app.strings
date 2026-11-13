@@ -26,6 +26,7 @@
 "app.display.numbered" = "Display %ld";
 
 /* Recording. */
+"app.recording.diskAlmostFull" = "Recording stopped: the disk is almost full.";
 "app.recording.screenUnavailable" = "Screen recording is not available. Grant Screen Recording access and try again.";
 "app.recording.cameraUnavailable" = "Camera is not available. Allow camera access for %@ in System Settings › Privacy & Security › Camera.";
 

@@ -5,6 +5,8 @@ import AppCore
 enum SystemLogCollector {
     /// Bigger logs keep their last part: the end is where the bug is.
     static let maxBytes = 2_000_000
+    /// `log show` takes a few seconds; on a loaded Mac with a long clip it can take far longer.
+    static let timeout: Double = 60
 
     struct Source {
         var name: String
@@ -39,28 +41,28 @@ enum SystemLogCollector {
         let pipe = Pipe()
         process.standardOutput = pipe
         process.standardError = FileHandle.nullDevice
-        do {
-            try process.run()
-        } catch {
+        // The log is read while the tool runs, and only its end is kept: a chatty app writes far
+        // more than fits in the file.
+        // A longer clip has more log to go through.
+        let limit = max(timeout, end.timeIntervalSince(start))
+        let output = await Task.detached(priority: .utility) {
+            return run(process, output: pipe, timeout: limit)
+        }.value
+        guard let output else {
+            // What was read so far is the start of the span, without the end where the bug is.
+            Log.info("system log for \(source.name): `log show` did not finish in \(Int(limit))s, nothing saved")
             return 0
         }
-        let output = await Task.detached(priority: .utility) { () -> Data in
-            let data = pipe.fileHandleForReading.readDataToEndOfFile()
-            process.waitUntilExit()
-            return data
-        }.value
 
-        var text = String(decoding: output, as: UTF8.self)
-        var lines = text.split(separator: "\n", omittingEmptySubsequences: true)
+        var lines = String(decoding: output.tail(), as: UTF8.self).split(separator: "\n", omittingEmptySubsequences: true)
         // The first line is the column header ("Timestamp Ty Process[PID:TID]").
         if let first = lines.first, first.hasPrefix("Timestamp") {
             lines.removeFirst()
         }
         if lines.isEmpty { return 0 }
-        text = lines.joined(separator: "\n")
-        if text.utf8.count > maxBytes {
-            let tail = Data(text.utf8).suffix(maxBytes)
-            text = "… (older lines cut)\n" + String(decoding: tail, as: UTF8.self)
+        var text = lines.joined(separator: "\n")
+        if output.isCut {
+            text = "… (older lines cut)\n" + text
         }
         let header = "# \(source.name) log, \(from) - \(to). Collected by \(AppInfo.name) with `log show --info`.\n"
         do {
@@ -69,6 +71,28 @@ enum SystemLogCollector {
             return 0
         }
         return lines.count
+    }
+
+    /// The end of what the tool wrote, nil when it was stopped for taking too long.
+    static func run(_ process: Process, output pipe: Pipe, limit: Int = maxBytes, timeout: Double = timeout) -> StreamTail? {
+        var tail = StreamTail(limit: limit)
+        let reading = DispatchGroup()
+        DispatchQueue.global(qos: .utility).async(group: reading) {
+            while let chunk = try? pipe.fileHandleForReading.read(upToCount: 65_536), !chunk.isEmpty {
+                tail.append(chunk)
+            }
+        }
+        // Not started (no log, as before): nothing else closes the pipe the reader waits on.
+        guard let finished = try? ProcessTimeout.run(process, seconds: timeout) else {
+            try? pipe.fileHandleForWriting.close()
+            reading.wait()
+            return tail
+        }
+        // Stopped for taking too long: a child of the tool may still hold the pipe open, so the
+        // reader is left to end by itself.
+        if !finished { return nil }
+        reading.wait()
+        return tail
     }
 
     private static func clean(_ text: String) -> String {

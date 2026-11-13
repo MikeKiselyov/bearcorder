@@ -110,7 +110,7 @@ struct MainApp: App {
     @State private var state = AppState.shared
 
     var body: some Scene {
-        MenuBarExtra(isInserted: Binding(get: { state.showsMenuBarItem }, set: { value in state.showsMenuBarItem = value })) {
+        MenuBarExtra(isInserted: state.menuBarItemInserted) {
             MenuBarView()
                 .environment(state)
                 .preferredColorScheme(.dark)
